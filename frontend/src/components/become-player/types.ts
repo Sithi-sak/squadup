@@ -53,3 +53,45 @@ export function createGamesStepData(): GamesStepData {
     headline: '',
   }
 }
+
+export type PricingModel = 'per-game' | 'per-hour' | 'per-session'
+
+export interface GameRate {
+  game: string
+  price: number | null
+}
+
+export interface AvailabilityDay {
+  key: string
+  label: string
+}
+
+export const availabilityDays: AvailabilityDay[] = [
+  { key: 'mon', label: 'M' },
+  { key: 'tue', label: 'T' },
+  { key: 'wed', label: 'W' },
+  { key: 'thu', label: 'T' },
+  { key: 'fri', label: 'F' },
+  { key: 'sat', label: 'S' },
+  { key: 'sun', label: 'S' },
+]
+
+export interface RatesStepData {
+  rates: GameRate[]
+  pricingModel: PricingModel
+  offerFirstOrderFree: boolean
+  availableDays: string[]
+  timeWindow: string
+  instantBooking: boolean
+}
+
+export function createRatesStepData(): RatesStepData {
+  return {
+    rates: [],
+    pricingModel: 'per-game',
+    offerFirstOrderFree: true,
+    availableDays: [],
+    timeWindow: '',
+    instantBooking: false,
+  }
+}

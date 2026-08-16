@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { PhArrowUp, PhCheck, PhLock } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import type { PayoutSchedule, VerifyStepData } from './types'
+import { mockWalletHandle, type PayoutSchedule, type VerifyStepData } from './types'
 
 const data = defineModel<VerifyStepData>({ required: true })
 
@@ -146,7 +146,7 @@ const canSubmit = computed(() => data.value.idFrontFileName !== null)
           <img :src="coinIcon" alt="" class="size-9 shrink-0" />
           <div>
             <p class="text-sm font-medium text-white">Squad Coin Wallet</p>
-            <p class="text-sm text-slate-400">@1525835767 · Balance 0 SC</p>
+            <p class="text-sm text-slate-400">@{{ mockWalletHandle }} · Balance 0 SC</p>
           </div>
         </div>
         <UBadge color="success" variant="subtle" class="rounded-full">Selected</UBadge>

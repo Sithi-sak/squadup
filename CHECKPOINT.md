@@ -35,7 +35,7 @@ end-to-end.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.6e Become a Player — Review & submit step
+- **Next task:** 1.6f Become a Player — Success screen
 - **Last updated:** 2026-08-17
 
 ---
@@ -62,7 +62,7 @@ Build in this order — each one is a single task:
   - [x] 1.6b Games & skills — game(s), rank, role (`GAMES.jpg`)
   - [x] 1.6c Rates & availability — pricing, schedule (`RATES.jpg`)
   - [x] 1.6d Verify & payout — ID upload, Squad Coin payout setup (`VERIFY.jpg`)
-  - [ ] 1.6e Review & submit — final summary before submitting (`REVIEW.jpg`)
+  - [x] 1.6e Review & submit — final summary before submitting (`REVIEW.jpg`)
   - [ ] 1.6f Success — confirmation screen after submit (`SUCCESS.jpg`)
 - [ ] 1.7 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
 - [ ] 1.8 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)

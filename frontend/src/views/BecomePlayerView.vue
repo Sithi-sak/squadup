@@ -6,24 +6,27 @@ import brandLogo from '@/assets/brand.svg'
 import StepAccount from '@/components/become-player/StepAccount.vue'
 import StepGames from '@/components/become-player/StepGames.vue'
 import StepRates from '@/components/become-player/StepRates.vue'
+import StepReview from '@/components/become-player/StepReview.vue'
 import StepVerify from '@/components/become-player/StepVerify.vue'
 import {
   becomePlayerSteps,
   createAccountStepData,
   createGamesStepData,
   createRatesStepData,
+  createReviewStepData,
   createVerifyStepData,
 } from '@/components/become-player/types'
 
 const router = useRouter()
 
 const currentStep = ref(1)
-const progressPct = computed(() => Math.min(100, 8 + (currentStep.value - 1) * 23))
+const progressPct = computed(() => (currentStep.value === 1 ? 8 : (currentStep.value - 1) * 20))
 
 const accountData = ref(createAccountStepData())
 const gamesData = ref(createGamesStepData())
 const ratesData = ref(createRatesStepData())
 const verifyData = ref(createVerifyStepData())
+const reviewData = ref(createReviewStepData())
 
 function handleStepContinue() {
   currentStep.value = Math.min(currentStep.value + 1, becomePlayerSteps.length)
@@ -31,6 +34,15 @@ function handleStepContinue() {
 
 function handleStepBack() {
   currentStep.value = Math.max(currentStep.value - 1, 1)
+}
+
+function handleSubmit() {
+  console.log('Pal application submitted', {
+    account: accountData.value,
+    games: gamesData.value,
+    rates: ratesData.value,
+    verify: verifyData.value,
+  })
 }
 </script>
 
@@ -120,6 +132,17 @@ function handleStepBack() {
             v-model="verifyData"
             @continue="handleStepContinue"
             @back="handleStepBack"
+          />
+          <StepReview
+            v-else-if="currentStep === 5"
+            v-model="reviewData"
+            :account-data="accountData"
+            :games-data="gamesData"
+            :rates-data="ratesData"
+            :verify-data="verifyData"
+            @submit="handleSubmit"
+            @back="handleStepBack"
+            @edit="currentStep = $event"
           />
         </div>
       </div>

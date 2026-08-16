@@ -1,0 +1,14 @@
+/* SquadUp brand overrides on top of Element Plus's dark theme (theme-chalk/dark/css-vars.css). */
+html.dark {
+  --el-color-primary: #059669;
+  --el-color-primary-light-3: color-mix(in srgb, var(--el-color-primary) 70%, black);
+  --el-color-primary-light-5: color-mix(in srgb, var(--el-color-primary) 50%, black);
+  --el-color-primary-light-7: color-mix(in srgb, var(--el-color-primary) 30%, black);
+  --el-color-primary-light-8: color-mix(in srgb, var(--el-color-primary) 20%, black);
+  --el-color-primary-light-9: color-mix(in srgb, var(--el-color-primary) 10%, black);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--el-color-primary) 80%, white);
+
+  --el-bg-color-page: #0f172a;
+  --el-bg-color: color-mix(in srgb, var(--el-bg-color-page) 85%, white);
+  --el-bg-color-overlay: color-mix(in srgb, var(--el-bg-color-page) 75%, white);
+}

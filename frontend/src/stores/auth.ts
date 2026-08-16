@@ -7,6 +7,7 @@ export interface AuthUser {
   displayName: string | null
   role: 'user' | 'player' | 'admin'
   onboardingComplete: boolean
+  coinBalance: number
 }
 
 export const useAuthStore = defineStore('auth', () => {

@@ -7,4 +7,5 @@ export const mockCurrentUser: AuthUser = {
   displayName: 'Dara Chan',
   role: 'user',
   onboardingComplete: true,
+  coinBalance: 3240,
 }

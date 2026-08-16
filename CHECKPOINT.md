@@ -30,12 +30,15 @@ Backend (FastAPI + Supabase) to wire everything for real → Payment integration
 (ABA/KHQR/Stripe) is the last task in the project, after every other feature works
 end-to-end.
 
+**Copy style:** never use em dashes in UI copy (headings, body text, labels,
+buttons). Use a comma, period, or rewrite the sentence instead.
+
 ---
 
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.7 Booking (`/book/:playerId`)
+- **Next task:** 1.4 Browse Players (`/players`)
 - **Last updated:** 2026-08-17
 
 ---
@@ -55,6 +58,7 @@ Build in this order — each one is a single task:
 
 - [x] 1.1 Landing (`/`) — hero, how it works, featured players, games supported
 - [x] 1.2 Login (`/login`) + Signup (`/signup`) — forms only, no real auth yet (plus Forgot Password `/forgot-password` and Set New Password `/reset-password`)
+- [x] 1.3 Home (`/home`) — authenticated landing hub shown right after login (post-signup role modal and future login redirect both land here instead of `/players`/`/become-player` directly). Quick-action cards into Browse Players, Become a Player, My Bookings, Messages, and role dashboard; recommended players / recent activity sections. This is the branch point every post-login page links out from, so build it before the pages it links to. `/` (`LandingView`) stays the logged-out public marketing page.
 - [ ] 1.4 Browse Players (`/players`) — card grid, filters (game, rank, role, price, availability, language)
 - [ ] 1.5 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA
 - [x] 1.6 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:

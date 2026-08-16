@@ -4,6 +4,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** Full-bleed pages (auth) render without the site header/footer chrome. */
     hideChrome?: boolean
+    /** Post-login pages get the signed-in header (search, wallet, avatar menu) instead of the public one. */
+    authenticated?: boolean
   }
 }
 
@@ -34,6 +36,12 @@ const router = createRouter({
       name: 'reset-password',
       component: () => import('@/views/ResetPasswordView.vue'),
       meta: { hideChrome: true },
+    },
+    {
+      path: '/home',
+      name: 'home',
+      component: () => import('@/views/HomeView.vue'),
+      meta: { authenticated: true },
     },
     { path: '/players', name: 'players', component: () => import('@/views/PlayersView.vue') },
     {

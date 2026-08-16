@@ -28,6 +28,10 @@ coverage
 
 .eslintcache
 
+# Nuxt UI auto-generated types
+auto-imports.d.ts
+components.d.ts
+
 # Cypress
 /cypress/videos/
 /cypress/screenshots/

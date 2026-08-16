@@ -1,14 +1,34 @@
-/* SquadUp brand overrides on top of Element Plus's dark theme (theme-chalk/dark/css-vars.css). */
-html.dark {
-  --el-color-primary: #059669;
-  --el-color-primary-light-3: color-mix(in srgb, var(--el-color-primary) 70%, black);
-  --el-color-primary-light-5: color-mix(in srgb, var(--el-color-primary) 50%, black);
-  --el-color-primary-light-7: color-mix(in srgb, var(--el-color-primary) 30%, black);
-  --el-color-primary-light-8: color-mix(in srgb, var(--el-color-primary) 20%, black);
-  --el-color-primary-light-9: color-mix(in srgb, var(--el-color-primary) 10%, black);
-  --el-color-primary-dark-2: color-mix(in srgb, var(--el-color-primary) 80%, white);
+@import 'tailwindcss';
+@import '@nuxt/ui';
 
-  --el-bg-color-page: #0f172a;
-  --el-bg-color: color-mix(in srgb, var(--el-bg-color-page) 85%, white);
-  --el-bg-color-overlay: color-mix(in srgb, var(--el-bg-color-page) 75%, white);
+@theme static {
+  /* SquadUp "brand" color ramp for Nuxt UI's `primary` semantic color.
+     Exact anchors at the specified brand hexes (300 = accent, 600 = primary,
+     900 = ink); the remaining stops are interpolated in HSL to keep a smooth
+     scale for hover/active states. */
+  --color-brand-50: hsl(160 84% 97%);
+  --color-brand-100: hsl(160 84% 93%);
+  --color-brand-200: hsl(160 84% 85%);
+  --color-brand-300: #6ee7b7; /* accent */
+  --color-brand-400: hsl(160 84% 56%);
+  --color-brand-500: hsl(160 84% 46%);
+  --color-brand-600: #059669; /* primary */
+  --color-brand-700: hsl(160 84% 24%);
+  --color-brand-800: hsl(160 84% 20%);
+  --color-brand-900: #064e3b; /* ink */
+  --color-brand-950: hsl(160 84% 10%);
+
+  /* Flat brand tokens used directly (page/section backgrounds, not a scale). */
+  --color-squadup-bg: #0f172a;
+  --color-squadup-dark: #0a0a0a;
+}
+
+/* SquadUp is dark-only (no light/dark toggle), so these are set unconditionally
+   rather than scoped to `.dark`. Nuxt UI's dark-mode default for the `primary`
+   token is shade 400, not 600 — pin it to brand-600 so color="primary" renders
+   the exact #059669 anchor. `--ui-text-inverted` (text on solid color
+   backgrounds) also defaults to a dark neutral instead of white. */
+:root {
+  --ui-primary: var(--color-brand-600);
+  --ui-text-inverted: #fff;
 }

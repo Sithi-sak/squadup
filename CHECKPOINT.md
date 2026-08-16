@@ -4,13 +4,26 @@ This file is the single source of truth for build progress. Work **one task at a
 pick the next unchecked box under "Next Up", implement it, check it off, then stop and
 return here before starting the next one. Don't jump ahead or batch multiple tasks.
 
-**Stack correction from the original recap:** no Tailwind CSS. UI is built with
-**Element Plus** (+ `@phosphor-icons/vue` for icons), both already in
-`frontend/package.json`.
+**Stack correction from the original recap:** UI is built with **Tailwind CSS v4 +
+Nuxt UI** (Vue install path, not the Nuxt framework — this is a Vite app) and
+`@phosphor-icons/vue` for icons, all in `frontend/package.json`. Nuxt UI is wired up
+via the `@nuxt/ui/vite` plugin in `vite.config.ts` (component auto-import,
+`colorMode: false` since this app is dark-only) and `@nuxt/ui/vue-plugin` in
+`main.ts`. `App.vue` root is wrapped in `<UApp>`. Element Plus was removed.
 
-**Brand colors:** primary `#059669`, background `#0F172A` — dark theme only (no
-light/dark toggle). Wired as Element Plus CSS var overrides in
-`frontend/src/styles/theme.css`.
+**Brand colors:** primary `#059669`, accent `#6EE7B7`, ink wordmark `#064E3B`,
+background `#0F172A`, dark `#0A0A0A` — dark theme only (no light/dark toggle).
+Tailwind v4's stock `emerald`/`slate`/`neutral` scales are OKLCH-based and don't
+reproduce these hexes exactly, so a custom `brand` color ramp is defined in
+`frontend/src/styles/theme.css` (`@theme static`), anchored exactly at the given
+hexes (300 = accent, 600 = primary, 900 = ink; other stops interpolated). Nuxt UI's
+semantic `primary` points at it via `colors: { primary: 'brand', neutral: 'slate' }`
+in the `@nuxt/ui/vite` plugin options (`vite.config.ts`). `bg` and `dark` are flat
+tokens (`--color-squadup-bg`, `--color-squadup-dark`) used directly, e.g.
+`bg-squadup-bg` / `bg-squadup-dark` utility classes — not part of a shade scale.
+Brand logo lives at `frontend/src/assets/brand.svg`, coin icon at
+`frontend/src/assets/squadup-coin.svg`. Font is Inter, loaded via Google Fonts
+`<link>` in `index.html`.
 
 **Order of operations:** Frontend UI first (static/mock data, no backend calls) →
 Backend (FastAPI + Supabase) to wire everything for real → Payment integration
@@ -22,7 +35,7 @@ end-to-end.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.1 Landing (`/`)
+- **Next task:** 1.2 Login (`/login`) + Signup (`/signup`)
 - **Last updated:** 2026-08-16
 
 ---
@@ -30,7 +43,7 @@ end-to-end.
 ## Phase 0 — Frontend Foundations
 
 - [x] 0.1 Strip default Vite/Vue boilerplate (`HelloWorld`-style demo content, `stores/counter.ts`, sample router entry)
-- [x] 0.2 Configure Element Plus (global or auto-import setup, default theme vars, confirm `@phosphor-icons/vue` as the icon set)
+- [x] 0.2 Configure Nuxt UI + Tailwind CSS v4 (Vue install path, global setup, brand theme vars, confirm `@phosphor-icons/vue` as the icon set)
 - [x] 0.3 Base layout shell: app header/navbar, footer, main content container, responsive breakpoints
 - [x] 0.4 Register all page routes in `router/index.ts` as placeholder components (see full route table in Phase 1)
 - [x] 0.5 Pinia store skeletons: `auth`, `players`, `bookings`, `messages`, `ui` (empty state shape only, no data fetching yet)
@@ -40,7 +53,7 @@ end-to-end.
 
 Build in this order — each one is a single task:
 
-- [ ] 1.1 Landing (`/`) — hero, how it works, featured players, games supported
+- [x] 1.1 Landing (`/`) — hero, how it works, featured players, games supported
 - [ ] 1.2 Login (`/login`) + Signup (`/signup`) — forms only, no real auth yet
 - [ ] 1.3 Onboarding (`/onboarding`) — runs once right after first login/signup: create base profile (display name, avatar, preferred games, languages, short bio) before entering the app
 - [ ] 1.4 Browse Players (`/players`) — card grid, filters (game, rank, role, price, availability, language)

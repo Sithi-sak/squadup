@@ -1,5 +1,7 @@
 <script setup lang="ts"></script>
 
 <template>
-  <el-empty description="404 — page not found" />
+  <div class="flex min-h-[60vh] items-center justify-center px-4 py-16">
+    <UEmpty title="404 — page not found" class="text-white" />
+  </div>
 </template>

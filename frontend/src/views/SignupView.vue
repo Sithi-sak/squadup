@@ -1,5 +1,7 @@
 <script setup lang="ts"></script>
 
 <template>
-  <el-empty description="Signup — form only, no real auth yet" />
+  <div class="flex min-h-[60vh] items-center justify-center px-4 py-16">
+    <UEmpty title="Signup — form only, no real auth yet" class="text-white" />
+  </div>
 </template>

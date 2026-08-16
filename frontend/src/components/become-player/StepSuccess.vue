@@ -26,7 +26,7 @@ const timelineItems: { label: string; status: string; state: TimelineState }[] =
     <h1 class="mt-8 text-3xl font-semibold text-white">You're all set, {{ displayName || 'Pal' }}!</h1>
     <p class="mt-3 text-slate-400">
       Your Pal application has been submitted. Our team reviews every application to keep SquadUp
-      safe — most are approved within 24–48 hours.
+      safe, most are approved within 24–48 hours.
     </p>
 
     <div class="mt-8 flex w-full flex-col gap-4 rounded-3xl bg-gray-900/60 px-6 py-5 text-left">

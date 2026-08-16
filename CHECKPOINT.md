@@ -35,7 +35,7 @@ end-to-end.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.6f Become a Player — Success screen
+- **Next task:** 1.7 Booking (`/book/:playerId`)
 - **Last updated:** 2026-08-17
 
 ---
@@ -57,13 +57,13 @@ Build in this order — each one is a single task:
 - [x] 1.2 Login (`/login`) + Signup (`/signup`) — forms only, no real auth yet (plus Forgot Password `/forgot-password` and Set New Password `/reset-password`)
 - [ ] 1.4 Browse Players (`/players`) — card grid, filters (game, rank, role, price, availability, language)
 - [ ] 1.5 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA
-- [ ] 1.6 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:
+- [x] 1.6 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:
   - [x] 1.6a Account — avatar, display name, email, phone, region, timezone, password, terms checkbox (`ACCOUNT.jpg`)
   - [x] 1.6b Games & skills — game(s), rank, role (`GAMES.jpg`)
   - [x] 1.6c Rates & availability — pricing, schedule (`RATES.jpg`)
   - [x] 1.6d Verify & payout — ID upload, Squad Coin payout setup (`VERIFY.jpg`)
   - [x] 1.6e Review & submit — final summary before submitting (`REVIEW.jpg`)
-  - [ ] 1.6f Success — confirmation screen after submit (`SUCCESS.jpg`)
+  - [x] 1.6f Success — confirmation screen after submit (`SUCCESS.jpg`)
 - [ ] 1.7 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
 - [ ] 1.8 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
 - [ ] 1.9 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet

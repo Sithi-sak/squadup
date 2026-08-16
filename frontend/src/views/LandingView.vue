@@ -87,8 +87,8 @@ function handleSearch() {
       "
     >
       <div class="mx-auto max-w-190 text-center">
-        <h1 class="text-4xl leading-tight font-extrabold text-white md:text-5xl">
-          You Will Never <span class="text-brand-300">Walk Alone</span>
+        <h1 class="text-4xl leading-tight font-bold text-white md:text-5xl">
+          You Will Never <span class="text-brand-500">Walk Alone</span>
         </h1>
         <p class="mx-auto mt-5 max-w-140 text-[15px] leading-relaxed text-slate-300">
           Team up, make friends, and have fun. Book a top-tier gaming companion in seconds and
@@ -134,20 +134,20 @@ function handleSearch() {
             <button
               type="button"
               aria-label="Scroll left"
-              class="flex size-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-white hover:border-brand-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/10"
+              class="flex size-9 cursor-pointer items-center justify-center rounded-full bg-white/5 text-white hover:border-brand-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/10"
               :disabled="!canScrollServicesLeft"
               @click="scrollServices('left')"
             >
-              <PhCaretLeft :size="16" />
+              <PhCaretLeft :size="16" weight="bold" />
             </button>
             <button
               type="button"
               aria-label="Scroll right"
-              class="flex size-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-white hover:border-brand-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/10"
+              class="flex size-9 cursor-pointer items-center justify-center rounded-full bg-white/5 text-white hover:border-brand-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/10"
               :disabled="!canScrollServicesRight"
               @click="scrollServices('right')"
             >
-              <PhCaretRight :size="16" />
+              <PhCaretRight :size="16" weight="bold" />
             </button>
           </div>
         </div>

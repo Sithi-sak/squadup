@@ -1,7 +1,91 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import googleIcon from '@/assets/google.svg'
+import AuthSplitShell from '@/components/auth/AuthSplitShell.vue'
+
+const router = useRouter()
+
+const identifier = ref('')
+const password = ref('')
+const loading = ref(false)
+
+const fieldUi = {
+  base: 'bg-white/5 px-5 py-3.5 text-sm ring-1 ring-inset ring-white/10 focus-visible:ring-2 focus-visible:ring-brand-600',
+}
+
+function handleLogin() {
+  loading.value = true
+  // TODO: wire to Supabase Auth in Phase 2
+  setTimeout(() => {
+    loading.value = false
+    router.push('/players')
+  }, 500)
+}
+</script>
 
 <template>
-  <div class="flex min-h-[60vh] items-center justify-center px-4 py-16">
-    <UEmpty title="Login — form only, no real auth yet" class="text-white" />
-  </div>
+  <AuthSplitShell>
+    <h2 class="text-3xl font-bold text-white">Log in or sign up</h2>
+
+    <form class="mt-8 flex flex-col gap-4" @submit.prevent="handleLogin">
+      <UInput
+        v-model="identifier"
+        type="text"
+        placeholder="Phone/Email"
+        autocomplete="username"
+        variant="subtle"
+        size="xl"
+        :ui="fieldUi"
+      />
+
+      <div class="flex flex-col gap-2">
+        <UInput
+          v-model="password"
+          type="password"
+          placeholder="Password"
+          autocomplete="current-password"
+          variant="subtle"
+          size="xl"
+          :ui="fieldUi"
+        />
+        <router-link to="/forgot-password" class="self-end text-sm text-brand-300 hover:underline">
+          Forgot password?
+        </router-link>
+      </div>
+
+      <UButton
+        type="submit"
+        color="primary"
+        block
+        :loading="loading"
+        class="justify-center rounded-full py-3.5 text-base"
+      >
+        Login
+      </UButton>
+    </form>
+
+    <div class="my-6 flex items-center gap-3">
+      <div class="h-px flex-1 bg-white/10" />
+      <span class="text-xs text-slate-400">Or continue with</span>
+      <div class="h-px flex-1 bg-white/10" />
+    </div>
+
+    <UButton
+      color="neutral"
+      variant="soft"
+      block
+      class="justify-center gap-2.5 rounded-full bg-white/5 py-3.5 text-base text-white hover:bg-white/10"
+    >
+      <img :src="googleIcon" alt="" class="h-4.5 w-4.5" />
+      Continue with Google
+    </UButton>
+
+    <p class="mt-6 text-center text-sm text-slate-400">
+      Don't have an account?
+      <router-link to="/signup" class="font-medium text-white underline">
+        Create one here
+      </router-link>
+    </p>
+  </AuthSplitShell>
 </template>

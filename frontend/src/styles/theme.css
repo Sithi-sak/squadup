@@ -21,6 +21,19 @@
   /* Flat brand tokens used directly (page/section backgrounds, not a scale). */
   --color-squadup-bg: #0f172a;
   --color-squadup-dark: #0a0a0a;
+
+  /* Gentle vertical float for hero/mascot art (e.g. auth pages). */
+  --animate-float: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-16px);
+  }
 }
 
 /* SquadUp is dark-only (no light/dark toggle), so these are set unconditionally

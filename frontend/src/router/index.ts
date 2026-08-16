@@ -1,15 +1,39 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** Full-bleed pages (auth) render without the site header/footer chrome. */
+    hideChrome?: boolean
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'landing', component: () => import('@/views/LandingView.vue') },
-    { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue') },
-    { path: '/signup', name: 'signup', component: () => import('@/views/SignupView.vue') },
     {
-      path: '/onboarding',
-      name: 'onboarding',
-      component: () => import('@/views/OnboardingView.vue'),
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { hideChrome: true },
+    },
+    {
+      path: '/signup',
+      name: 'signup',
+      component: () => import('@/views/SignupView.vue'),
+      meta: { hideChrome: true },
+    },
+    {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: () => import('@/views/ForgotPasswordView.vue'),
+      meta: { hideChrome: true },
+    },
+    {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('@/views/ResetPasswordView.vue'),
+      meta: { hideChrome: true },
     },
     { path: '/players', name: 'players', component: () => import('@/views/PlayersView.vue') },
     {
@@ -21,6 +45,7 @@ const router = createRouter({
       path: '/become-player',
       name: 'become-player',
       component: () => import('@/views/BecomePlayerView.vue'),
+      meta: { hideChrome: true },
     },
     {
       path: '/book/:playerId',

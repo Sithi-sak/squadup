@@ -22,6 +22,21 @@ export default defineConfig({
           primary: 'brand',
           neutral: 'slate',
         },
+        input: {
+          // Every text field across the SquadUp mockups (auth, settings, create
+          // service, ...) is a full pill, never Nuxt UI's default rounded-md —
+          // set that once here instead of overriding it on every UInput.
+          slots: {
+            base: 'w-full rounded-full border-0 appearance-none placeholder:text-dimmed disabled:cursor-not-allowed disabled:opacity-75 transition-colors',
+          },
+        },
+        select: {
+          slots: {
+            base: [
+              'relative group rounded-full inline-flex items-center disabled:cursor-not-allowed disabled:opacity-75 transition-colors',
+            ],
+          }
+        }
       },
     }),
   ],

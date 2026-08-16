@@ -35,7 +35,7 @@ end-to-end.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.2 Login (`/login`) + Signup (`/signup`)
+- **Next task:** 1.6b Become a Player — Games & skills step
 - **Last updated:** 2026-08-16
 
 ---
@@ -54,11 +54,16 @@ end-to-end.
 Build in this order — each one is a single task:
 
 - [x] 1.1 Landing (`/`) — hero, how it works, featured players, games supported
-- [ ] 1.2 Login (`/login`) + Signup (`/signup`) — forms only, no real auth yet
-- [ ] 1.3 Onboarding (`/onboarding`) — runs once right after first login/signup: create base profile (display name, avatar, preferred games, languages, short bio) before entering the app
+- [x] 1.2 Login (`/login`) + Signup (`/signup`) — forms only, no real auth yet (plus Forgot Password `/forgot-password` and Set New Password `/reset-password`)
 - [ ] 1.4 Browse Players (`/players`) — card grid, filters (game, rank, role, price, availability, language)
 - [ ] 1.5 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA
-- [ ] 1.6 Become a Player (`/become-player`) — registration flow (game, rank/screenshot upload UI, role, price, availability, bio)
+- [ ] 1.6 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:
+  - [x] 1.6a Account — avatar, display name, email, phone, region, timezone, password, terms checkbox (`ACCOUNT.jpg`)
+  - [ ] 1.6b Games & skills — game(s), rank, role (`GAMES.jpg`)
+  - [ ] 1.6c Rates & availability — pricing, schedule (`RATES.jpg`)
+  - [ ] 1.6d Verify & payout — ID upload, Squad Coin payout setup (`VERIFY.jpg`)
+  - [ ] 1.6e Review & submit — final summary before submitting (`REVIEW.jpg`)
+  - [ ] 1.6f Success — confirmation screen after submit (`SUCCESS.jpg`)
 - [ ] 1.7 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
 - [ ] 1.8 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
 - [ ] 1.9 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
@@ -74,11 +79,11 @@ Build in this order — each one is a single task:
 - [ ] 2.2 Supabase connection (service-role client for backend, anon client pattern documented for frontend)
 - [ ] 2.3 Database schema in Supabase: `users`, `players`, `bookings`, `messages`, `reviews` tables + relations
 - [ ] 2.4 Supabase Storage buckets: player avatars, rank verification screenshots
-- [ ] 2.5 Auth wiring: Supabase Auth end-to-end (signup/login/logout, session persistence, route guards on frontend — redirect to Onboarding if profile is incomplete)
+- [ ] 2.5 Auth wiring: Supabase Auth end-to-end (signup/login/logout, session persistence, route guards on frontend)
 
 ## Phase 3 — Backend Features (wire real data into Phase 1 pages)
 
-- [ ] 3.1 User profile creation (Onboarding) + player profile CRUD + connect to Onboarding / Player Profile / Become a Player / Player Dashboard pages
+- [ ] 3.1 User profile CRUD + player profile CRUD + connect to Player Profile / Become a Player / Player Dashboard pages
 - [ ] 3.2 Browse & filter endpoint + connect to Browse Players page
 - [ ] 3.3 Matching algorithm (weighted scoring: game 40 / rank 30 / role 20 / availability 10) + apply as default sort on Browse Players
 - [ ] 3.4 Booking request flow (create/accept/decline) + connect Booking / My Bookings / Player Dashboard

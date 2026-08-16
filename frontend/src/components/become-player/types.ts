@@ -95,3 +95,21 @@ export function createRatesStepData(): RatesStepData {
     instantBooking: false,
   }
 }
+
+export type PayoutSchedule = 'weekly' | 'bi-weekly' | 'monthly'
+
+export interface VerifyStepData {
+  idFrontFileName: string | null
+  idBackFileName: string | null
+  selfieVerified: boolean
+  payoutSchedule: PayoutSchedule
+}
+
+export function createVerifyStepData(): VerifyStepData {
+  return {
+    idFrontFileName: null,
+    idBackFileName: null,
+    selfieVerified: false,
+    payoutSchedule: 'weekly',
+  }
+}

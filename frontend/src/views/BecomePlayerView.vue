@@ -6,11 +6,13 @@ import brandLogo from '@/assets/brand.svg'
 import StepAccount from '@/components/become-player/StepAccount.vue'
 import StepGames from '@/components/become-player/StepGames.vue'
 import StepRates from '@/components/become-player/StepRates.vue'
+import StepVerify from '@/components/become-player/StepVerify.vue'
 import {
   becomePlayerSteps,
   createAccountStepData,
   createGamesStepData,
   createRatesStepData,
+  createVerifyStepData,
 } from '@/components/become-player/types'
 
 const router = useRouter()
@@ -21,6 +23,7 @@ const progressPct = computed(() => Math.min(100, 8 + (currentStep.value - 1) * 2
 const accountData = ref(createAccountStepData())
 const gamesData = ref(createGamesStepData())
 const ratesData = ref(createRatesStepData())
+const verifyData = ref(createVerifyStepData())
 
 function handleStepContinue() {
   currentStep.value = Math.min(currentStep.value + 1, becomePlayerSteps.length)
@@ -109,6 +112,12 @@ function handleStepBack() {
             v-else-if="currentStep === 3"
             v-model="ratesData"
             :selected-games="gamesData.games"
+            @continue="handleStepContinue"
+            @back="handleStepBack"
+          />
+          <StepVerify
+            v-else-if="currentStep === 4"
+            v-model="verifyData"
             @continue="handleStepContinue"
             @back="handleStepBack"
           />

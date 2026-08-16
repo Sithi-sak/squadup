@@ -35,3 +35,21 @@ export function createAccountStepData(): AccountStepData {
     agreedToTerms: false,
   }
 }
+
+export interface GamesStepData {
+  games: string[]
+  highestRank: string
+  role: string
+  languages: string[]
+  headline: string
+}
+
+export function createGamesStepData(): GamesStepData {
+  return {
+    games: [],
+    highestRank: '',
+    role: '',
+    languages: [],
+    headline: '',
+  }
+}

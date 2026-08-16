@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { PhCamera } from '@phosphor-icons/vue'
+import { PhCamera, PhCheckCircle, PhEye, PhEyeSlash, PhXCircle } from '@phosphor-icons/vue'
 import type { AccountStepData } from './types'
 
 const data = defineModel<AccountStepData>({ required: true })
@@ -24,6 +24,31 @@ const timezoneOptions = [
 ]
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const showPassword = ref(false)
+
+const passwordRequirements = [
+  { regex: /.{8,}/, text: 'At least 8 characters' },
+  { regex: /\d/, text: 'At least 1 number' },
+  { regex: /[a-z]/, text: 'At least 1 lowercase letter' },
+  { regex: /[A-Z]/, text: 'At least 1 uppercase letter' },
+]
+
+const passwordStrength = computed(() =>
+  passwordRequirements.map((req) => ({ met: req.regex.test(data.value.password), text: req.text })),
+)
+const passwordScore = computed(() => passwordStrength.value.filter((req) => req.met).length)
+const passwordColor = computed(() => {
+  if (passwordScore.value === 0) return 'neutral'
+  if (passwordScore.value <= 2) return 'error'
+  if (passwordScore.value === 3) return 'warning'
+  return 'success'
+})
+const passwordStrengthText = computed(() => {
+  if (passwordScore.value === 0) return 'Enter a password'
+  if (passwordScore.value <= 2) return 'Weak password'
+  if (passwordScore.value === 3) return 'Medium password'
+  return 'Strong password'
+})
 
 const emailValid = computed(() => /^\S+@\S+\.\S+$/.test(data.value.email))
 const canSubmit = computed(
@@ -33,7 +58,7 @@ const canSubmit = computed(
     data.value.phone.trim().length > 0 &&
     data.value.region.length > 0 &&
     data.value.timezone.length > 0 &&
-    data.value.password.length >= 8 &&
+    passwordScore.value === passwordRequirements.length &&
     data.value.agreedToTerms,
 )
 
@@ -166,12 +191,54 @@ function onFileSelected(event: Event) {
       <UInput
         id="password"
         v-model="data.password"
-        type="password"
+        :type="showPassword ? 'text' : 'password'"
         autocomplete="new-password"
         variant="subtle"
-        size="xl"
-        :ui="fieldUi"
+        size="md"
+        :color="passwordColor"
+        aria-describedby="password-strength"
+        :ui="{ ...fieldUi, trailing: 'pe-1' }"
+      >
+        <template #trailing>
+          <UButton
+            color="neutral"
+            variant="link"
+            size="md"
+            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+            :aria-pressed="showPassword"
+            aria-controls="password"
+            @click="showPassword = !showPassword"
+          >
+            <PhEyeSlash v-if="showPassword" :size="18" />
+            <PhEye v-else :size="18" />
+          </UButton>
+        </template>
+      </UInput>
+
+      <UProgress
+        v-if="data.password"
+        :color="passwordColor"
+        :model-value="passwordScore"
+        :max="passwordRequirements.length"
+        size="sm"
       />
+
+      <p id="password-strength" class="text-sm font-medium text-slate-300">
+        {{ passwordStrengthText }}
+      </p>
+
+      <ul v-if="data.password" class="flex flex-col gap-1" aria-label="Password requirements">
+        <li
+          v-for="req in passwordStrength"
+          :key="req.text"
+          class="flex items-center gap-1.5"
+          :class="req.met ? 'text-brand-300' : 'text-slate-500'"
+        >
+          <PhCheckCircle v-if="req.met" :size="16" weight="fill" />
+          <PhXCircle v-else :size="16" />
+          <span class="text-xs">{{ req.text }}</span>
+        </li>
+      </ul>
     </div>
 
     <UCheckbox

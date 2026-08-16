@@ -4,7 +4,12 @@ import { useRouter } from 'vue-router'
 import { PhCheck, PhX } from '@phosphor-icons/vue'
 import brandLogo from '@/assets/brand.svg'
 import StepAccount from '@/components/become-player/StepAccount.vue'
-import { becomePlayerSteps, createAccountStepData } from '@/components/become-player/types'
+import StepGames from '@/components/become-player/StepGames.vue'
+import {
+  becomePlayerSteps,
+  createAccountStepData,
+  createGamesStepData,
+} from '@/components/become-player/types'
 
 const router = useRouter()
 
@@ -12,9 +17,14 @@ const currentStep = ref(1)
 const progressPct = computed(() => Math.min(100, 8 + (currentStep.value - 1) * 23))
 
 const accountData = ref(createAccountStepData())
+const gamesData = ref(createGamesStepData())
 
 function handleStepContinue() {
-  // TODO: advance to the Games & skills step once it's built.
+  currentStep.value = Math.min(currentStep.value + 1, becomePlayerSteps.length)
+}
+
+function handleStepBack() {
+  currentStep.value = Math.max(currentStep.value - 1, 1)
 }
 </script>
 
@@ -52,10 +62,12 @@ function handleStepContinue() {
 
       <div class="grid grid-cols-1 gap-10 md:grid-cols-[240px_1fr]">
         <nav class="flex flex-row gap-4 overflow-x-auto md:flex-col md:gap-6">
-          <div
+          <button
             v-for="step in becomePlayerSteps"
             :key="step.id"
-            class="flex shrink-0 items-start gap-3"
+            type="button"
+            class="flex shrink-0 cursor-pointer items-start gap-3 text-left"
+            @click="currentStep = step.id"
           >
             <div
               class="flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold"
@@ -79,11 +91,17 @@ function handleStepContinue() {
               </p>
               <p class="text-sm text-slate-500">{{ step.subtitle }}</p>
             </div>
-          </div>
+          </button>
         </nav>
 
         <div class="rounded-3xl bg-gray-900/60 p-6 sm:p-8">
           <StepAccount v-if="currentStep === 1" v-model="accountData" @continue="handleStepContinue" />
+          <StepGames
+            v-else-if="currentStep === 2"
+            v-model="gamesData"
+            @continue="handleStepContinue"
+            @back="handleStepBack"
+          />
         </div>
       </div>
     </div>

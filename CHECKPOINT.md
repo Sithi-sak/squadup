@@ -35,7 +35,7 @@ end-to-end.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.6b Become a Player — Games & skills step
+- **Next task:** 1.6c Become a Player — Rates & availability step
 - **Last updated:** 2026-08-16
 
 ---
@@ -59,7 +59,7 @@ Build in this order — each one is a single task:
 - [ ] 1.5 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA
 - [ ] 1.6 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:
   - [x] 1.6a Account — avatar, display name, email, phone, region, timezone, password, terms checkbox (`ACCOUNT.jpg`)
-  - [ ] 1.6b Games & skills — game(s), rank, role (`GAMES.jpg`)
+  - [x] 1.6b Games & skills — game(s), rank, role (`GAMES.jpg`)
   - [ ] 1.6c Rates & availability — pricing, schedule (`RATES.jpg`)
   - [ ] 1.6d Verify & payout — ID upload, Squad Coin payout setup (`VERIFY.jpg`)
   - [ ] 1.6e Review & submit — final summary before submitting (`REVIEW.jpg`)

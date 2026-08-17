@@ -30,7 +30,7 @@ const spotlight = [...mockPlayers].sort((a, b) => (b.rating ?? 0) - (a.rating ??
 const tiles = [
   { label: 'Games', to: '/players', image: gamesTileImage },
   { label: 'Chilling', to: '/players', image: chillingTileImage },
-  { label: 'All Services', to: '/players', image: allServiceTileImage },
+  { label: 'All Services', to: '/services', image: allServiceTileImage },
 ]
 
 const games = [
@@ -202,7 +202,7 @@ function goToProfile(id: string) {
             v-for="player in eStars"
             :key="player.id"
             type="button"
-            class="flex cursor-pointer flex-col items-center gap-3 rounded-xl bg-gray-800/70 p-5 text-center hover:bg-white/10"
+            class="flex cursor-pointer flex-col items-center gap-3 rounded-xl bg-gray-800/70 p-5 text-center hover:bg-gray-800 transition-colors"
             @click="goToProfile(player.id)"
           >
             <UAvatar size="2xl" class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60">

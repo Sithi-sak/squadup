@@ -38,7 +38,7 @@ buttons). Use a comma, period, or rewrite the sentence instead.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.4 Browse Players (`/players`)
+- **Next task:** 1.5 Browse Players (`/players`)
 - **Last updated:** 2026-08-17
 
 ---
@@ -59,23 +59,24 @@ Build in this order — each one is a single task:
 - [x] 1.1 Landing (`/`) — hero, how it works, featured players, games supported
 - [x] 1.2 Login (`/login`) + Signup (`/signup`) — forms only, no real auth yet (plus Forgot Password `/forgot-password` and Set New Password `/reset-password`)
 - [x] 1.3 Home (`/home`) — authenticated landing hub shown right after login (post-signup role modal and future login redirect both land here instead of `/players`/`/become-player` directly). Quick-action cards into Browse Players, Become a Player, My Bookings, Messages, and role dashboard; recommended players / recent activity sections. This is the branch point every post-login page links out from, so build it before the pages it links to. `/` (`LandingView`) stays the logged-out public marketing page.
-- [ ] 1.4 Browse Players (`/players`) — card grid, filters (game, rank, role, price, availability, language)
-- [ ] 1.5 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA
-- [x] 1.6 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:
-  - [x] 1.6a Account — avatar, display name, email, phone, region, timezone, password, terms checkbox (`ACCOUNT.jpg`)
-  - [x] 1.6b Games & skills — game(s), rank, role (`GAMES.jpg`)
-  - [x] 1.6c Rates & availability — pricing, schedule (`RATES.jpg`)
-  - [x] 1.6d Verify & payout — ID upload, Squad Coin payout setup (`VERIFY.jpg`)
-  - [x] 1.6e Review & submit — final summary before submitting (`REVIEW.jpg`)
-  - [x] 1.6f Success — confirmation screen after submit (`SUCCESS.jpg`)
-- [ ] 1.7 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
-- [ ] 1.8 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
-- [ ] 1.9 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
-- [ ] 1.10 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
-- [ ] 1.11 User Dashboard (`/dashboard/user`) — session history, reviews left, spending summary
-- [ ] 1.12 Settings (`/settings`) — account settings form
-- [ ] 1.13 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
-- [ ] 1.14 Checkout (`/checkout/:bookingId`) — payment summary UI shell only (no live payment logic — that's Phase 4)
+- [x] 1.4 All Services (`/services`) — service/category directory built per `squadup_ui/ALL SERVICES.jpg`. Linked from the navbar `Games` link and the homepage `All Services` tile. Games/Chilling/Valorant tiles reuse existing assets; Hobbies Talk, E-Chat, and Watch Together are left image-less placeholders pending real artwork.
+- [ ] 1.5 Browse Players (`/players`) — card grid, filters (game, rank, role, price, availability, language)
+- [ ] 1.6 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA
+- [x] 1.7 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:
+  - [x] 1.7a Account — avatar, display name, email, phone, region, timezone, password, terms checkbox (`ACCOUNT.jpg`)
+  - [x] 1.7b Games & skills — game(s), rank, role (`GAMES.jpg`)
+  - [x] 1.7c Rates & availability — pricing, schedule (`RATES.jpg`)
+  - [x] 1.7d Verify & payout — ID upload, Squad Coin payout setup (`VERIFY.jpg`)
+  - [x] 1.7e Review & submit — final summary before submitting (`REVIEW.jpg`)
+  - [x] 1.7f Success — confirmation screen after submit (`SUCCESS.jpg`)
+- [ ] 1.8 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
+- [ ] 1.9 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
+- [ ] 1.10 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
+- [ ] 1.11 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
+- [ ] 1.12 User Dashboard (`/dashboard/user`) — session history, reviews left, spending summary
+- [ ] 1.13 Settings (`/settings`) — account settings form
+- [ ] 1.14 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
+- [ ] 1.15 Checkout (`/checkout/:bookingId`) — payment summary UI shell only (no live payment logic — that's Phase 4)
 
 ## Phase 2 — Backend Foundations
 

@@ -43,6 +43,12 @@ const router = createRouter({
       component: () => import('@/views/HomeView.vue'),
       meta: { authenticated: true },
     },
+    {
+      path: '/services',
+      name: 'services',
+      component: () => import('@/views/AllServicesView.vue'),
+      meta: { authenticated: true },
+    },
     { path: '/players', name: 'players', component: () => import('@/views/PlayersView.vue') },
     {
       path: '/players/:id',

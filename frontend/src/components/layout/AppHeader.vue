@@ -8,6 +8,7 @@ import {
   PhChatCircle,
   PhCaretDown,
   PhUserCircle,
+  PhPlus,
 } from '@phosphor-icons/vue'
 import brandLogo from '@/assets/brand.svg'
 import coinIcon from '@/assets/squadup-coin.svg'
@@ -23,7 +24,7 @@ const isAuthenticated = computed(() => route.meta.authenticated === true)
 
 const navLinks = [
   { label: 'Discover', to: '/home' },
-  { label: 'Games' },
+  { label: 'Games', to: '/services' },
   { label: 'eStars' },
   { label: 'Become a Pal', to: '/become-player' },
   { label: 'Help' },
@@ -89,17 +90,29 @@ function handleSearch() {
           </template>
         </UInput>
 
-        <UBadge color="neutral" variant="soft" size="lg" class="gap-1.5 rounded-full py-1.5">
-          <template #leading>
-            <img :src="coinIcon" alt="" class="h-4.5 w-4.5" />
-          </template>
-          {{ mockCurrentUser.coinBalance.toLocaleString() }}
-        </UBadge>
+        <div class="flex items-center gap-1.5">
+          <UBadge color="neutral" variant="soft" size="lg" class="gap-1.5 rounded-full py-1.5">
+            <template #leading>
+              <img :src="coinIcon" alt="" class="h-4.5 w-4.5" />
+            </template>
+            {{ mockCurrentUser.coinBalance.toLocaleString() }}
+          </UBadge>
+          <UButton
+            color="primary"
+            variant="solid"
+            square
+            size="sm"
+            class="rounded-full"
+            aria-label="Top up coins"
+          >
+            <PhPlus :size="16" weight="bold" />
+          </UButton>
+        </div>
 
-        <UButton color="neutral" variant="ghost" square aria-label="Notifications">
+        <UButton color="neutral" variant="ghost" :ui="{ base: 'rounded-full' }" square aria-label="Notifications">
           <PhBell :size="20" />
         </UButton>
-        <UButton to="/messages" color="neutral" variant="ghost" square aria-label="Messages">
+        <UButton to="/messages" color="neutral" variant="ghost" :ui="{ base: 'rounded-full' }" square aria-label="Messages">
           <PhChatCircle :size="20" />
         </UButton>
 

@@ -38,7 +38,7 @@ buttons). Use a comma, period, or rewrite the sentence instead.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.5 Browse Players (`/players`)
+- **Next task:** 1.6 Player Profile (`/players/:id`)
 - **Last updated:** 2026-08-17
 
 ---

@@ -11,6 +11,16 @@ export interface PlayerSummary {
   pricePerHour: number | null
   languages: string[]
   rating: number | null
+  /** Number of reviews behind `rating`, shown as "(250)" / "(9.5k)" on browse cards. */
+  reviewCount: number | null
+  /** One-line bio shown on browse cards, e.g. "I'm the duo your friends warned about". */
+  tagline: string | null
+  /** Squad Coin price per game, shown as "500/Game" on browse cards. */
+  priceCoins: number | null
+  online: boolean
+  isNew: boolean
+  /** Promo pill on browse cards, e.g. "10% Off", "1st Order Free". */
+  promoBadge: string | null
 }
 
 export interface PlayerFilters {

@@ -49,11 +49,17 @@ const router = createRouter({
       component: () => import('@/views/AllServicesView.vue'),
       meta: { authenticated: true },
     },
-    { path: '/players', name: 'players', component: () => import('@/views/PlayersView.vue') },
+    {
+      path: '/players',
+      name: 'players',
+      component: () => import('@/views/PlayersView.vue'),
+      meta: { authenticated: true },
+    },
     {
       path: '/players/:id',
       name: 'player-profile',
       component: () => import('@/views/PlayerProfileView.vue'),
+      meta: { authenticated: true },
     },
     {
       path: '/become-player',

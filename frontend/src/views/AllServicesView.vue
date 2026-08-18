@@ -143,7 +143,6 @@ const filteredChillingSections = computed(() => {
       v-model:open="drawerOpen"
       direction="right"
       :handle="false"
-      :dismissible="false"
       :ui="{ content: 'w-full sm:max-w-3xl', container: 'p-0 gap-0' }"
     >
       <template #body>

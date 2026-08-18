@@ -147,7 +147,7 @@ const visibleReviews = computed(() => {
           class="mt-2.5 rounded-full"
           @click="router.push(`/book/${playerId}`)"
         >
-          Order
+          Book
         </UButton>
         <p class="mt-3 text-center text-xs text-slate-400">Avg Response Time {{ detail.avgResponseTime }}</p>
       </div>

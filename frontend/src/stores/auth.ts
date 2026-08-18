@@ -5,7 +5,9 @@ export interface AuthUser {
   id: string
   email: string
   displayName: string | null
-  role: 'user' | 'player' | 'admin'
+  role: 'user' | 'admin'
+  /** Links to a `PlayerProfile` when this account also has a Pal profile (additive, not exclusive). */
+  playerId: string | null
   onboardingComplete: boolean
   coinBalance: number
 }

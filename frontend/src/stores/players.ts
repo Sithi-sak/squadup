@@ -104,6 +104,9 @@ export interface PlayerProfile {
   feed: FeedPost[]
   album: AlbumItem[]
   wish: WishItem[]
+  postsCount: number
+  followersCount: number
+  followingCount: number
 }
 
 export interface PlayerFilters {

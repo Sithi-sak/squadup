@@ -33,12 +33,24 @@ end-to-end.
 **Copy style:** never use em dashes in UI copy (headings, body text, labels,
 buttons). Use a comma, period, or rewrite the sentence instead.
 
+**Account model:** a user and a Pal are **additive, not exclusive** — one
+account can browse/book as a user and also carry its own Pal profile, matching
+the recap's relational `users` + `players` tables (2.3) rather than a single
+exclusive role tag. `AuthUser.role` is just `'user' | 'admin'`; `AuthUser.playerId`
+links to a `PlayerProfile` (`stores/players.ts`) when the account also has a Pal
+profile, mirroring the future `players.user_id → users.id` foreign key. Seed
+Pals (`p1`..`p8` in `mocks/players.ts`) are independent marketplace NPCs, not
+linked to any mock account. Components should branch on `playerId` presence
+(e.g. `AppHeader.vue`'s dashboard link, `FeedSidebar.vue`'s profile card), not
+on `role`. Apply this when building Dashboards (1.12/1.13) and wiring real auth
+(2.5).
+
 ---
 
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.8 Booking (`/book/:playerId`)
+- **Next task:** 1.9 Booking (`/book/:playerId`)
 - **Last updated:** 2026-08-18
 
 ---
@@ -73,14 +85,19 @@ Build in this order — each one is a single task:
   - [x] 1.7d Verify & payout — ID upload, Squad Coin payout setup (`VERIFY.jpg`)
   - [x] 1.7e Review & submit — final summary before submitting (`REVIEW.jpg`)
   - [x] 1.7f Success — confirmation screen after submit (`SUCCESS.jpg`)
-- [ ] 1.8 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
-- [ ] 1.9 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
-- [ ] 1.10 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
-- [ ] 1.11 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
-- [ ] 1.12 User Dashboard (`/dashboard/user`) — session history, reviews left, spending summary
-- [ ] 1.13 Settings (`/settings`) — account settings form
-- [ ] 1.14 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
-- [ ] 1.15 Checkout (`/checkout/:bookingId`) — payment summary UI shell only (no live payment logic — that's Phase 4)
+- [x] 1.8 Feed (`/feed`) — social feed hub built per `squadup_ui/FEED.jpg` and `squadup_ui/FEED/`. Linked from the navbar beside "Discover". Left sidebar (profile card + Feed/Following/Explore/Saved/Your profile nav) and right rail (Suggested Pals, Trending now) are shared across all 4 screens; images left blank pending real artwork.
+  - [x] 1.8a Feed (`/feed`) — composer + feed post list (`FEED.jpg`)
+  - [x] 1.8b Following (`/feed/following`) — posts from followed Pals, filterable (`FEED/FOLLOWING.jpg`)
+  - [x] 1.8c Explore (`/feed/explore`) — search + category grid of trending posts (`FEED/EXPLORE.jpg`)
+  - [x] 1.8d Saved (`/feed/saved`) — bookmarked posts and services, filterable (`FEED/SAVED.jpg`)
+- [ ] 1.9 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
+- [ ] 1.10 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
+- [ ] 1.11 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
+- [ ] 1.12 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
+- [ ] 1.13 User Dashboard (`/dashboard/user`) — not an analytics dashboard (that's Player Dashboard's job, see the Account model note above). A plain user account has no need for one, so this route is just a lightweight "Become a Pal" upsell/ad for accounts with no `playerId`. Session/booking history lives on My Bookings (1.10) instead, reviews-left and spending stay wherever wallet/Settings ends up; don't duplicate that content here.
+- [ ] 1.14 Settings (`/settings`) — account settings form
+- [ ] 1.15 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
+- [ ] 1.16 Checkout (`/checkout/:bookingId`) — payment summary UI shell only (no live payment logic — that's Phase 4)
 
 ## Phase 2 — Backend Foundations
 
@@ -115,6 +132,6 @@ Build in this order — each one is a single task:
 
 ## Cut list (only if time runs out)
 
-- Admin panel (1.12, 3.8)
+- Admin panel (1.15, 3.8)
 - Earnings tracker — fall back to plain booking history (3.7)
 - Matching algorithm — fall back to unsorted player list (3.3)

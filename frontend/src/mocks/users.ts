@@ -6,6 +6,7 @@ export const mockCurrentUser: AuthUser = {
   email: 'dara.chan@example.com',
   displayName: 'Dara Chan',
   role: 'user',
+  playerId: 'self',
   onboardingComplete: true,
   coinBalance: 3240,
 }

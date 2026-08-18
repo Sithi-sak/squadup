@@ -50,6 +50,30 @@ const router = createRouter({
       meta: { authenticated: true },
     },
     {
+      path: '/feed',
+      name: 'feed',
+      component: () => import('@/views/FeedView.vue'),
+      meta: { authenticated: true },
+    },
+    {
+      path: '/feed/following',
+      name: 'feed-following',
+      component: () => import('@/views/FeedFollowingView.vue'),
+      meta: { authenticated: true },
+    },
+    {
+      path: '/feed/explore',
+      name: 'feed-explore',
+      component: () => import('@/views/FeedExploreView.vue'),
+      meta: { authenticated: true },
+    },
+    {
+      path: '/feed/saved',
+      name: 'feed-saved',
+      component: () => import('@/views/FeedSavedView.vue'),
+      meta: { authenticated: true },
+    },
+    {
       path: '/players',
       name: 'players',
       component: () => import('@/views/PlayersView.vue'),

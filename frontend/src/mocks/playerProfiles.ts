@@ -184,6 +184,30 @@ export const mockPlayerProfiles: Record<string, PlayerProfile> = {
       { id: 'w5', title: 'Victory Royale x5', game: 'Fortnite', type: 'Carry', priceCoins: 500, saved: true },
       { id: 'w6', title: 'Ranked Grind Night', game: 'Apex Legends', type: 'Coaching', priceCoins: 850, saved: true },
     ],
+    postsCount: 42,
+    followersCount: 1200,
+    followingCount: 30,
+  },
+  /** The current mock account's own (freshly started) Pal profile, linked via `AuthUser.playerId`.
+   * Distinct from `p1`, which is a separate seed Pal the current account books/messages. */
+  self: {
+    id: 'self',
+    handle: '@1525835767',
+    timezone: 'GMT+07:00',
+    language: 'English',
+    tier: 'Pal 2',
+    highlightBadge: null,
+    subscribeLabel: null,
+    highlightedServiceId: '',
+    services: [],
+    serviceDetails: {},
+    reviews: {},
+    feed: [],
+    album: [],
+    wish: [],
+    postsCount: 128,
+    followersCount: 3400,
+    followingCount: 86,
   },
 }
 
@@ -240,6 +264,9 @@ function buildGenericProfile(player: PlayerSummary): PlayerProfile {
     feed: [],
     album: [],
     wish: [],
+    postsCount: 0,
+    followersCount: 0,
+    followingCount: 0,
   }
 }
 

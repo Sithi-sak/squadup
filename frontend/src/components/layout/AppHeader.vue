@@ -24,6 +24,7 @@ const isAuthenticated = computed(() => route.meta.authenticated === true)
 
 const navLinks = [
   { label: 'Discover', to: '/home' },
+  { label: 'Feed', to: '/feed' },
   { label: 'Games', to: '/services' },
   { label: 'eStars' },
   { label: 'Become a Pal', to: '/become-player' },
@@ -31,7 +32,7 @@ const navLinks = [
 ]
 
 const dashboardPath = computed(() =>
-  mockCurrentUser.role === 'player' ? '/dashboard/player' : '/dashboard/user',
+  mockCurrentUser.playerId ? '/dashboard/player' : '/dashboard/user',
 )
 const firstName = computed(() => mockCurrentUser.displayName?.split(' ')[0] ?? 'Account')
 
@@ -172,6 +173,7 @@ function handleSearch() {
           </UInput>
           <nav class="flex flex-col gap-4" @click="mobileMenuOpen = false">
             <router-link to="/home" class="text-base text-white">Discover</router-link>
+            <router-link to="/feed" class="text-base text-white">Feed</router-link>
             <router-link to="/players" class="text-base text-white">Browse Players</router-link>
             <router-link to="/messages" class="text-base text-white">Messages</router-link>
             <router-link to="/bookings" class="text-base text-white">My Bookings</router-link>

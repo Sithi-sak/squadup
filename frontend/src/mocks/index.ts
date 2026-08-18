@@ -1,4 +1,5 @@
 export * from './users'
 export * from './players'
+export * from './playerProfiles'
 export * from './bookings'
 export * from './messages'

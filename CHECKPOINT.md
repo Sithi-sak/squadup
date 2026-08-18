@@ -38,8 +38,8 @@ buttons). Use a comma, period, or rewrite the sentence instead.
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.6 Player Profile (`/players/:id`)
-- **Last updated:** 2026-08-17
+- **Next task:** 1.8 Booking (`/book/:playerId`)
+- **Last updated:** 2026-08-18
 
 ---
 
@@ -61,7 +61,11 @@ Build in this order — each one is a single task:
 - [x] 1.3 Home (`/home`) — authenticated landing hub shown right after login (post-signup role modal and future login redirect both land here instead of `/players`/`/become-player` directly). Quick-action cards into Browse Players, Become a Player, My Bookings, Messages, and role dashboard; recommended players / recent activity sections. This is the branch point every post-login page links out from, so build it before the pages it links to. `/` (`LandingView`) stays the logged-out public marketing page.
 - [x] 1.4 All Services (`/services`) — service/category directory built per `squadup_ui/ALL SERVICES.jpg`. Linked from the navbar `Games` link and the homepage `All Services` tile. Games/Chilling/Valorant tiles reuse existing assets; Hobbies Talk, E-Chat, and Watch Together are left image-less placeholders pending real artwork.
 - [x] 1.5 Browse Players (`/players`) — card grid, filters (game, rank, role, price, availability, language)
-- [ ] 1.6 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA
+- [x] 1.6 Player Profile (`/players/:id`) — profile details, reviews list, "Book" CTA, built per the mockups in `squadup_ui/PROFILE/`. One profile page with 4 tabs, images left blank pending real artwork. Full mock detail (services, reviews, feed, album, wish) authored for player `p1`; other mock players fall back to a minimal generic profile. Split into sub-tasks, one tab at a time:
+  - [x] 1.6a Services — service list sidebar, selected service detail (styles/platforms/service types), reviews list (`SERVICE.jpg`)
+  - [x] 1.6b Feeds — post composer (visual only, no backend) + feed post list (`FEEDS.jpg`)
+  - [x] 1.6c Album — highlights grid with All/Clips/Screens filter (`ALBUM.jpg`)
+  - [x] 1.6d Wish — wishlist grid with "Book" CTA per item (`WISH.jpg`)
 - [x] 1.7 Become a Player (`/become-player`) — 5-step "Pal Application" wizard, built per the mockups in `squadup_ui/ONBOARDING/` (folder name is a misnomer — this is the only signup-adjacent flow in the design; there's no separate base-profile onboarding). After signup, a modal ("Just looking for a player" / "Become a Pal") routes here or to Browse Players — see `PostSignupRoleModal.vue`. Split into sub-tasks, one screen at a time:
   - [x] 1.7a Account — avatar, display name, email, phone, region, timezone, password, terms checkbox (`ACCOUNT.jpg`)
   - [x] 1.7b Games & skills — game(s), rank, role (`GAMES.jpg`)

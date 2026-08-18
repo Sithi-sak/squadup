@@ -23,6 +23,89 @@ export interface PlayerSummary {
   promoBadge: string | null
 }
 
+/** Sidebar entry on the Player Profile page, e.g. "eMeow Feeding · 0/Game". */
+export interface PlayerServiceListing {
+  id: string
+  name: string
+  promoBadge: string | null
+  priceCoins: number
+  priceUnit: string
+}
+
+export interface ServiceTypeOption {
+  label: string
+  priceCoins: number
+  priceUnit: string
+  promoBadge: string | null
+}
+
+/** Detail panel shown on the Services tab for whichever sidebar entry is selected. */
+export interface PlayerServiceDetail {
+  title: string
+  rating: number | null
+  servedCount: number
+  description: string
+  styles: string[]
+  platforms: string[]
+  serviceTypes: ServiceTypeOption[]
+  avgResponseTime: string
+}
+
+export interface PlayerReview {
+  id: string
+  author: string
+  rating: number
+  text: string
+  timeAgo: string
+  sentiment: 'positive' | 'neutral' | 'negative'
+}
+
+export interface FeedPost {
+  id: string
+  timeAgo: string
+  text: string
+  hasImage: boolean
+  likes: number
+  comments: number
+}
+
+export interface AlbumItem {
+  id: string
+  kind: 'clip' | 'screenshot'
+  label: string
+  views: number
+  likes: number
+  shares: number
+  durationSeconds: number | null
+}
+
+export interface WishItem {
+  id: string
+  title: string
+  game: string
+  type: string
+  priceCoins: number
+  saved: boolean
+}
+
+/** Full Player Profile page data (`/players/:id`), backing all 4 tabs. */
+export interface PlayerProfile {
+  id: string
+  handle: string
+  timezone: string
+  language: string
+  tier: string
+  highlightBadge: string | null
+  subscribeLabel: string | null
+  services: PlayerServiceListing[]
+  highlightedServiceId: string
+  serviceDetails: Record<string, PlayerServiceDetail>
+  reviews: Record<string, PlayerReview[]>
+  feed: FeedPost[]
+  album: AlbumItem[]
+  wish: WishItem[]
+}
+
 export interface PlayerFilters {
   game: string | null
   rank: string | null

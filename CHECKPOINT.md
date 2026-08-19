@@ -45,13 +45,82 @@ linked to any mock account. Components should branch on `playerId` presence
 on `role`. Apply this when building Dashboards (1.12/1.13) and wiring real auth
 (2.5).
 
+**Booking flow (built for 1.9):** the flow ended up wider than the original
+"duration + time picker" plan, driven by `squadup_ui/s2/SERVICE DETAIL.jpg` and
+`squadup_ui/s1/{BOOKING,CHECKOUT,ORDER CONFIRMATION}.jpg`. Actual shape: Player
+Profile Services tab "Book" → **Service Detail** page (`/players/:id/services/:serviceId`,
+new route, not in the original table) → **"Book now"** opens a `BookingModal`
+(quantity + add-ons + promo code) → **Continue to checkout** creates a draft
+`Booking` in `stores/bookings.ts` and routes to `/checkout/:bookingId` → **Place
+order** finalizes payment method/start time and routes to
+`/checkout/:bookingId/confirmation` (new route). The old placeholder
+`/book/:playerId` route and `BookingView.vue` were removed. Notes for Phase 2/3:
+- `Booking` in `stores/bookings.ts` was redesigned around quantity/add-ons/promo/
+  payment/scheduling (not the original `durationMinutes` shape) — `mocks/bookings.ts`
+  matches the new shape; use it as the reference when designing the `bookings`
+  table (2.3) and the create/accept/decline flow (3.4).
+- A booking currently goes straight to `status: 'pending'` the moment the modal's
+  "Continue to checkout" fires (before "Place order" is even clicked). Decide in
+  3.4 whether the backend wants a real draft/cart state distinct from a submitted
+  "pending" request, since right now both are collapsed into one client-side object.
+- Add-ons (`mocks/bookings.ts` → `mockAddons`) are one flat global list, not
+  per-service. Decide whether Pals can configure their own add-ons (3.1) or
+  whether a platform-wide list is fine long-term.
+- Promo codes are a single hardcoded demo code (`SQUAD10`) plus an auto-applied
+  discount parsed from a service type's `promoBadge` string (e.g. `"15% Off"`,
+  `"1st Order Free"`). Real promo/coupon logic and "first order" detection need a
+  backend rule, not string parsing.
+- Order numbers (`SQ-XXXXX`) and booking IDs are generated client-side
+  (`Math.random()` / `Date.now()`). Backend must generate both server-side to
+  avoid collisions once multiple clients can create bookings.
+- Checkout's "Squad Coin balance" option reads `mockCurrentUser.coinBalance`
+  directly and computes "left after this order" client-side with no real
+  deduction. Wire this to the real wallet once it exists; also decide the
+  coin↔real-money exchange rate before Phase 4.
+- "Schedule" start time uses `@internationalized/date` + `UInputDate`/`UCalendar`
+  (added `@internationalized/date` as an explicit dependency) and converts via
+  `getLocalTimeZone()` — i.e. the browser's local zone, not the Pal's profile
+  timezone (`PlayerProfile.timezone`, e.g. `"GMT+07:00"`). Pick a canonical
+  storage timezone (UTC) and reconcile against the Pal's displayed timezone
+  before this is real.
+- `WishItem` gained a `serviceId` field so its "Book" button can open the same
+  Service Detail page. For `p1`'s mock wishlist several of those links are
+  best-effort matches (the wish game doesn't always match the linked service) —
+  revisit once wishlist items are backed by real data (3.1) rather than needing
+  a service reference at all.
+
+**Messages / dashboard shell (built for 1.11):** the two sides needed different chrome around
+the same chat UI — per `squadup_ui/DASHBOARD/MESSAGE.jpg`, a Pal sees Messages inside a
+dashboard shell (left rail: Dashboard/Orders/My services/Earnings/Messages/Settings + online
+toggle + profile), while a plain user just gets the chat panel under the normal header, no
+sidebar. `MessagesView.vue` branches on `mockCurrentUser.playerId` (same convention as
+`AppHeader`'s Dashboard button and `FeedSidebar`) to pick one of two wrappers around a shared
+`components/messages/MessagesPanel.vue` (thread list + message pane, both sides read/write the
+same mock thread data via `stores/messages.ts` — there's one inbox per account, not a separate
+buyer/Pal persona). The dashboard shell itself is a new reusable pair,
+`components/dashboard/DashboardLayout.vue` + `DashboardSidebar.vue`, meant to be reused as-is by
+1.12 Player Dashboard rather than rebuilt. Two notes for 1.12:
+- The sidebar's Orders/My services/Earnings items all currently link to the `/dashboard/player`
+  placeholder route since those don't have their own routes yet — 1.12 needs to decide whether
+  they become real sub-routes or stay as sections/tabs on one dashboard page (the original 1.12
+  scope line reads like one page, which conflicts with the mock's separate nav items).
+  `/dashboard/player` and `/dashboard/user` were also given `authenticated: true` +
+  `hideFooter: true` route meta now (they had neither) so the header/footer render correctly
+  once those pages are built.
+- `/messages`, `/dashboard/player`, and `/dashboard/user` use a new `hideFooter` route meta
+  (`App.vue`) instead of `hideChrome`, since these keep the signed-in header but drop the
+  marketing footer. The page height is pinned to `h-[calc(100vh-65px)]` (65px = the header's
+  `h-16` plus its 1px `border-b`) so the panel fills the viewport with internal scrolling instead
+  of the page scrolling — reuse that exact offset rather than `4rem`, which is 1px short and
+  reintroduces a stray scrollbar.
+
 ---
 
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.9 Booking (`/book/:playerId`)
-- **Last updated:** 2026-08-18
+- **Next task:** 1.12 Player Dashboard (`/dashboard/player`)
+- **Last updated:** 2026-08-19
 
 ---
 
@@ -90,14 +159,20 @@ Build in this order — each one is a single task:
   - [x] 1.8b Following (`/feed/following`) — posts from followed Pals, filterable (`FEED/FOLLOWING.jpg`)
   - [x] 1.8c Explore (`/feed/explore`) — search + category grid of trending posts (`FEED/EXPLORE.jpg`)
   - [x] 1.8d Saved (`/feed/saved`) — bookmarked posts and services, filterable (`FEED/SAVED.jpg`)
-- [ ] 1.9 Booking (`/book/:playerId`) — duration + time picker, request summary, submit
-- [ ] 1.10 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
-- [ ] 1.11 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
+- [x] 1.9 Booking — Service Detail page (`/players/:id/services/:serviceId`), "Book a session"
+      modal (quantity/add-ons/promo), Checkout (`/checkout/:bookingId`), and Order Confirmation
+      (`/checkout/:bookingId/confirmation`), built per `squadup_ui/s2/SERVICE DETAIL.jpg` and
+      `squadup_ui/s1/{BOOKING,CHECKOUT,ORDER CONFIRMATION}.jpg`. Replaces the originally planned
+      `/book/:playerId` duration/time-picker page. See the "Booking flow" note above for what's
+      still mocked and needs real backend decisions.
+- [x] 1.10 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
+- [x] 1.11 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
 - [ ] 1.12 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
 - [ ] 1.13 User Dashboard (`/dashboard/user`) — not an analytics dashboard (that's Player Dashboard's job, see the Account model note above). A plain user account has no need for one, so this route is just a lightweight "Become a Pal" upsell/ad for accounts with no `playerId`. Session/booking history lives on My Bookings (1.10) instead, reviews-left and spending stay wherever wallet/Settings ends up; don't duplicate that content here.
 - [ ] 1.14 Settings (`/settings`) — account settings form
 - [ ] 1.15 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
-- [ ] 1.16 Checkout (`/checkout/:bookingId`) — payment summary UI shell only (no live payment logic — that's Phase 4)
+- [x] 1.16 Checkout (`/checkout/:bookingId`) — built early as part of 1.9's booking flow (payment
+      summary UI shell only, no live payment logic — that's still Phase 4)
 
 ## Phase 2 — Backend Foundations
 

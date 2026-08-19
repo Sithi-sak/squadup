@@ -13,7 +13,7 @@ const route = useRoute()
       <main class="w-full flex-1">
         <router-view />
       </main>
-      <AppFooter v-if="!route.meta.hideChrome" />
+      <AppFooter v-if="!route.meta.hideChrome && !route.meta.hideFooter" />
     </div>
   </UApp>
 </template>

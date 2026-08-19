@@ -1,7 +1,19 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { computed } from 'vue'
+import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
+import MessagesPanel from '@/components/messages/MessagesPanel.vue'
+import { mockCurrentUser } from '@/mocks/users'
+
+const isPal = computed(() => Boolean(mockCurrentUser.playerId))
+</script>
 
 <template>
-  <div class="flex min-h-[60vh] items-center justify-center px-4 py-16">
-    <UEmpty title="Messages — chat UI shell" class="text-white" />
+  <DashboardLayout v-if="isPal" active="messages">
+    <MessagesPanel title="Messages" subtitle="Chat with your buyers in real time" />
+  </DashboardLayout>
+  <div v-else class="h-[calc(100vh-65px)] px-4 py-6 md:px-6">
+    <div class="mx-auto h-full max-w-(--content-max-width)">
+      <MessagesPanel title="Messages" subtitle="Chat with your Pals" />
+    </div>
   </div>
 </template>

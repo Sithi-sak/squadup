@@ -6,6 +6,8 @@ declare module 'vue-router' {
     hideChrome?: boolean
     /** Post-login pages get the signed-in header (search, wallet, avatar menu) instead of the public one. */
     authenticated?: boolean
+    /** App-shell pages (dashboard, messages) keep the header but drop the marketing footer. */
+    hideFooter?: boolean
   }
 }
 
@@ -86,31 +88,40 @@ const router = createRouter({
       meta: { authenticated: true },
     },
     {
+      path: '/players/:id/services/:serviceId',
+      name: 'service-detail',
+      component: () => import('@/views/ServiceDetailView.vue'),
+      meta: { authenticated: true },
+    },
+    {
       path: '/become-player',
       name: 'become-player',
       component: () => import('@/views/BecomePlayerView.vue'),
       meta: { hideChrome: true },
     },
     {
-      path: '/book/:playerId',
-      name: 'booking',
-      component: () => import('@/views/BookingView.vue'),
-    },
-    {
       path: '/bookings',
       name: 'my-bookings',
       component: () => import('@/views/MyBookingsView.vue'),
+      meta: { authenticated: true },
     },
-    { path: '/messages', name: 'messages', component: () => import('@/views/MessagesView.vue') },
+    {
+      path: '/messages',
+      name: 'messages',
+      component: () => import('@/views/MessagesView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
     {
       path: '/dashboard/player',
       name: 'player-dashboard',
       component: () => import('@/views/PlayerDashboardView.vue'),
+      meta: { authenticated: true, hideFooter: true },
     },
     {
       path: '/dashboard/user',
       name: 'user-dashboard',
       component: () => import('@/views/UserDashboardView.vue'),
+      meta: { authenticated: true, hideFooter: true },
     },
     { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
     { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
@@ -118,6 +129,11 @@ const router = createRouter({
       path: '/checkout/:bookingId',
       name: 'checkout',
       component: () => import('@/views/CheckoutView.vue'),
+    },
+    {
+      path: '/checkout/:bookingId/confirmation',
+      name: 'order-confirmation',
+      component: () => import('@/views/OrderConfirmationView.vue'),
     },
     {
       path: '/:pathMatch(.*)*',

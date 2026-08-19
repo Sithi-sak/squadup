@@ -141,7 +141,12 @@ const router = createRouter({
       component: () => import('@/views/UserDashboardView.vue'),
       meta: { authenticated: true, hideFooter: true },
     },
-    { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/SettingsView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
     { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
     {
       path: '/checkout/:bookingId',

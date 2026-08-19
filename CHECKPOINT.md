@@ -145,13 +145,30 @@ disabled stub buttons for now.
   `/checkout/:bookingId/confirmation` — that page is written from the *buyer's* POV ("Your request
   was sent to {Pal}") and doesn't fit a Pal viewing an order they're fulfilling.
 
+**Settings (built for 1.14):** per `squadup_ui/SETTINGS/*.jpg`, one page (`/settings`) with a
+vertical tab nav (`components/settings/SettingsNav.vue`) and six tab components: Profile, Account,
+Notifications, Payments, Privacy, Security. Follows the same `isPal` branch as Messages/Dashboard
+(`SettingsView.vue`): a Pal gets the full `DashboardLayout` shell (`active="settings"`) with all 6
+tabs, default tab "Profile"; a plain user (no `playerId`) gets a lightweight header-only wrapper
+with the Pal-only Profile tab dropped, default tab "Account". Three small reusable row components
+(`SettingsToggleRow`, `SettingsSelectRow`, `SettingsActionRow`) cover the repeated
+label+switch/select/button row shape across tabs instead of duplicating that markup ~30 times.
+New fixtures in `mocks/settings.ts` (payment cards, active sessions, phone/country/member-since)
+fill gaps `AuthUser`/`PlayerProfile` don't cover; `assets/visa.svg` added for the card row icon.
+Matching the "+ New Service" / "+ Withdraw" stub convention from 1.12/1.13, anything that would
+need real backend logic ("Save changes", "Edit", "Change", "Enable", "Manage", "Request",
+"+ Add card/payout method", "Deactivate", "Delete") is a disabled button. Two things are
+interactive purely client-side, no backend needed to make them meaningful locally: Security tab's
+session list ("Sign out" removes a session from the local array, mirroring My Services' `active`
+toggle) and Payments tab's card "..." menu (set default / remove).
+
 ---
 
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.14 Settings (`/settings`)
-- **Last updated:** 2026-08-19
+- **Next task:** 1.15 Admin (`/admin`) — or cut it and move to Phase 2, see the cut list
+- **Last updated:** 2026-08-20
 
 ---
 
@@ -200,7 +217,7 @@ Build in this order — each one is a single task:
 - [x] 1.11 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
 - [x] 1.12 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
 - [x] 1.13 User Dashboard (`/dashboard/user`) — not an analytics dashboard (that's Player Dashboard's job, see the Account model note above). A plain user account has no need for one, so this route is just a lightweight "Become a Pal" upsell/ad for accounts with no `playerId`. Session/booking history lives on My Bookings (1.10) instead, reviews-left and spending stay wherever wallet/Settings ends up; don't duplicate that content here.
-- [ ] 1.14 Settings (`/settings`) — account settings form
+- [x] 1.14 Settings (`/settings`) — account settings form
 - [ ] 1.15 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
 - [x] 1.16 Checkout (`/checkout/:bookingId`) — built early as part of 1.9's booking flow (payment
       summary UI shell only, no live payment logic — that's still Phase 4)

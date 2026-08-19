@@ -30,6 +30,8 @@ export interface PlayerServiceListing {
   promoBadge: string | null
   priceCoins: number
   priceUnit: string
+  /** Whether buyers can currently book this service, shown as the toggle on My Services (Pal Dashboard). */
+  active?: boolean
 }
 
 export interface ServiceTypeOption {
@@ -48,6 +50,8 @@ export interface PlayerServiceDetail {
   styles: string[]
   platforms: string[]
   serviceTypes: ServiceTypeOption[]
+  /** Checklist shown on the Service Detail page, e.g. "Live voice comms the whole session". */
+  whatsIncluded: string[]
   avgResponseTime: string
 }
 
@@ -86,6 +90,8 @@ export interface WishItem {
   type: string
   priceCoins: number
   saved: boolean
+  /** Which of the Pal's `services` entries "Book" on this wish item opens the Service Detail page for. */
+  serviceId: string
 }
 
 /** Full Player Profile page data (`/players/:id`), backing all 4 tabs. */

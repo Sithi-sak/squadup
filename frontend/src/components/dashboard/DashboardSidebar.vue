@@ -22,13 +22,11 @@ const myPlayerProfile = computed(() =>
   mockCurrentUser.playerId ? (mockPlayerProfiles[mockCurrentUser.playerId] ?? null) : null,
 )
 
-/** Orders/My services/Earnings don't have their own routes yet (1.12 covers all of this
- * on a single `/dashboard/player` page) — they land there too until that's built out. */
 const navItems = [
   { key: 'dashboard', label: 'Dashboard', to: '/dashboard/player', icon: PhSquaresFour },
-  { key: 'orders', label: 'Orders', to: '/dashboard/player', icon: PhClipboardText },
-  { key: 'services', label: 'My services', to: '/dashboard/player', icon: PhBriefcase },
-  { key: 'earnings', label: 'Earnings', to: '/dashboard/player', icon: PhCurrencyDollar },
+  { key: 'orders', label: 'Orders', to: '/dashboard/player/orders', icon: PhClipboardText },
+  { key: 'services', label: 'My services', to: '/dashboard/player/services', icon: PhBriefcase },
+  { key: 'earnings', label: 'Earnings', to: '/dashboard/player/earnings', icon: PhCurrencyDollar },
   { key: 'messages', label: 'Messages', to: '/messages', icon: PhEnvelopeSimple },
   { key: 'settings', label: 'Settings', to: '/settings', icon: PhGearSix },
 ] as const

@@ -114,12 +114,43 @@ buyer/Pal persona). The dashboard shell itself is a new reusable pair,
   of the page scrolling — reuse that exact offset rather than `4rem`, which is 1px short and
   reintroduces a stray scrollbar.
 
+**Pal Dashboard (built for 1.12/1.13):** per `squadup_ui/DASHBOARD.jpg` and
+`squadup_ui/DASHBOARD/{EARNINGS,MY SERVICES,ORDERS}.jpg`, the Figma's 4 screens became 4 real
+routes (not tabs on one page) so `DashboardSidebar` can deep-link into each: `/dashboard/player`
+(overview + incoming orders + earnings-this-week + top services + upcoming schedule),
+`/dashboard/player/orders` (full order list, filterable, "View" opens a detail modal),
+`/dashboard/player/services` (service cards with an active/paused toggle), and
+`/dashboard/player/earnings` (balance, 8-month chart, payout method + history). All four reuse
+`DashboardLayout`/`DashboardSidebar` unchanged. `squadup_ui/SETTING.jpg`'s sidebar tab stays
+pointed at 1.14. `squadup_ui/CREATE SERVICE.jpg` (the full service creation/edit flow) was **not**
+built, it's a separate task, not part of the 5 images this task was scoped against, so "+ New
+Service", "Edit", "View stats", "Export", "Withdraw", and "Change payout settings" are all
+disabled stub buttons for now.
+- The mock account's own Pal profile (`self` in `mocks/playerProfiles.ts`) was upgraded from an
+  empty "freshly started Pal" to a fully authored one (4 services matching MY SERVICES.jpg) so
+  these pages render populated instead of empty-state. A new `mocks/buyers.ts` (`BuyerSummary`,
+  distinct from `mockPlayers`/seed Pals) and `mocks/bookings.ts`'s `mockIncomingBookings` (7
+  bookings with `playerId: 'self'`) back Orders/incoming-orders; `mocks/dashboardStats.ts` holds
+  the aggregate numbers that aren't derivable from those 7 rows (lifetime earned, response rate,
+  payout history). "Top services" on the overview page *is* derived live from
+  `mockIncomingBookings` rather than duplicated into the stats mock.
+- The mockups show 5 order-status pills (Pending/In progress/Scheduled/Completed/Cancelled) but
+  `BookingStatus` only has 4 values. Rather than widen the enum, "Scheduled" is a presentation-only
+  derivation in the new `utils/orderStatus.ts`: an `accepted` booking whose `scheduledFor` is still
+  in the future. Reuse `orderStatusMeta()` wherever a booking's status is shown as one of these 5
+  labels instead of re-deriving it.
+- `PlayerServiceListing` (`stores/players.ts`) gained an optional `active?: boolean` for the My
+  Services toggle. It's additive, other Pal profiles (`p1`, generic fallback) simply don't set it.
+- Orders' "View" opens a `UModal` with the order detail inline rather than routing to
+  `/checkout/:bookingId/confirmation` — that page is written from the *buyer's* POV ("Your request
+  was sent to {Pal}") and doesn't fit a Pal viewing an order they're fulfilling.
+
 ---
 
 ## Status
 
 - **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.12 Player Dashboard (`/dashboard/player`)
+- **Next task:** 1.14 Settings (`/settings`)
 - **Last updated:** 2026-08-19
 
 ---
@@ -167,8 +198,8 @@ Build in this order — each one is a single task:
       still mocked and needs real backend decisions.
 - [x] 1.10 My Bookings (`/bookings`) — list with status (pending/accepted/declined/completed)
 - [x] 1.11 Messages (`/messages`) — chat UI shell (thread list + message pane), no realtime wiring yet
-- [ ] 1.12 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
-- [ ] 1.13 User Dashboard (`/dashboard/user`) — not an analytics dashboard (that's Player Dashboard's job, see the Account model note above). A plain user account has no need for one, so this route is just a lightweight "Become a Pal" upsell/ad for accounts with no `playerId`. Session/booking history lives on My Bookings (1.10) instead, reviews-left and spending stay wherever wallet/Settings ends up; don't duplicate that content here.
+- [x] 1.12 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
+- [x] 1.13 User Dashboard (`/dashboard/user`) — not an analytics dashboard (that's Player Dashboard's job, see the Account model note above). A plain user account has no need for one, so this route is just a lightweight "Become a Pal" upsell/ad for accounts with no `playerId`. Session/booking history lives on My Bookings (1.10) instead, reviews-left and spending stay wherever wallet/Settings ends up; don't duplicate that content here.
 - [ ] 1.14 Settings (`/settings`) — account settings form
 - [ ] 1.15 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
 - [x] 1.16 Checkout (`/checkout/:bookingId`) — built early as part of 1.9's booking flow (payment

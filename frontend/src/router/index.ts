@@ -118,6 +118,24 @@ const router = createRouter({
       meta: { authenticated: true, hideFooter: true },
     },
     {
+      path: '/dashboard/player/orders',
+      name: 'player-dashboard-orders',
+      component: () => import('@/views/PlayerOrdersView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
+    {
+      path: '/dashboard/player/services',
+      name: 'player-dashboard-services',
+      component: () => import('@/views/PlayerServicesView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
+    {
+      path: '/dashboard/player/earnings',
+      name: 'player-dashboard-earnings',
+      component: () => import('@/views/PlayerEarningsView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
+    {
       path: '/dashboard/user',
       name: 'user-dashboard',
       component: () => import('@/views/UserDashboardView.vue'),

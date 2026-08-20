@@ -13,6 +13,10 @@ import {
 import brandLogo from '@/assets/brand.svg'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
+import { useNotificationsStore } from '@/stores/notifications'
+import NotificationPanel from '@/components/layout/NotificationPanel.vue'
+
+const notificationsStore = useNotificationsStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -115,9 +119,25 @@ function handleSearch() {
           </UButton>
         </div>
 
-        <UButton color="neutral" variant="ghost" :ui="{ base: 'rounded-full' }" square aria-label="Notifications">
-          <PhBell :size="20" />
-        </UButton>
+        <UPopover :content="{ side: 'bottom', align: 'end', sideOffset: 8 }">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            :ui="{ base: 'rounded-full' }"
+            square
+            aria-label="Notifications"
+            class="relative"
+          >
+            <PhBell :size="20" />
+            <span
+              v-if="notificationsStore.unreadCount > 0"
+              class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-brand-400 ring-2 ring-squadup-bg"
+            />
+          </UButton>
+          <template #content="{ close }">
+            <NotificationPanel :close="close" />
+          </template>
+        </UPopover>
         <UButton to="/messages" color="neutral" variant="ghost" :ui="{ base: 'rounded-full' }" square aria-label="Messages">
           <PhChatCircle :size="20" />
         </UButton>
@@ -181,6 +201,7 @@ function handleSearch() {
             <router-link to="/feed" class="text-base text-white">Feed</router-link>
             <router-link to="/players" class="text-base text-white">Browse Players</router-link>
             <router-link to="/messages" class="text-base text-white">Messages</router-link>
+            <router-link to="/notifications" class="text-base text-white">Notifications</router-link>
             <router-link to="/bookings" class="text-base text-white">My Bookings</router-link>
             <router-link to="/wallet" class="text-base text-white">Wallet</router-link>
             <router-link :to="dashboardPath" class="text-base text-white">Dashboard</router-link>

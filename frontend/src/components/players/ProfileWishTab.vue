@@ -49,7 +49,12 @@ function toggleSaved(id: string) {
               <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
               {{ item.priceCoins }}
             </span>
-            <UButton color="primary" size="sm" class="rounded-full" @click="router.push(`/book/${playerId}`)">
+            <UButton
+              color="primary"
+              size="sm"
+              class="rounded-full"
+              @click="router.push(`/players/${playerId}/services/${item.serviceId}`)"
+            >
               Book
             </UButton>
           </div>

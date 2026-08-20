@@ -6,9 +6,27 @@ import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type Booking, type BookingStatus } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
+import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
 
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+
+const cancelModalOpen = ref(false)
+const cancelTarget = ref<{ id: string; palName: string; refundCoins: number } | null>(null)
+
+function isCancellable(status: BookingStatus) {
+  return status === 'pending' || status === 'accepted'
+}
+
+function openCancelModal(booking: Booking, palName: string) {
+  cancelTarget.value = { id: booking.id, palName, refundCoins: booking.totalCoins }
+  cancelModalOpen.value = true
+}
+
+function confirmCancel() {
+  if (cancelTarget.value) bookingsStore.cancelBooking(cancelTarget.value.id)
+  cancelModalOpen.value = false
+}
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -169,6 +187,16 @@ function handlePrimaryAction(booking: Booking) {
             </span>
             <div class="flex items-center gap-2">
               <UButton
+                v-if="isCancellable(booking.status)"
+                color="neutral"
+                variant="soft"
+                size="sm"
+                class="rounded-full text-red-400"
+                @click="openCancelModal(booking, player?.displayName ?? 'Pal')"
+              >
+                Cancel order
+              </UButton>
+              <UButton
                 color="neutral"
                 variant="soft"
                 size="sm"
@@ -184,6 +212,13 @@ function handlePrimaryAction(booking: Booking) {
           </div>
         </div>
       </div>
+
+      <CancelOrderModal
+        v-model:open="cancelModalOpen"
+        :pal-name="cancelTarget?.palName ?? 'Pal'"
+        :refund-coins="cancelTarget?.refundCoins ?? 0"
+        @confirm="confirmCancel"
+      />
     </div>
   </div>
 </template>

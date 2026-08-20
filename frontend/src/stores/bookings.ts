@@ -51,5 +51,10 @@ export const useBookingsStore = defineStore('bookings', () => {
     return list.value.find((b) => b.id === id) ?? null
   }
 
-  return { list, current, loading, error, addBooking, getBooking }
+  function cancelBooking(id: string) {
+    const booking = list.value.find((b) => b.id === id)
+    if (booking) booking.status = 'declined'
+  }
+
+  return { list, current, loading, error, addBooking, getBooking, cancelBooking }
 })

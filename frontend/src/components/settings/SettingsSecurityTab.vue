@@ -1,14 +1,27 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { PhDesktop, PhDeviceMobile } from '@phosphor-icons/vue'
-import { mockActiveSessions } from '@/mocks/settings'
+import { mockAccountDetails, mockActiveSessions } from '@/mocks/settings'
 import SettingsSelectRow from './SettingsSelectRow.vue'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 import SettingsActionRow from './SettingsActionRow.vue'
+import TwoFactorAuthModal from '@/components/modals/TwoFactorAuthModal.vue'
+import DeleteAccountModal from '@/components/modals/DeleteAccountModal.vue'
+
+const router = useRouter()
 
 const twoFactorEnabled = ref(false)
+const twoFactorModalOpen = ref(false)
+const deleteAccountModalOpen = ref(false)
 const loginAlerts = ref('Email')
 const loginAlertOptions = ['Email', 'Push', 'Off']
+
+const maskedPhone = computed(() => {
+  const parts = mockAccountDetails.phone.split(' ')
+  if (parts.length < 3) return mockAccountDetails.phone
+  return `${parts[0]} ••• ${parts[parts.length - 1]}`
+})
 
 const sessions = ref(mockActiveSessions.map((session) => ({ ...session })))
 
@@ -19,6 +32,24 @@ function signOutSession(sessionId: string) {
 function signOutAllOthers() {
   sessions.value = sessions.value.filter((session) => session.current)
 }
+
+function handleTwoFactorToggle(value: boolean) {
+  if (value) {
+    twoFactorModalOpen.value = true
+  } else {
+    twoFactorEnabled.value = false
+  }
+}
+
+function confirmTwoFactor() {
+  twoFactorEnabled.value = true
+  twoFactorModalOpen.value = false
+}
+
+function confirmDeleteAccount() {
+  deleteAccountModalOpen.value = false
+  router.push('/')
+}
 </script>
 
 <template>
@@ -28,9 +59,10 @@ function signOutAllOthers() {
       <div class="flex flex-col divide-y divide-white/10">
         <SettingsActionRow label="Password" value="Last changed 3 months ago" action-label="Change" />
         <SettingsToggleRow
-          v-model="twoFactorEnabled"
+          :model-value="twoFactorEnabled"
           label="Two-factor authentication"
           description="Off, add an extra layer of security."
+          @update:model-value="handleTwoFactorToggle"
         />
         <SettingsSelectRow v-model="loginAlerts" label="Login alerts" :items="loginAlertOptions" />
       </div>
@@ -84,8 +116,13 @@ function signOutAllOthers() {
           value="Permanently remove your account and data"
           action-label="Delete"
           danger
+          :disabled="false"
+          @action="deleteAccountModalOpen = true"
         />
       </div>
     </div>
+
+    <TwoFactorAuthModal v-model:open="twoFactorModalOpen" :phone="maskedPhone" @confirm="confirmTwoFactor" />
+    <DeleteAccountModal v-model:open="deleteAccountModalOpen" @confirm="confirmDeleteAccount" />
   </div>
 </template>

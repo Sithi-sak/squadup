@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { PhCactus } from '@phosphor-icons/vue'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { mockFollowingPosts } from '@/mocks/feed'
+
+const router = useRouter()
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -37,7 +42,22 @@ const visiblePosts = computed(() => {
       </UButton>
     </div>
 
-    <p v-if="visiblePosts.length === 0" class="py-16 text-center text-sm text-slate-400">
+    <div v-if="mockFollowingPosts.length === 0" class="py-6">
+      <EmptyState
+        :icon="PhCactus"
+        badge="Quiet in here"
+        title="Your feed is quiet"
+        description="Follow Pals to see their posts, clips and updates, or share the first one."
+      >
+        <template #actions>
+          <UButton color="primary" class="rounded-full px-6" @click="router.push('/players')">
+            Discover Pals
+          </UButton>
+          <UButton color="neutral" variant="soft" class="rounded-full px-6">Create a post</UButton>
+        </template>
+      </EmptyState>
+    </div>
+    <p v-else-if="visiblePosts.length === 0" class="py-16 text-center text-sm text-slate-400">
       No posts from Pals you follow match this filter yet.
     </p>
 

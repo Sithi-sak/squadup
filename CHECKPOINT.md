@@ -218,6 +218,12 @@ Build in this order — each one is a single task:
 - [x] 1.12 Player Dashboard (`/dashboard/player`) — profile mgmt, availability editor, incoming requests, session history, earnings view
 - [x] 1.13 User Dashboard (`/dashboard/user`) — not an analytics dashboard (that's Player Dashboard's job, see the Account model note above). A plain user account has no need for one, so this route is just a lightweight "Become a Pal" upsell/ad for accounts with no `playerId`. Session/booking history lives on My Bookings (1.10) instead, reviews-left and spending stay wherever wallet/Settings ends up; don't duplicate that content here.
 - [x] 1.14 Settings (`/settings`) — account settings form
+- [x] 1.14a State pages + Wallet (`/wallet`) — reusable `EmptyState` component
+      (`components/common/EmptyState.vue`) built per
+      `squadup_ui/STATE/{404,EMPTY SEARCH,EMPTY FEED,EMPTY WALLET}.jpg`, wired into 404
+      (`NotFoundView`), Browse Players' no-search-results state, Feed Following's
+      no-follows state, and a new Wallet page (`/wallet`, zero-balance state) linked from
+      the header's coin balance / top-up button.
 - [ ] 1.15 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
 - [x] 1.16 Checkout (`/checkout/:bookingId`) — built early as part of 1.9's booking flow (payment
       summary UI shell only, no live payment logic — that's still Phase 4)

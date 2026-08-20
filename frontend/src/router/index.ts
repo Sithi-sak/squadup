@@ -147,6 +147,12 @@ const router = createRouter({
       component: () => import('@/views/SettingsView.vue'),
       meta: { authenticated: true, hideFooter: true },
     },
+    {
+      path: '/wallet',
+      name: 'wallet',
+      component: () => import('@/views/WalletView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
     { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
     {
       path: '/checkout/:bookingId',
@@ -162,6 +168,7 @@ const router = createRouter({
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),
+      meta: { authenticated: true, hideFooter: true },
     },
   ],
 })

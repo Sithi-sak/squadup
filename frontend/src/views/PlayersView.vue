@@ -5,6 +5,7 @@ import { PhMagnifyingGlass } from '@phosphor-icons/vue'
 import { mockPlayers } from '@/mocks/players'
 import type { PlayerSummary } from '@/stores/players'
 import PlayerCard from '@/components/players/PlayerCard.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface FilterChip {
   key: string
@@ -24,6 +25,11 @@ watch(query, (value) => (searchInput.value = value))
 
 function executeSearch() {
   router.push({ path: '/players', query: searchInput.value ? { q: searchInput.value } : {} })
+}
+
+function clearSearch() {
+  searchInput.value = ''
+  router.push({ path: '/players', query: {} })
 }
 
 const searchChips: FilterChip[] = [
@@ -182,7 +188,22 @@ function formatCount(count: number) {
         </div>
       </div>
 
-      <div v-if="visiblePlayers.length === 0" class="py-16">
+      <div v-if="visiblePlayers.length === 0 && query" class="py-6">
+        <EmptyState
+          :icon="PhMagnifyingGlass"
+          badge="No results"
+          :title="`No results for “${query}”`"
+          description="Check your spelling, or try a different game, service, or Pal name."
+        >
+          <template #actions>
+            <UButton color="primary" class="rounded-full px-6" @click="clearSearch">Browse all Pals</UButton>
+            <UButton color="neutral" variant="soft" class="rounded-full px-6" @click="clearSearch">
+              Clear search
+            </UButton>
+          </template>
+        </EmptyState>
+      </div>
+      <div v-else-if="visiblePlayers.length === 0" class="py-16">
         <UEmpty title="No Pals match your filters" class="text-white" />
       </div>
       <div v-else class="grid grid-cols-1 gap-4 py-6 sm:grid-cols-2 lg:grid-cols-4">

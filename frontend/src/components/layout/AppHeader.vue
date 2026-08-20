@@ -37,7 +37,11 @@ const dashboardPath = computed(() =>
 const firstName = computed(() => mockCurrentUser.displayName?.split(' ')[0] ?? 'Account')
 
 const accountMenuItems = [
-  [{ label: 'Settings', to: '/settings' }],
+  [
+    { label: 'My orders', to: '/bookings' },
+    { label: 'Wallet', to: '/wallet' },
+    { label: 'Settings', to: '/settings' },
+  ],
   [{ label: 'Log out', onSelect: handleLogout }],
 ]
 
@@ -92,13 +96,14 @@ function handleSearch() {
         </UInput>
 
         <div class="flex items-center gap-1.5">
-          <UBadge color="neutral" variant="soft" size="lg" class="gap-1.5 rounded-full py-1.5">
+          <UButton to="/wallet" color="neutral" variant="soft" size="lg" class="gap-1.5 rounded-full py-1.5">
             <template #leading>
               <img :src="coinIcon" alt="" class="h-4.5 w-4.5" />
             </template>
             {{ mockCurrentUser.coinBalance.toLocaleString() }}
-          </UBadge>
+          </UButton>
           <UButton
+            to="/wallet"
             color="primary"
             variant="solid"
             square
@@ -177,6 +182,7 @@ function handleSearch() {
             <router-link to="/players" class="text-base text-white">Browse Players</router-link>
             <router-link to="/messages" class="text-base text-white">Messages</router-link>
             <router-link to="/bookings" class="text-base text-white">My Bookings</router-link>
+            <router-link to="/wallet" class="text-base text-white">Wallet</router-link>
             <router-link :to="dashboardPath" class="text-base text-white">Dashboard</router-link>
             <router-link to="/settings" class="text-base text-white">Settings</router-link>
             <USeparator />

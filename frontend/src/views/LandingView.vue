@@ -215,7 +215,7 @@ function handleSearch() {
                 color="primary"
                 block
                 class="mt-auto justify-center rounded-full"
-                @click="router.push(`/book/${player.id}`)"
+                @click="router.push(`/players/${player.id}`)"
               >
                 Play now
               </UButton>

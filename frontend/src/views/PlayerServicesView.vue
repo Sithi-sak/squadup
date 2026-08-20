@@ -20,12 +20,12 @@ const cards = ref(
 <template>
   <DashboardLayout active="services">
     <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">My services</h1>
           <p class="mt-1 text-sm text-slate-400">Manage the services buyers can book from you</p>
         </div>
-        <UButton color="primary" class="rounded-full" disabled>+ New Service</UButton>
+        <UButton color="primary" class="rounded-full" disabled>New Service</UButton>
       </div>
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -41,7 +41,7 @@ const cards = ref(
           </div>
           <div class="p-5">
             <div class="flex items-center justify-between gap-3">
-              <h2 class="text-lg font-bold text-white">{{ service.name }}</h2>
+              <h2 class="text-lg font-semibold text-white">{{ service.name }}</h2>
               <USwitch v-model="service.active" color="primary" />
             </div>
             <p class="mt-1 text-sm text-slate-400">{{ detail.description }}</p>

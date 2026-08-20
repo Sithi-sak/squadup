@@ -68,6 +68,7 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
       <ProfileServicesTab
         v-if="activeTab === 'services'"
         :player-id="player.id"
+        :service-id="selectedServiceId"
         :detail="selectedDetail"
         :reviews="selectedReviews"
       />

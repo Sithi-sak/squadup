@@ -269,7 +269,7 @@ function goToProfile(id: string) {
                 size="sm"
                 variant="solid"
                 class="rounded-full"
-                @click="router.push(`/book/${player.id}`)"
+                @click="router.push(`/players/${player.id}`)"
               >
                 Book
               </UButton>

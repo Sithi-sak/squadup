@@ -60,7 +60,7 @@ function formatScheduled(iso: string) {
 <template>
   <DashboardLayout active="dashboard">
     <div class="flex h-full flex-col gap-6 overflow-y-auto pr-1">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">
             Welcome back, {{ (mockCurrentUser.displayName ?? 'Pal').split(' ')[0] }} 👋
@@ -70,48 +70,48 @@ function formatScheduled(iso: string) {
             <span v-if="waitingCount"> · {{ waitingCount }} new order{{ waitingCount > 1 ? 's' : '' }} waiting</span>
           </p>
         </div>
-        <UButton color="primary" class="rounded-full" disabled>+ New Service</UButton>
+        <UButton color="primary" class="rounded-full" disabled>New Service</UButton>
       </div>
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div class="rounded-xl bg-gray-800/70 p-5">
+        <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="text-sm text-slate-400">This month</p>
-          <p class="mt-2 inline-flex items-center gap-1.5 text-2xl font-bold text-white">
+          <p class="mt-2 flex items-center gap-1.5 text-2xl font-bold text-white">
             <img :src="coinIcon" alt="" class="h-5 w-5" />
             {{ mockCurrentUser.coinBalance.toLocaleString() }}
           </p>
-          <p class="mt-1 inline-flex items-center gap-1 text-xs text-brand-400">
+          <p class="mt-auto inline-flex items-center gap-1 pt-1 text-xs text-brand-400">
             <PhTrendUp :size="14" weight="bold" />
             {{ stats.coinsThisMonthChangePct }}% · ~${{ stats.usdEquivalentThisMonth.toFixed(2) }}
           </p>
         </div>
-        <div class="rounded-xl bg-gray-800/70 p-5">
+        <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="text-sm text-slate-400">Orders completed</p>
           <p class="mt-2 text-2xl font-bold text-white">{{ stats.ordersCompleted }}</p>
-          <p class="mt-1 inline-flex items-center gap-1 text-xs text-brand-400">
+          <p class="mt-auto inline-flex items-center gap-1 pt-1 text-xs text-brand-400">
             <PhTrendUp :size="14" weight="bold" />
             {{ stats.ordersCompletedThisWeek }} this week
           </p>
         </div>
-        <div class="rounded-xl bg-gray-800/70 p-5">
+        <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="text-sm text-slate-400">Avg rating</p>
           <p class="mt-2 inline-flex items-center gap-1.5 text-2xl font-bold text-white">
             <PhStar :size="20" weight="fill" class="text-amber-400" />
             {{ stats.avgRating.toFixed(1) }}
           </p>
-          <p class="mt-1 text-xs text-slate-400">From {{ stats.reviewCount }} reviews</p>
+          <p class="mt-auto pt-1 text-xs text-slate-400">From {{ stats.reviewCount }} reviews</p>
         </div>
-        <div class="rounded-xl bg-gray-800/70 p-5">
+        <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="text-sm text-slate-400">Response rate</p>
           <p class="mt-2 text-2xl font-bold text-white">{{ stats.responseRatePct }}%</p>
-          <p class="mt-1 text-xs text-slate-400">Avg {{ stats.avgResponseTime }}</p>
+          <p class="mt-auto pt-1 text-xs text-slate-400">Avg {{ stats.avgResponseTime }}</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <div class="rounded-xl bg-gray-800/70 p-5">
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-bold text-white">Incoming orders</h2>
+            <h2 class="text-lg font-semibold text-white">Incoming orders</h2>
             <button
               type="button"
               class="cursor-pointer text-sm font-medium text-brand-400 hover:text-brand-300"
@@ -165,14 +165,14 @@ function formatScheduled(iso: string) {
 
         <div class="flex flex-col gap-4">
           <div class="rounded-xl bg-gray-800/70 p-5">
-            <h2 class="text-lg font-bold text-white">Earnings this week</h2>
+            <h2 class="text-lg font-semibold text-white">Earnings this week</h2>
             <div class="mt-4 h-32">
               <DashboardBarChart :bars="stats.earningsThisWeek.map((b) => ({ label: b.day, value: b.coins }))" />
             </div>
           </div>
 
           <div class="rounded-xl bg-gray-800/70 p-5">
-            <h2 class="text-lg font-bold text-white">Top services</h2>
+            <h2 class="text-lg font-semibold text-white">Top services</h2>
             <div class="mt-3 flex flex-col gap-3">
               <div v-for="service in topServices" :key="service.serviceId" class="flex items-center justify-between text-sm">
                 <span class="text-slate-300">{{ service.name }}</span>
@@ -187,7 +187,7 @@ function formatScheduled(iso: string) {
       </div>
 
       <div class="rounded-xl bg-gray-800/70 p-5">
-        <h2 class="text-lg font-bold text-white">Upcoming Schedule</h2>
+        <h2 class="text-lg font-semibold text-white">Upcoming Schedule</h2>
         <UEmpty
           v-if="upcomingSchedule.length === 0"
           title="No upcoming sessions"

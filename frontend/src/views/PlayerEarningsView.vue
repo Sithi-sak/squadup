@@ -15,12 +15,12 @@ function formatDate(iso: string) {
 <template>
   <DashboardLayout active="earnings">
     <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">Earnings</h1>
           <p class="mt-1 text-sm text-slate-400">Your Squad Coin balance, payouts and history</p>
         </div>
-        <UButton color="primary" class="rounded-full" disabled>+ Withdraw</UButton>
+        <UButton color="primary" class="rounded-full" disabled>Withdraw</UButton>
       </div>
 
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -55,7 +55,7 @@ function formatDate(iso: string) {
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <div class="rounded-xl bg-gray-800/70 p-5">
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-bold text-white">Earnings overview</h2>
+            <h2 class="text-lg font-semibold text-white">Earnings overview</h2>
             <span class="text-sm text-slate-400">Last {{ stats.earningsOverview.length }} months</span>
           </div>
           <div class="mt-6 h-48">
@@ -64,7 +64,7 @@ function formatDate(iso: string) {
         </div>
 
         <div class="rounded-xl bg-gray-800/70 p-5">
-          <h2 class="text-lg font-bold text-white">Payout method</h2>
+          <h2 class="text-lg font-semibold text-white">Payout method</h2>
           <div class="mt-3 flex items-center gap-3 rounded-xl bg-gray-700/50 px-4 py-3">
             <img :src="coinIcon" alt="" class="h-6 w-6" />
             <div>
@@ -89,7 +89,7 @@ function formatDate(iso: string) {
       </div>
 
       <div class="rounded-xl bg-gray-800/70 p-5">
-        <h2 class="text-lg font-bold text-white">Payout history</h2>
+        <h2 class="text-lg font-semibold text-white">Payout history</h2>
         <div class="mt-3 flex flex-col divide-y divide-white/10">
           <div
             v-for="payout in stats.payoutHistory"

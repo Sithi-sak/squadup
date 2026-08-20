@@ -5,6 +5,7 @@
     "": {
       "name": "frontend",
       "dependencies": {
+        "@internationalized/date": "^3.12.3",
         "@nuxt/ui": "^4.10.0",
         "@phosphor-icons/vue": "^2.2.1",
         "@supabase/supabase-js": "^2.112.2",

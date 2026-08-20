@@ -53,12 +53,12 @@ const rows = computed(() => {
 <template>
   <DashboardLayout active="orders">
     <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">Orders</h1>
           <p class="mt-1 text-sm text-slate-400">Track active jobs and review your order history</p>
         </div>
-        <UButton color="primary" class="rounded-full" disabled>+ Export</UButton>
+        <UButton color="primary" class="rounded-full" disabled>Export</UButton>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3">

@@ -250,8 +250,9 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 
 ## Status
 
-- **Current phase:** Phase 3 — Backend Features, starting
-- **Next task:** 3.1 — User profile CRUD + player profile CRUD + service CRUD
+- **Current phase:** Phase 3 — Backend Features, in progress
+- **Next task:** 3.1 — backend (3.1a-3.1e) is done; next up are the frontend sub-items
+  3.1f-3.1j
 - **Last updated:** 2026-08-22
 
 ---
@@ -334,9 +335,48 @@ Build in this order — each one is a single task:
 - [x] 2.4 Supabase Storage buckets: player avatars, rank verification screenshots, Pal ID/KYC documents (1.7d), service cover images (Create Service), dispute/report attachments (Order Detail's "report an issue" flow)
 - [x] 2.5 Auth wiring: Supabase Auth end-to-end (signup/login/logout, session persistence, route guards on frontend)
 
+**Task breakdown convention:** any Phase 2/3 task large enough to span multiple files or
+layers (e.g. backend + frontend, or several pages) gets broken into lettered sub-items
+(`3.1a`, `3.1b`, ...) under its checklist line, each checked off independently as it lands,
+same pattern Phase 1 already used for 1.6/1.7/1.8. Don't leave a multi-part task as one big
+unchecked box until the whole thing is done.
+
 ## Phase 3 — Backend Features (wire real data into Phase 1 pages)
 
 - [ ] 3.1 User profile CRUD + player profile CRUD + service CRUD (Create/Edit Service) + connect to Player Profile / Become a Player / Player Dashboard / Create Service pages
+  - [x] 3.1a Backend core: bearer-token auth dependency, Supabase Storage upload helper,
+        camelCase response schema base (`core/auth.py`, `core/storage.py`, `core/schema.py`)
+  - [x] 3.1b Backend: `GET/PATCH /users/me` (`routers/users.py`)
+  - [x] 3.1c Backend: `GET /players/{id}` (public profile), `GET/POST/PATCH /players/me`
+        (`routers/players.py`) — `POST /players/me` is the Become a Player submission and
+        auto-creates a `services` row per priced game from the Rates step
+  - [x] 3.1d Backend: `POST/PATCH/DELETE /players/me/services/{id}` (`routers/players.py`)
+  - [x] 3.1e Backend: live smoke test against the real Supabase project (create a throwaway
+        test user, curl through create-player → get → create-service → toggle-active). Caught
+        and fixed two bugs only a live run surfaces: (1) `postgrest-py`'s `.maybe_single()`
+        returns `None` itself (not a response with `.data = None`) on zero rows, which crashed
+        every "no row yet" path (`GET /players/me` before a profile exists, the existing-profile
+        check in `POST /players/me`, etc.) across `routers/users.py` and `routers/players.py` -
+        all six call sites now guard `if not result or not result.data`. (2) `_get_owned_service`'s
+        `players!inner(user_id)` embed was ambiguous once `players.highlighted_service_id` (a
+        second FK between `services` and `players`) existed, so PostgREST rejected every
+        `PATCH`/`DELETE /players/me/services/{id}` - fixed by naming the FK explicitly
+        (`players!services_player_id_fkey!inner(user_id)`). Also noted: deleting an `auth.users`
+        row only cascades to `public.users`, not `players`/`services` (no FK cascade configured
+        in 2.3's schema) - not fixed now since no delete-account flow is wired yet (3.13), but
+        worth remembering before that lands.
+  - [ ] 3.1f Frontend: `lib/api.ts` bearer-token fetch client + `VITE_API_URL` env var
+  - [ ] 3.1g Frontend: `stores/auth.ts` real `playerId` lookup + `stores/players.ts` real
+        fetch/create/update actions
+  - [ ] 3.1h Frontend: Become a Player wizard wired to the real submit endpoint (drop the
+        dead password field/strength meter, track raw `File`s for avatar/ID upload)
+  - [ ] 3.1i Frontend: Create Service + My Services (Player Dashboard) pages wired to real
+        service CRUD
+  - [ ] 3.1j Frontend: Player Profile page wired to real data with a mock fallback (seed
+        Pals `p1`..`p8` aren't in the DB yet, that's 3.2's call)
+  - [ ] 3.1k Verification: frontend type-check + manual browser walkthrough of the full flow,
+        then check off 3.1 itself and fold these notes into a summary block like the other
+        Phase 1/2 entries above
 - [ ] 3.2 Browse & filter endpoint + connect to Browse Players page
 - [ ] 3.3 Matching algorithm (weighted scoring: game 40 / rank 30 / role 20 / availability 10) + apply as default sort on Browse Players
 - [ ] 3.4 Booking request flow (create/accept/decline/cancel + refund/dispute reporting) + connect Booking / My Bookings / Order Detail / Player Dashboard

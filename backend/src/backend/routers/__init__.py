@@ -8,11 +8,13 @@ from . import (
     players,
     reviews,
     subscriptions,
+    users,
     wallet,
 )
 
 routers = [
     auth.router,
+    users.router,
     players.router,
     bookings.router,
     messages.router,

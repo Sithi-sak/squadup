@@ -3,12 +3,15 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import googleIcon from '@/assets/google.svg'
 import AuthSplitShell from '@/components/auth/AuthSplitShell.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const identifier = ref('')
 const password = ref('')
 const loading = ref(false)
+const googleLoading = ref(false)
 
 const fieldUi = {
   base: 'bg-white/5 px-5 py-3.5 text-sm ring-1 ring-inset ring-white/10 focus-visible:ring-2 focus-visible:ring-brand-600',
@@ -16,11 +19,17 @@ const fieldUi = {
 
 function handleLogin() {
   loading.value = true
-  // TODO: wire to Supabase Auth in Phase 2
+  // TODO: wire email/password to Supabase Auth (2.5 only wires Google)
   setTimeout(() => {
     loading.value = false
     router.push('/players')
   }, 500)
+}
+
+async function handleGoogleLogin() {
+  googleLoading.value = true
+  await authStore.signInWithGoogle()
+  googleLoading.value = false
 }
 </script>
 
@@ -75,7 +84,9 @@ function handleLogin() {
       color="neutral"
       variant="soft"
       block
+      :loading="googleLoading"
       class="justify-center gap-2.5 rounded-full bg-white/5 py-3.5 text-base text-white hover:bg-white/10"
+      @click="handleGoogleLogin"
     >
       <img :src="googleIcon" alt="" class="h-4.5 w-4.5" />
       Continue with Google

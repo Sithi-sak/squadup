@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -8,6 +9,10 @@ declare module 'vue-router' {
     authenticated?: boolean
     /** App-shell pages (dashboard, messages) keep the header but drop the marketing footer. */
     hideFooter?: boolean
+    /** Redirects to `/login` when nobody's signed in (real Supabase session, not just chrome).
+     * Browsing (players, profiles, feed, services) stays public; only account-bound pages are
+     * gated. See CHECKPOINT.md 2.5. */
+    requiresAuth?: boolean
   }
 }
 
@@ -43,7 +48,7 @@ const router = createRouter({
       path: '/home',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { authenticated: true },
+      meta: { authenticated: true, requiresAuth: true },
     },
     {
       path: '/services',
@@ -109,7 +114,7 @@ const router = createRouter({
       path: '/become-player',
       name: 'become-player',
       component: () => import('@/views/BecomePlayerView.vue'),
-      meta: { hideChrome: true },
+      meta: { hideChrome: true, requiresAuth: true },
     },
     {
       path: '/become-a-pal',
@@ -135,85 +140,85 @@ const router = createRouter({
       path: '/bookings',
       name: 'my-bookings',
       component: () => import('@/views/MyBookingsView.vue'),
-      meta: { authenticated: true },
+      meta: { authenticated: true, requiresAuth: true },
     },
     {
       path: '/bookings/:bookingId',
       name: 'order-detail',
       component: () => import('@/views/OrderDetailView.vue'),
-      meta: { authenticated: true },
+      meta: { authenticated: true, requiresAuth: true },
     },
     {
       path: '/messages',
       name: 'messages',
       component: () => import('@/views/MessagesView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/dashboard/player',
       name: 'player-dashboard',
       component: () => import('@/views/PlayerDashboardView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/dashboard/player/orders',
       name: 'player-dashboard-orders',
       component: () => import('@/views/PlayerOrdersView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/dashboard/player/services',
       name: 'player-dashboard-services',
       component: () => import('@/views/PlayerServicesView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/dashboard/player/services/new',
       name: 'player-dashboard-create-service',
       component: () => import('@/views/CreateServiceView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/dashboard/player/earnings',
       name: 'player-dashboard-earnings',
       component: () => import('@/views/PlayerEarningsView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/dashboard/user',
       name: 'user-dashboard',
       component: () => import('@/views/UserDashboardView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/wallet',
       name: 'wallet',
       component: () => import('@/views/WalletView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/wallet/withdraw',
       name: 'wallet-withdraw',
       component: () => import('@/views/WithdrawView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/subscriptions',
       name: 'subscriptions',
       component: () => import('@/views/SubscriptionsView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/notifications',
       name: 'notifications',
       component: () => import('@/views/NotificationsView.vue'),
-      meta: { authenticated: true, hideFooter: true },
+      meta: { authenticated: true, hideFooter: true, requiresAuth: true },
     },
     {
       path: '/admin',
@@ -225,11 +230,13 @@ const router = createRouter({
       path: '/checkout/:bookingId',
       name: 'checkout',
       component: () => import('@/views/CheckoutView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/checkout/:bookingId/confirmation',
       name: 'order-confirmation',
       component: () => import('@/views/OrderConfirmationView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/:pathMatch(.*)*',
@@ -238,6 +245,14 @@ const router = createRouter({
       meta: { authenticated: true, hideFooter: true },
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  if (!to.meta.requiresAuth) return true
+  const auth = useAuthStore()
+  await auth.init()
+  if (auth.isAuthenticated) return true
+  return { path: '/login', query: { redirect: to.fullPath } }
 })
 
 export default router

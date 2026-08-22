@@ -219,12 +219,39 @@ step, plus rank verification which has no upload UI yet — column provisioned a
 `order_disputes.attachment_urls` from 2.3 already covers the dispute-attachments bucket, no
 change needed there.
 
+**Auth wiring (built for 2.5):** scoped to **Google OAuth only** (per the task), not
+email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, still `TODO`.
+- Frontend: `lib/supabase.ts` (anon/publishable client), `stores/auth.ts` rewritten with
+  `init()` (restores/subscribes to the session, memoized into a single promise), `signInWithGoogle()`
+  (`supabase.auth.signInWithOAuth({ provider: 'google' })`, `redirectTo` → `/home`), and
+  `signOut()`. Both "Continue with Google" buttons now call it; `AppHeader`'s "Log out" calls
+  `signOut()`. `AuthUser.playerId` is hardcoded `null` for now, real Pal-profile linkage is 3.1.
+- Route guards: a new `requiresAuth` meta flag (separate from the pre-existing `authenticated`
+  flag, which only controls chrome and is also set on the 404 catch-all — gating on it directly
+  would have redirected logged-out users hitting a bad URL to `/login`). Applied to the
+  conservative set only: `/home`, `/dashboard/*`, `/messages`, `/settings`, `/wallet*`,
+  `/bookings*`, `/checkout*`, `/become-player`, `/subscriptions`, `/notifications`. Browsing
+  (players, profiles, feed, services, estars) stays public. The guard `await`s the same memoized
+  `init()` promise the app boot sequence uses rather than trusting call-order in `main.ts` —
+  `app.use(router)` kicks off Vue Router's own initial navigation (and guard run)
+  asynchronously, so it does not actually wait for a separate `await authStore.init()` call made
+  after it; without the guard awaiting the promise itself, first-load hits a real race (session
+  not yet restored → bounced to `/login` even when valid).
+- Backend: `handle_new_user()` trigger (`security definer`, on `auth.users` insert) populates
+  `public.users`, since Google sign-in creates the `auth.users` row directly with no app code in
+  between. First real RLS policies (self select/update on `public.users`), per the "policies
+  land in 2.5" note left in the 2.3 section above; every other table is still service_role-only.
+- Not done here, left for Phase 3 as each feature is wired: email/password auth, backend JWT
+  verification for FastAPI routes (nothing calls the API with a bearer token yet), and replacing
+  the pervasive `mockCurrentUser` reads across the app (header, dashboards, settings, etc.) with
+  the real `authStore.user` — 2.5 only wires the session itself, not every consumer of it.
+
 ---
 
 ## Status
 
-- **Current phase:** Phase 2 — Backend Foundations, in progress
-- **Next task:** 2.5 — Auth wiring
+- **Current phase:** Phase 3 — Backend Features, starting
+- **Next task:** 3.1 — User profile CRUD + player profile CRUD + service CRUD
 - **Last updated:** 2026-08-22
 
 ---
@@ -305,7 +332,7 @@ Build in this order — each one is a single task:
 - [x] 2.2 Supabase connection (service-role client for backend, anon client pattern documented for frontend)
 - [x] 2.3 Database schema in Supabase: `users`, `players`, `services` (+ `service_pricing_options`, `service_promotions` for 1.17's Create Service), `bookings` (+ `order_cancellations`, `order_disputes` for Order Detail's cancel/report flows), `messages`, `reviews`, `posts` (+ `comments`, `follows`, `saved_items` for Feed/Post Detail), `notifications`, `subscriptions`, `wallet_transactions` (+ `payout_methods`, `withdrawals` for Wallet/Withdraw), `payment_cards`, `active_sessions` (Settings), `admin_flags`/`admin_disputes` tables + relations — match each table's shape against the corresponding `mocks/*.ts` file cataloged above before finalizing columns
 - [x] 2.4 Supabase Storage buckets: player avatars, rank verification screenshots, Pal ID/KYC documents (1.7d), service cover images (Create Service), dispute/report attachments (Order Detail's "report an issue" flow)
-- [ ] 2.5 Auth wiring: Supabase Auth end-to-end (signup/login/logout, session persistence, route guards on frontend)
+- [x] 2.5 Auth wiring: Supabase Auth end-to-end (signup/login/logout, session persistence, route guards on frontend)
 
 ## Phase 3 — Backend Features (wire real data into Phase 1 pages)
 

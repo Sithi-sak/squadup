@@ -3,11 +3,15 @@ import { computed, ref } from 'vue'
 import googleIcon from '@/assets/google.svg'
 import AuthSplitShell from '@/components/auth/AuthSplitShell.vue'
 import PostSignupRoleModal from '@/components/auth/PostSignupRoleModal.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 const identifier = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
+const googleLoading = ref(false)
 const showRoleModal = ref(false)
 
 const passwordsMatch = computed(
@@ -22,11 +26,17 @@ const fieldUi = {
 function handleSignup() {
   if (!canSubmit.value) return
   loading.value = true
-  // TODO: wire to Supabase Auth in Phase 2
+  // TODO: wire email/password to Supabase Auth (2.5 only wires Google)
   setTimeout(() => {
     loading.value = false
     showRoleModal.value = true
   }, 500)
+}
+
+async function handleGoogleSignup() {
+  googleLoading.value = true
+  await authStore.signInWithGoogle()
+  googleLoading.value = false
 }
 </script>
 
@@ -92,7 +102,9 @@ function handleSignup() {
       color="neutral"
       variant="soft"
       block
+      :loading="googleLoading"
       class="justify-center gap-2.5 rounded-full bg-white/5 py-3.5 text-base text-white hover:bg-white/10"
+      @click="handleGoogleSignup"
     >
       <img :src="googleIcon" alt="" class="h-4.5 w-4.5" />
       Continue with Google

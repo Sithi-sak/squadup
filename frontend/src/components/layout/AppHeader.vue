@@ -14,9 +14,11 @@ import brandLogo from '@/assets/brand.svg'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAuthStore } from '@/stores/auth'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 
 const notificationsStore = useNotificationsStore()
+const authStore = useAuthStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -50,7 +52,8 @@ const accountMenuItems = [
   [{ label: 'Log out', onSelect: handleLogout }],
 ]
 
-function handleLogout() {
+async function handleLogout() {
+  await authStore.signOut()
   router.push('/')
 }
 

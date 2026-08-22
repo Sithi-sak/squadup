@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import { api, ApiError } from '@/lib/api'
 
 export interface PlayerSummary {
   id: string
@@ -127,6 +128,51 @@ function emptyFilters(): PlayerFilters {
   return { game: null, rank: null, role: null, maxPrice: null, language: null }
 }
 
+/** `GET/POST /players/me` response shape (backend's `PlayerDetailOut`) — the core,
+ * non-social slice of a Pal's own profile: header fields plus services. Reviews/feed/album/wish
+ * stay mock-backed until 3.6/3.8 land, so this is narrower than `PlayerProfile` above. */
+export interface MyPlayerProfile {
+  id: string
+  handle: string | null
+  displayName: string
+  avatarUrl: string | null
+  tagline: string | null
+  timezone: string | null
+  language: string | null
+  tier: string | null
+  highlightBadge: string | null
+  subscribeLabel: string | null
+  games: string[]
+  rank: string | null
+  role: string | null
+  languages: string[]
+  pricePerHour: number | null
+  rating: number | null
+  reviewCount: number
+  online: boolean
+  isNew: boolean
+  priceCoins: number | null
+  promoBadge: string | null
+  services: PlayerServiceListing[]
+  highlightedServiceId: string
+  serviceDetails: Record<string, PlayerServiceDetail>
+  postsCount: number
+  followersCount: number
+  followingCount: number
+}
+
+/** `POST /players/me/services` and `PATCH /players/me/services/{id}` response shape
+ * (backend's `ServiceOut`) — a `PlayerServiceListing` and `PlayerServiceDetail` merged into one
+ * object, plus `title` (the detail form of `name`). */
+export interface MyService extends PlayerServiceListing, Omit<PlayerServiceDetail, 'title'> {
+  title: string
+}
+
+/** Fields `PATCH /players/me/services/{id}` accepts (backend's `ServiceUpdateIn`). */
+export type ServiceUpdate = Partial<
+  Pick<MyService, 'name' | 'description' | 'styles' | 'platforms' | 'whatsIncluded' | 'avgResponseTime' | 'active'>
+>
+
 export const usePlayersStore = defineStore('players', () => {
   const list = ref<PlayerSummary[]>([])
   const filters = ref<PlayerFilters>(emptyFilters())
@@ -134,9 +180,74 @@ export const usePlayersStore = defineStore('players', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  const mine = ref<MyPlayerProfile | null>(null)
+  const mineLoading = ref(false)
+  const mineError = ref<string | null>(null)
+
   function resetFilters() {
     filters.value = emptyFilters()
   }
 
-  return { list, filters, selected, loading, error, resetFilters }
+  /** Loads the signed-in user's own Pal profile + services (`GET /players/me`). A 404 means
+   * they haven't completed Become a Player yet, so it clears `mine` rather than setting
+   * `mineError` — callers use `mine === null` to decide whether to show that flow. */
+  async function fetchMine() {
+    mineLoading.value = true
+    mineError.value = null
+    try {
+      mine.value = await api.get<MyPlayerProfile>('/players/me')
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        mine.value = null
+      } else {
+        mineError.value = err instanceof Error ? err.message : 'Failed to load player profile'
+      }
+    } finally {
+      mineLoading.value = false
+    }
+  }
+
+  /** Become a Player submission (`POST /players/me`, multipart — see `lib/api.ts`'s `FormData`
+   * handling). */
+  async function createMine(formData: FormData) {
+    mine.value = await api.post<MyPlayerProfile>('/players/me', formData)
+    return mine.value
+  }
+
+  /** Create Service submission (`POST /players/me/services`, multipart). Refetches `mine` so
+   * derived fields (e.g. `highlightedServiceId`, the profile-level `priceCoins`) stay correct
+   * rather than re-deriving them client-side. */
+  async function createService(formData: FormData) {
+    const service = await api.post<MyService>('/players/me/services', formData)
+    await fetchMine()
+    return service
+  }
+
+  async function updateService(serviceId: string, patch: ServiceUpdate) {
+    const service = await api.patch<MyService>(`/players/me/services/${serviceId}`, patch)
+    await fetchMine()
+    return service
+  }
+
+  async function deleteService(serviceId: string) {
+    await api.delete(`/players/me/services/${serviceId}`)
+    await fetchMine()
+  }
+
+  return {
+    list,
+    filters,
+    selected,
+    loading,
+    error,
+    resetFilters,
+    mine,
+    mineLoading,
+    mineError,
+    fetchMine,
+    createMine,
+    createService,
+    updateService,
+    deleteService,
+  }
 })

@@ -15,21 +15,24 @@ export interface AuthUser {
 }
 
 /** Loads the `public.users` row a signed-in Supabase user is backed by (populated by the
- * `handle_new_user` trigger on signup, see supabase/migrations). `playerId` is always `null`
- * here — real Pal-profile linkage lands with Player Profile CRUD (3.1). */
+ * `handle_new_user` trigger on signup, see supabase/migrations), plus `playerId` — the
+ * `players` row's id if this account has also completed Become a Player (3.1), else `null`. */
 async function loadAuthUser(supabaseUser: User): Promise<AuthUser> {
-  const { data } = await supabase
-    .from('users')
-    .select('display_name, role, onboarding_complete, coin_balance')
-    .eq('id', supabaseUser.id)
-    .maybeSingle()
+  const [{ data }, { data: player }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('display_name, role, onboarding_complete, coin_balance')
+      .eq('id', supabaseUser.id)
+      .maybeSingle(),
+    supabase.from('players').select('id').eq('user_id', supabaseUser.id).maybeSingle(),
+  ])
 
   return {
     id: supabaseUser.id,
     email: supabaseUser.email ?? '',
     displayName: data?.display_name ?? null,
     role: (data?.role as AuthUser['role']) ?? 'user',
-    playerId: null,
+    playerId: player?.id ?? null,
     onboardingComplete: data?.onboarding_complete ?? false,
     coinBalance: data?.coin_balance ?? 0,
   }

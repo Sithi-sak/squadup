@@ -251,8 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.1 — backend (3.1a-3.1e) is done; next up are the frontend sub-items
-  3.1f-3.1j
+- **Next task:** 3.1 — backend (3.1a-3.1e) and frontend 3.1f-3.1g are done; next up is 3.1h
 - **Last updated:** 2026-08-22
 
 ---
@@ -365,9 +364,15 @@ unchecked box until the whole thing is done.
         row only cascades to `public.users`, not `players`/`services` (no FK cascade configured
         in 2.3's schema) - not fixed now since no delete-account flow is wired yet (3.13), but
         worth remembering before that lands.
-  - [ ] 3.1f Frontend: `lib/api.ts` bearer-token fetch client + `VITE_API_URL` env var
-  - [ ] 3.1g Frontend: `stores/auth.ts` real `playerId` lookup + `stores/players.ts` real
-        fetch/create/update actions
+  - [x] 3.1f Frontend: `lib/api.ts` bearer-token fetch client + `VITE_API_URL` env var
+  - [x] 3.1g Frontend: `stores/auth.ts` real `playerId` lookup (queries `players.id` by
+        `user_id` alongside the existing `users` row query) + `stores/players.ts` real
+        `mine`/`mineLoading`/`mineError` state and `fetchMine`/`createMine`/`createService`/
+        `updateService`/`deleteService` actions against `/players/me...`. Mutations refetch
+        `mine` afterward rather than re-deriving `highlightedServiceId`/profile-level
+        `priceCoins` client-side. `MyPlayerProfile`/`MyService`/`ServiceUpdate` types added
+        alongside the existing mock-backed `PlayerProfile` (kept for 3.1j's reviews/feed/
+        album/wish, still mock-only until 3.6/3.8).
   - [ ] 3.1h Frontend: Become a Player wizard wired to the real submit endpoint (drop the
         dead password field/strength meter, track raw `File`s for avatar/ID upload)
   - [ ] 3.1i Frontend: Create Service + My Services (Player Dashboard) pages wired to real

@@ -206,12 +206,25 @@ deviations:
   `mocks/players.ts` `p1`..`p8`); `bookings.order_number` is a unique text column but nothing
   generates it server-side yet, that's still a 3.4 task per the Booking flow note above.
 
+**Storage buckets (built for 2.4):** 5 buckets in
+`supabase/migrations/20260822071454_storage_buckets.sql`. `avatars`/`service-covers` are public
+(served by plain URL, no auth needed to view a profile/service card); `rank-verification`/
+`id-documents`/`dispute-attachments` are private, readable only via the backend's service-role
+client (e.g. signed URLs), matching how sensitive those uploads are. Same RLS posture as 2.3:
+`storage.objects` RLS is on with no policies, so only service_role can write until per-feature
+policies land in 2.5/Phase 3. Two follow-ups to the 2.3 schema, both required for these buckets
+to actually be usable: `services.cover_image_url` (Create Service's cover upload had no column
+yet) and `players.id_front_url`/`id_back_url`/`rank_verification_url` (Become a Pal's Verify
+step, plus rank verification which has no upload UI yet — column provisioned ahead of it).
+`order_disputes.attachment_urls` from 2.3 already covers the dispute-attachments bucket, no
+change needed there.
+
 ---
 
 ## Status
 
 - **Current phase:** Phase 2 — Backend Foundations, in progress
-- **Next task:** 2.4 — Supabase Storage buckets
+- **Next task:** 2.5 — Auth wiring
 - **Last updated:** 2026-08-22
 
 ---
@@ -291,7 +304,7 @@ Build in this order — each one is a single task:
 - [x] 2.1 FastAPI app structure: routers per domain (players, bookings, messages, reviews, auth, feed, wallet, notifications, subscriptions, admin), `pydantic-settings` config, CORS for the Vite dev origin
 - [x] 2.2 Supabase connection (service-role client for backend, anon client pattern documented for frontend)
 - [x] 2.3 Database schema in Supabase: `users`, `players`, `services` (+ `service_pricing_options`, `service_promotions` for 1.17's Create Service), `bookings` (+ `order_cancellations`, `order_disputes` for Order Detail's cancel/report flows), `messages`, `reviews`, `posts` (+ `comments`, `follows`, `saved_items` for Feed/Post Detail), `notifications`, `subscriptions`, `wallet_transactions` (+ `payout_methods`, `withdrawals` for Wallet/Withdraw), `payment_cards`, `active_sessions` (Settings), `admin_flags`/`admin_disputes` tables + relations — match each table's shape against the corresponding `mocks/*.ts` file cataloged above before finalizing columns
-- [ ] 2.4 Supabase Storage buckets: player avatars, rank verification screenshots, Pal ID/KYC documents (1.7d), service cover images (Create Service), dispute/report attachments (Order Detail's "report an issue" flow)
+- [x] 2.4 Supabase Storage buckets: player avatars, rank verification screenshots, Pal ID/KYC documents (1.7d), service cover images (Create Service), dispute/report attachments (Order Detail's "report an issue" flow)
 - [ ] 2.5 Auth wiring: Supabase Auth end-to-end (signup/login/logout, session persistence, route guards on frontend)
 
 ## Phase 3 — Backend Features (wire real data into Phase 1 pages)

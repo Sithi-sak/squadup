@@ -170,8 +170,58 @@ export interface MyService extends PlayerServiceListing, Omit<PlayerServiceDetai
 
 /** Fields `PATCH /players/me/services/{id}` accepts (backend's `ServiceUpdateIn`). */
 export type ServiceUpdate = Partial<
-  Pick<MyService, 'name' | 'description' | 'styles' | 'platforms' | 'whatsIncluded' | 'avgResponseTime' | 'active'>
+  Pick<
+    MyService,
+    'name' | 'description' | 'styles' | 'platforms' | 'whatsIncluded' | 'avgResponseTime' | 'active'
+  >
 >
+
+/** Narrows a `GET /players/{id}` response down to the `PlayerSummary` shape used by browse
+ * cards and the Player Profile header. */
+export function playerSummaryFromDetail(p: MyPlayerProfile): PlayerSummary {
+  return {
+    id: p.id,
+    displayName: p.displayName,
+    avatarUrl: p.avatarUrl,
+    games: p.games,
+    rank: p.rank,
+    role: p.role,
+    pricePerHour: p.pricePerHour,
+    languages: p.languages,
+    rating: p.rating,
+    reviewCount: p.reviewCount,
+    tagline: p.tagline,
+    priceCoins: p.priceCoins,
+    online: p.online,
+    isNew: p.isNew,
+    promoBadge: p.promoBadge,
+  }
+}
+
+/** Expands a `GET /players/{id}` response into the full `PlayerProfile` shape the Player
+ * Profile page's tabs expect. Reviews/feed/album/wish are still mock-only (3.6/3.8), so they
+ * come back empty for a real (DB-backed) profile rather than falling back to authored mock data. */
+export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
+  return {
+    id: p.id,
+    handle: p.handle ?? `@${p.id.slice(0, 10)}`,
+    timezone: p.timezone ?? 'GMT+00:00',
+    language: p.language ?? p.languages[0] ?? 'English',
+    tier: p.tier ?? 'Pal 1',
+    highlightBadge: p.highlightBadge,
+    subscribeLabel: p.subscribeLabel,
+    services: p.services,
+    highlightedServiceId: p.highlightedServiceId,
+    serviceDetails: p.serviceDetails,
+    reviews: {},
+    feed: [],
+    album: [],
+    wish: [],
+    postsCount: p.postsCount,
+    followersCount: p.followersCount,
+    followingCount: p.followingCount,
+  }
+}
 
 export const usePlayersStore = defineStore('players', () => {
   const list = ref<PlayerSummary[]>([])
@@ -234,6 +284,13 @@ export const usePlayersStore = defineStore('players', () => {
     await fetchMine()
   }
 
+  /** Loads any Pal's public profile (`GET /players/{id}`). Throws (404, or a Postgres error for
+   * an id that isn't a valid uuid — e.g. the seed mock ids) when there's no DB-backed profile for
+   * `id`; callers fall back to mock data in that case. */
+  async function fetchPlayer(id: string) {
+    return api.get<MyPlayerProfile>(`/players/${id}`)
+  }
+
   return {
     list,
     filters,
@@ -249,5 +306,6 @@ export const usePlayersStore = defineStore('players', () => {
     createService,
     updateService,
     deleteService,
+    fetchPlayer,
   }
 })

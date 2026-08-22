@@ -385,8 +385,16 @@ unchecked box until the whole thing is done.
         `updateService`, and a new trash-icon button + `ConfirmModal` wires `deleteService`
         (toast on failure via `useToast`). "Edit" stays disabled — no edit form/route exists yet,
         out of scope here.
-  - [ ] 3.1j Frontend: Player Profile page wired to real data with a mock fallback (seed
-        Pals `p1`..`p8` aren't in the DB yet, that's 3.2's call)
+  - [x] 3.1j Frontend: Player Profile page wired to real data with a mock fallback (seed
+        Pals `p1`..`p8` aren't in the DB yet, that's 3.2's call). Added `players.fetchPlayer`
+        (`GET /players/{id}`, public) plus `playerSummaryFromDetail`/`playerProfileFromDetail`
+        converters, and a shared `usePlayerProfileData(id)` composable that tries the real
+        endpoint and falls back to `mocks/playerProfiles.ts` on any failure (404 for a real
+        missing id, or a Postgres error for a non-uuid mock id like `p1`) — reviews/feed/album/wish
+        come back empty for a real profile rather than mock data, consistent with `mine`'s `self`
+        entry. `ServiceDetailView.vue` (`/players/:id/services/:serviceId`) uses the same
+        composable since it's a direct drill-down from the profile page and would otherwise break
+        for real playerIds.
   - [ ] 3.1k Verification: frontend type-check + manual browser walkthrough of the full flow,
         then check off 3.1 itself and fold these notes into a summary block like the other
         Phase 1/2 entries above

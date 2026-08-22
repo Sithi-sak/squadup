@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.1 — backend (3.1a-3.1e) and frontend 3.1f-3.1i are done; next up is 3.1j
+- **Next task:** 3.2 done; next up is 3.3 (Matching algorithm)
 - **Last updated:** 2026-08-22
 
 ---
@@ -342,7 +342,7 @@ unchecked box until the whole thing is done.
 
 ## Phase 3 — Backend Features (wire real data into Phase 1 pages)
 
-- [ ] 3.1 User profile CRUD + player profile CRUD + service CRUD (Create/Edit Service) + connect to Player Profile / Become a Player / Player Dashboard / Create Service pages
+- [x] 3.1 User profile CRUD + player profile CRUD + service CRUD (Create/Edit Service) + connect to Player Profile / Become a Player / Player Dashboard / Create Service pages. Backend (FastAPI + Supabase) for user/player/service CRUD, live-smoke-tested against the real project; frontend wired end-to-end (Become a Player wizard, Create/My Services, Player Profile + Service Detail) with a mock fallback on Player Profile/Service Detail for seed Pals (`p1`..`p8`) not yet in the DB (3.2's call). Type-check/lint clean; manual browser walkthrough not run by Claude, left to the user.
   - [x] 3.1a Backend core: bearer-token auth dependency, Supabase Storage upload helper,
         camelCase response schema base (`core/auth.py`, `core/storage.py`, `core/schema.py`)
   - [x] 3.1b Backend: `GET/PATCH /users/me` (`routers/users.py`)
@@ -395,10 +395,38 @@ unchecked box until the whole thing is done.
         entry. `ServiceDetailView.vue` (`/players/:id/services/:serviceId`) uses the same
         composable since it's a direct drill-down from the profile page and would otherwise break
         for real playerIds.
-  - [ ] 3.1k Verification: frontend type-check + manual browser walkthrough of the full flow,
-        then check off 3.1 itself and fold these notes into a summary block like the other
-        Phase 1/2 entries above
-- [ ] 3.2 Browse & filter endpoint + connect to Browse Players page
+  - [x] 3.1k Verification: `vue-tsc --build` and `eslint` both clean (the only eslint hits,
+        `StepRates.vue`/`RefundModal.vue` unused-var errors, predate 3.1 and are unrelated).
+        Manual browser walkthrough skipped per standing instruction not to run the `run` skill
+        in this project - user to verify the flow manually.
+- [x] 3.2 Browse & filter endpoint + connect to Browse Players page
+  - [x] 3.2a Backend: `GET /players` (`routers/players.py`) — a new list route registered above
+        the `/{player_id}` catch-all (distinct path shape, no collision risk, but kept there for
+        readability alongside `/me`). Filters (`q`, `game`, `rank`, `role`, `language`,
+        `max_price`, `online`, `is_new`) and `sort` (`rating`/`price_asc`/`price_desc`) are all
+        applied in Python over one `players` fetch plus one batched `services` fetch scoped to
+        each player's `highlighted_service_id` (fine at this dataset scale; avoids composing
+        PostgREST filters against array columns for `games`/`languages`). Added `PlayerSummaryOut`
+        (the browse-card slice of `PlayerDetailOut`, no `services`/`serviceDetails`) and a
+        `_player_summary` helper alongside the existing `_serialize_player`. No `availability`
+        filter: 1.5's actual filter chips never grew a dropdown for it and the `players` table
+        (2.3) has no matching column, so there's nothing to wire it to yet.
+  - [x] 3.2b Backend: live smoke test against the real Supabase project (create a throwaway user
+        + player via `POST /players/me`, curl `GET /players` with each filter param and `sort`
+        individually, confirm expected include/exclude/order, delete the throwaway user/player).
+  - [x] 3.2c Frontend: `stores/players.ts` `fetchList()` action wired to `GET /players` into the
+        pre-existing (previously-unused) `list`/`loading`/`error` state from the 0.5 store
+        skeleton.
+  - [x] 3.2d Frontend: `PlayersView.vue` now fetches `fetchList()` on mount and merges it with
+        `mockPlayers` (`allPlayers` computed) rather than replacing the mock catalog outright —
+        the call left open in 3.1j ("seed Pals aren't in the DB yet, that's 3.2's call"). Seed
+        Pals `p1`..`p8` stay as demo content; any real signed-up Pal now also shows up in Browse
+        Players alongside them. The existing search/game-category matching, promo/rating chips,
+        and sort dropdown are unchanged, just operate over `allPlayers` instead of `mockPlayers`
+        directly — those chip predicates (promo-badge string checks, rating thresholds) stay
+        client-side rather than becoming more backend query params, since they're presentation
+        categories layered on the fetched list, not independent data filters. `vue-tsc --build`
+        and `eslint` both clean.
 - [ ] 3.3 Matching algorithm (weighted scoring: game 40 / rank 30 / role 20 / availability 10) + apply as default sort on Browse Players
 - [ ] 3.4 Booking request flow (create/accept/decline/cancel + refund/dispute reporting) + connect Booking / My Bookings / Order Detail / Player Dashboard
 - [ ] 3.5 Realtime chat via Supabase Realtime + connect Messages page

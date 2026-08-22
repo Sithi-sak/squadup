@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PhMagnifyingGlass } from '@phosphor-icons/vue'
 import { mockPlayers } from '@/mocks/players'
-import type { PlayerSummary } from '@/stores/players'
+import { usePlayersStore, type PlayerSummary } from '@/stores/players'
 import PlayerCard from '@/components/players/PlayerCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+
+const playersStore = usePlayersStore()
+onMounted(() => playersStore.fetchList())
+
+/** Seed Pals (`mockPlayers`, `p1`..`p8`) stay in the catalog as demo content alongside whatever
+ * real Pal profiles the backend returns (`GET /players`) — see the 3.1j/3.2 notes in
+ * CHECKPOINT.md on why seed Pals aren't DB rows yet. */
+const allPlayers = computed<PlayerSummary[]>(() => [...playersStore.list, ...mockPlayers])
 
 interface FilterChip {
   key: string
@@ -76,11 +84,11 @@ watch(sortOptions, (options) => (sortBy.value = options[0]!))
 const matchedPlayers = computed(() => {
   if (isGameMode.value) {
     const game = gameFilter.value.toLowerCase()
-    return mockPlayers.filter((p) => p.games.some((g) => g.toLowerCase() === game))
+    return allPlayers.value.filter((p) => p.games.some((g) => g.toLowerCase() === game))
   }
-  if (!query.value) return mockPlayers
+  if (!query.value) return allPlayers.value
   const q = query.value.toLowerCase()
-  return mockPlayers.filter(
+  return allPlayers.value.filter(
     (p) =>
       p.displayName.toLowerCase().includes(q) ||
       p.games.some((g) => g.toLowerCase().includes(q)) ||

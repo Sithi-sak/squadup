@@ -238,6 +238,26 @@ export const usePlayersStore = defineStore('players', () => {
     filters.value = emptyFilters()
   }
 
+  /** Loads the real Browse Players catalog (`GET /players`) into `list`. Seed Pals (`p1`..`p8`
+   * in `mocks/players.ts`) aren't DB rows, so `PlayersView.vue` merges `list` with the mock
+   * catalog rather than replacing it. */
+  async function fetchList(params: { q?: string; game?: string } = {}) {
+    loading.value = true
+    error.value = null
+    try {
+      const query = new URLSearchParams()
+      if (params.q) query.set('q', params.q)
+      if (params.game) query.set('game', params.game)
+      const qs = query.toString()
+      list.value = await api.get<PlayerSummary[]>(`/players${qs ? `?${qs}` : ''}`)
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to load players'
+      list.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+
   /** Loads the signed-in user's own Pal profile + services (`GET /players/me`). A 404 means
    * they haven't completed Become a Player yet, so it clears `mine` rather than setting
    * `mineError` — callers use `mine === null` to decide whether to show that flow. */
@@ -298,6 +318,7 @@ export const usePlayersStore = defineStore('players', () => {
     loading,
     error,
     resetFilters,
+    fetchList,
     mine,
     mineLoading,
     mineError,

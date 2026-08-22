@@ -7,7 +7,7 @@ defineEmits<{ 'update:active': [string] }>()
 </script>
 
 <template>
-  <nav class="flex flex-col gap-1 rounded-xl bg-gray-800/70 p-2">
+  <nav class="flex flex-col gap-1">
     <button
       v-for="tab in tabs"
       :key="tab.key"

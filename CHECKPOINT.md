@@ -166,9 +166,9 @@ toggle) and Payments tab's card "..." menu (set default / remove).
 
 ## Status
 
-- **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only)
-- **Next task:** 1.15 Admin (`/admin`) — or cut it and move to Phase 2, see the cut list
-- **Last updated:** 2026-08-20
+- **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only), complete
+- **Next task:** Phase 2 — Backend Foundations, starting with 2.1
+- **Last updated:** 2026-08-22
 
 ---
 
@@ -224,7 +224,15 @@ Build in this order — each one is a single task:
       (`NotFoundView`), Browse Players' no-search-results state, Feed Following's
       no-follows state, and a new Wallet page (`/wallet`, zero-balance state) linked from
       the header's coin balance / top-up button.
-- [ ] 1.15 Admin (`/admin`) — flagged players, disputes list (cut this if time is short later)
+- [x] 1.15 Admin (`/admin`) — flagged players, disputes list. Single route, gated behind a
+      mock credential login (`stores/admin.ts`, `admin@squadup.gg` / `SquadUp-Admin-26`,
+      session-only via `sessionStorage`) since there's exactly one admin account and no
+      real auth yet (that lands with 2.5 / 3.8). Once logged in, `AdminView.vue` renders
+      its own dashboard shell (`hideChrome: true`, no public header/footer or Pal dashboard
+      chrome) with three tabs built like Settings' tab pattern (`SettingsNav` reused as-is):
+      `AdminOverviewPanel` (stat cards + `DashboardBarChart` reuse + recent lists),
+      `AdminFlaggedPlayersPanel` and `AdminDisputesPanel` (filter pills + table + review
+      modal, mirroring `PlayerOrdersView`'s table/modal shape). Mock data in `mocks/admin.ts`.
 - [x] 1.16 Checkout (`/checkout/:bookingId`) — built early as part of 1.9's booking flow (payment
       summary UI shell only, no live payment logic — that's still Phase 4)
 

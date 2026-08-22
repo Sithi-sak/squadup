@@ -215,7 +215,12 @@ const router = createRouter({
       component: () => import('@/views/NotificationsView.vue'),
       meta: { authenticated: true, hideFooter: true },
     },
-    { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/views/AdminView.vue'),
+      meta: { hideChrome: true },
+    },
     {
       path: '/checkout/:bookingId',
       name: 'checkout',

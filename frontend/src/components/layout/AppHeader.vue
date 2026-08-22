@@ -67,7 +67,7 @@ function handleSearch() {
   <header class="sticky top-0 z-50 border-b border-white/10 bg-squadup-bg">
     <div class="mx-auto flex h-16 max-w-(--content-max-width) items-center gap-6 px-4">
       <router-link :to="isAuthenticated ? '/home' : '/'" class="flex shrink-0 items-center">
-        <img :src="brandLogo" alt="SquadUp" class="h-[26px] w-auto" />
+        <img :src="brandLogo" alt="SquadUp" class="h-6.5 w-auto" />
       </router-link>
 
       <nav v-if="isAuthenticated" class="hidden items-center gap-5 md:flex">

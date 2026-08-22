@@ -14,24 +14,24 @@ export const becomePlayerSteps: BecomePlayerStepMeta[] = [
 
 export interface AccountStepData {
   avatarUrl: string | null
+  avatarFile: File | null
   displayName: string
   email: string
   phone: string
   region: string
   timezone: string
-  password: string
   agreedToTerms: boolean
 }
 
 export function createAccountStepData(): AccountStepData {
   return {
     avatarUrl: null,
+    avatarFile: null,
     displayName: '',
     email: '',
     phone: '',
     region: '',
     timezone: '',
-    password: '',
     agreedToTerms: false,
   }
 }
@@ -99,16 +99,16 @@ export function createRatesStepData(): RatesStepData {
 export type PayoutSchedule = 'weekly' | 'bi-weekly' | 'monthly'
 
 export interface VerifyStepData {
-  idFrontFileName: string | null
-  idBackFileName: string | null
+  idFrontFile: File | null
+  idBackFile: File | null
   selfieVerified: boolean
   payoutSchedule: PayoutSchedule
 }
 
 export function createVerifyStepData(): VerifyStepData {
   return {
-    idFrontFileName: null,
-    idBackFileName: null,
+    idFrontFile: null,
+    idBackFile: null,
     selfieVerified: false,
     payoutSchedule: 'weekly',
   }

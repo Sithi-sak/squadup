@@ -17,8 +17,10 @@ import {
   createReviewStepData,
   createVerifyStepData,
 } from '@/components/become-player/types'
+import { usePlayersStore } from '@/stores/players'
 
 const router = useRouter()
+const playersStore = usePlayersStore()
 
 const currentStep = ref(1)
 const progressPct = computed(() => (currentStep.value === 1 ? 8 : (currentStep.value - 1) * 20))
@@ -29,6 +31,8 @@ const ratesData = ref(createRatesStepData())
 const verifyData = ref(createVerifyStepData())
 const reviewData = ref(createReviewStepData())
 const submitted = ref(false)
+const submitting = ref(false)
+const submitError = ref<string | null>(null)
 
 function handleStepContinue() {
   currentStep.value = Math.min(currentStep.value + 1, becomePlayerSteps.length)
@@ -38,14 +42,37 @@ function handleStepBack() {
   currentStep.value = Math.max(currentStep.value - 1, 1)
 }
 
-function handleSubmit() {
-  console.log('Pal application submitted', {
-    account: accountData.value,
-    games: gamesData.value,
-    rates: ratesData.value,
-    verify: verifyData.value,
-  })
-  submitted.value = true
+async function handleSubmit() {
+  submitting.value = true
+  submitError.value = null
+
+  const formData = new FormData()
+  formData.append('display_name', accountData.value.displayName)
+  if (gamesData.value.headline) formData.append('tagline', gamesData.value.headline)
+  if (accountData.value.timezone) formData.append('timezone', accountData.value.timezone)
+  for (const game of gamesData.value.games) formData.append('games', game)
+  if (gamesData.value.highestRank) formData.append('rank', gamesData.value.highestRank)
+  if (gamesData.value.role) formData.append('role', gamesData.value.role)
+  for (const language of gamesData.value.languages) formData.append('languages', language)
+  formData.append('payout_schedule', verifyData.value.payoutSchedule)
+  formData.append('pricing_model', ratesData.value.pricingModel)
+  formData.append(
+    'rates',
+    JSON.stringify(ratesData.value.rates.map((rate) => ({ game: rate.game, price: rate.price }))),
+  )
+  formData.append('offer_first_order_free', String(ratesData.value.offerFirstOrderFree))
+  if (accountData.value.avatarFile) formData.append('avatar', accountData.value.avatarFile)
+  if (verifyData.value.idFrontFile) formData.append('id_front', verifyData.value.idFrontFile)
+  if (verifyData.value.idBackFile) formData.append('id_back', verifyData.value.idBackFile)
+
+  try {
+    await playersStore.createMine(formData)
+    submitted.value = true
+  } catch (err) {
+    submitError.value = err instanceof Error ? err.message : 'Failed to submit your application'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -54,7 +81,7 @@ function handleSubmit() {
     <header class="border-b border-gray-800 px-6 py-5">
       <div class="mx-auto flex max-w-5xl items-center justify-between">
         <router-link to="/" class="flex items-center gap-2">
-          <img :src="brandLogo" alt="SquadUp" class="h-[24px] w-auto" />
+          <img :src="brandLogo" alt="SquadUp" class="h-6 w-auto" />
           <span class="text-sm text-slate-400">· Pal Application</span>
         </router-link>
         <UButton
@@ -147,6 +174,8 @@ function handleSubmit() {
               :games-data="gamesData"
               :rates-data="ratesData"
               :verify-data="verifyData"
+              :submitting="submitting"
+              :submit-error="submitError"
               @submit="handleSubmit"
               @back="handleStepBack"
               @edit="currentStep = $event"

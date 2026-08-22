@@ -18,8 +18,8 @@ function openFilePicker(side: 'front' | 'back') {
 function onFileSelected(event: Event, side: 'front' | 'back') {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
-  if (side === 'front') data.value.idFrontFileName = file.name
-  else data.value.idBackFileName = file.name
+  if (side === 'front') data.value.idFrontFile = file
+  else data.value.idBackFile = file
 }
 
 function toggleSelfie() {
@@ -32,7 +32,7 @@ const payoutScheduleOptions: { label: string; value: PayoutSchedule }[] = [
   { label: 'Monthly', value: 'monthly' },
 ]
 
-const canSubmit = computed(() => data.value.idFrontFileName !== null)
+const canSubmit = computed(() => data.value.idFrontFile !== null)
 </script>
 
 <template>
@@ -54,7 +54,7 @@ const canSubmit = computed(() => data.value.idFrontFileName !== null)
           type="button"
           class="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 px-6 py-10 text-center transition-colors"
           :class="
-            data.idFrontFileName
+            data.idFrontFile
               ? 'border-brand-600 bg-brand-600/5'
               : 'border-dashed border-gray-700 hover:border-gray-600'
           "
@@ -62,17 +62,17 @@ const canSubmit = computed(() => data.value.idFrontFileName !== null)
         >
           <span
             class="flex size-10 items-center justify-center rounded-full"
-            :class="data.idFrontFileName ? 'bg-brand-600 text-white' : 'bg-gray-800 text-white'"
+            :class="data.idFrontFile ? 'bg-brand-600 text-white' : 'bg-gray-800 text-white'"
           >
-            <PhCheck v-if="data.idFrontFileName" :size="20" weight="bold" />
+            <PhCheck v-if="data.idFrontFile" :size="20" weight="bold" />
             <PhArrowUp v-else :size="20" weight="bold" />
           </span>
           <div>
             <p class="text-sm font-semibold text-white">
-              {{ data.idFrontFileName ? 'ID uploaded — front' : 'Upload ID — front' }}
+              {{ data.idFrontFile ? 'ID uploaded, front' : 'Upload ID, front' }}
             </p>
             <p class="mt-1 text-xs text-slate-400">
-              {{ data.idFrontFileName ?? 'PNG, JPG or PDF · Max 10 MB' }}
+              {{ data.idFrontFile?.name ?? 'PNG, JPG or PDF · Max 10 MB' }}
             </p>
           </div>
         </button>
@@ -81,7 +81,7 @@ const canSubmit = computed(() => data.value.idFrontFileName !== null)
           type="button"
           class="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 px-6 py-10 text-center transition-colors"
           :class="
-            data.idBackFileName
+            data.idBackFile
               ? 'border-brand-600 bg-brand-600/5'
               : 'border-dashed border-gray-700 hover:border-gray-600'
           "
@@ -89,17 +89,17 @@ const canSubmit = computed(() => data.value.idFrontFileName !== null)
         >
           <span
             class="flex size-10 items-center justify-center rounded-full"
-            :class="data.idBackFileName ? 'bg-brand-600 text-white' : 'bg-gray-800 text-white'"
+            :class="data.idBackFile ? 'bg-brand-600 text-white' : 'bg-gray-800 text-white'"
           >
-            <PhCheck v-if="data.idBackFileName" :size="20" weight="bold" />
+            <PhCheck v-if="data.idBackFile" :size="20" weight="bold" />
             <PhArrowUp v-else :size="20" weight="bold" />
           </span>
           <div>
             <p class="text-sm font-semibold text-white">
-              {{ data.idBackFileName ? 'ID uploaded — back' : 'Upload ID — back' }}
+              {{ data.idBackFile ? 'ID uploaded, back' : 'Upload ID, back' }}
             </p>
             <p class="mt-1 text-xs text-slate-400">
-              {{ data.idBackFileName ?? 'PNG, JPG or PDF · Max 10 MB' }}
+              {{ data.idBackFile?.name ?? 'PNG, JPG or PDF · Max 10 MB' }}
             </p>
           </div>
         </button>

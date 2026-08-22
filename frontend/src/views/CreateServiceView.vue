@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { PhCaretLeft, PhLightning, PhPlay, PhPlus, PhStar, PhTrophy, PhUserCircle, PhX } from '@phosphor-icons/vue'
+import { PhCaretLeft, PhLightning, PhPlus, PhStar, PhTrophy, PhUserCircle, PhX } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { mockCurrentUser } from '@/mocks/users'
-import { mockPlayerProfiles } from '@/mocks/playerProfiles'
-import type { PlayerServiceDetail, PlayerServiceListing } from '@/stores/players'
+import { usePlayersStore } from '@/stores/players'
 
 const router = useRouter()
-const profile = mockPlayerProfiles.self!
+const playersStore = usePlayersStore()
+
+onMounted(() => {
+  if (!playersStore.mine) playersStore.fetchMine()
+})
 
 const categoryOptions = ['Game', 'Coaching', 'Chat', 'Watch Party']
 const gameOptions = [
@@ -32,6 +34,7 @@ const description = ref('')
 
 const coverInput = ref<HTMLInputElement | null>(null)
 const coverPreviewUrl = ref<string | null>(null)
+const coverFile = ref<File | null>(null)
 
 function openCoverPicker() {
   coverInput.value?.click()
@@ -42,11 +45,13 @@ function onCoverSelected(event: Event) {
   if (!file) return
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = URL.createObjectURL(file)
+  coverFile.value = file
 }
 
 function removeCover() {
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = null
+  coverFile.value = null
   if (coverInput.value) coverInput.value.value = ''
 }
 
@@ -100,40 +105,6 @@ const canPublish = computed(
 const fieldUi = { base: 'bg-gray-800/70 px-5 py-3.5 text-sm ring-0 hover:bg-gray-800' }
 const selectUi = { base: 'bg-gray-800/70 px-5 py-3.5 text-sm ring-0 hover:bg-gray-800' }
 
-function buildListing(): { listing: PlayerServiceListing; detail: PlayerServiceDetail } {
-  const id = title.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `service-${Date.now()}`
-  const types = serviceTypes.value.filter((row) => row.label.trim().length > 0)
-  const first = types[0]
-
-  const listing: PlayerServiceListing = {
-    id,
-    name: title.value.trim(),
-    promoBadge: previewPromoBadge.value,
-    priceCoins: first?.priceCoins ?? 0,
-    priceUnit: first?.priceUnit ?? '/game',
-    active: true,
-  }
-
-  const detail: PlayerServiceDetail = {
-    title: title.value.trim(),
-    rating: null,
-    servedCount: 0,
-    description: description.value.trim() || 'Service details coming soon.',
-    styles: [],
-    platforms: [game.value],
-    serviceTypes: types.map((row) => ({
-      label: row.label.trim(),
-      priceCoins: row.priceCoins ?? 0,
-      priceUnit: row.priceUnit,
-      promoBadge: previewPromoBadge.value,
-    })),
-    whatsIncluded: [],
-    avgResponseTime: '5-10 mins',
-  }
-
-  return { listing, detail }
-}
-
 function goBack() {
   router.push('/dashboard/player/services')
 }
@@ -142,12 +113,38 @@ function saveDraft() {
   goBack()
 }
 
-function publish() {
-  if (!canPublish.value) return
-  const { listing, detail } = buildListing()
-  profile.services.push(listing)
-  profile.serviceDetails[listing.id] = detail
-  goBack()
+const submitting = ref(false)
+const submitError = ref<string | null>(null)
+
+async function publish() {
+  if (!canPublish.value || submitting.value) return
+  submitting.value = true
+  submitError.value = null
+
+  const types = serviceTypes.value.filter((row) => row.label.trim().length > 0)
+
+  const formData = new FormData()
+  formData.append('name', title.value.trim())
+  if (description.value.trim()) formData.append('description', description.value.trim())
+  formData.append('platforms', game.value)
+  formData.append(
+    'pricing_options',
+    JSON.stringify(
+      types.map((row) => ({ label: row.label.trim(), price_coins: row.priceCoins ?? 0, price_unit: row.priceUnit })),
+    ),
+  )
+  formData.append('first_order_free', String(firstOrderFree.value))
+  if (percentageDiscount.value) formData.append('percent_off', String(discountPct.value))
+  if (coverFile.value) formData.append('cover', coverFile.value)
+
+  try {
+    await playersStore.createService(formData)
+    goBack()
+  } catch (err) {
+    submitError.value = err instanceof Error ? err.message : 'Failed to publish service'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -168,9 +165,19 @@ function publish() {
         </div>
         <div class="flex items-center gap-3">
           <UButton color="neutral" variant="soft" class="rounded-full" @click="saveDraft">Save draft</UButton>
-          <UButton color="primary" class="rounded-full" :disabled="!canPublish" @click="publish">Publish</UButton>
+          <UButton
+            color="primary"
+            class="rounded-full"
+            :disabled="!canPublish"
+            :loading="submitting"
+            @click="publish"
+          >
+            Publish
+          </UButton>
         </div>
       </div>
+
+      <p v-if="submitError" class="mt-3 text-sm text-red-400">{{ submitError }}</p>
 
       <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <div class="flex flex-col gap-5">
@@ -365,7 +372,7 @@ function publish() {
             </div>
 
             <div class="mt-3 flex items-center gap-1.5">
-              <span class="font-semibold text-white">{{ mockCurrentUser.displayName }}</span>
+              <span class="font-semibold text-white">{{ playersStore.mine?.displayName ?? 'You' }}</span>
               <PhTrophy :size="14" weight="fill" class="shrink-0 text-amber-400" />
             </div>
             <p class="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-400">

@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.1 — backend (3.1a-3.1e) and frontend 3.1f-3.1g are done; next up is 3.1h
+- **Next task:** 3.1 — backend (3.1a-3.1e) and frontend 3.1f-3.1i are done; next up is 3.1j
 - **Last updated:** 2026-08-22
 
 ---
@@ -373,10 +373,18 @@ unchecked box until the whole thing is done.
         `priceCoins` client-side. `MyPlayerProfile`/`MyService`/`ServiceUpdate` types added
         alongside the existing mock-backed `PlayerProfile` (kept for 3.1j's reviews/feed/
         album/wish, still mock-only until 3.6/3.8).
-  - [ ] 3.1h Frontend: Become a Player wizard wired to the real submit endpoint (drop the
+  - [x] 3.1h Frontend: Become a Player wizard wired to the real submit endpoint (drop the
         dead password field/strength meter, track raw `File`s for avatar/ID upload)
-  - [ ] 3.1i Frontend: Create Service + My Services (Player Dashboard) pages wired to real
-        service CRUD
+  - [x] 3.1i Frontend: Create Service + My Services (Player Dashboard) pages wired to real
+        service CRUD — `CreateServiceView.vue` posts multipart `FormData` to
+        `playersStore.createService` (name/description/platforms/pricing_options JSON/
+        first_order_free/percent_off/cover), with a submitting/error state on Publish;
+        "Category" stays UI-only since the backend has no matching field. `PlayerServicesView.vue`
+        (`/dashboard/player/services`) now fetches `playersStore.mine` on mount with
+        loading/error/no-profile/empty states (each via `UEmpty`), the active toggle calls
+        `updateService`, and a new trash-icon button + `ConfirmModal` wires `deleteService`
+        (toast on failure via `useToast`). "Edit" stays disabled — no edit form/route exists yet,
+        out of scope here.
   - [ ] 3.1j Frontend: Player Profile page wired to real data with a mock fallback (seed
         Pals `p1`..`p8` aren't in the DB yet, that's 3.2's call)
   - [ ] 3.1k Verification: frontend type-check + manual browser walkthrough of the full flow,

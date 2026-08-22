@@ -16,6 +16,8 @@ const props = defineProps<{
   gamesData: GamesStepData
   ratesData: RatesStepData
   verifyData: VerifyStepData
+  submitting: boolean
+  submitError: string | null
 }>()
 
 const emit = defineEmits<{ submit: []; back: []; edit: [stepId: number] }>()
@@ -98,7 +100,7 @@ const reviewSections = computed(() => [
   {
     stepId: 4,
     title: 'Verify & payout',
-    line1: `ID ${props.verifyData.idFrontFileName ? 'verified' : 'not uploaded'} · Selfie ${props.verifyData.selfieVerified ? 'verified' : 'pending review'}`,
+    line1: `ID ${props.verifyData.idFrontFile ? 'verified' : 'not uploaded'} · Selfie ${props.verifyData.selfieVerified ? 'verified' : 'pending review'}`,
     line2: `Squad Coin wallet @${mockWalletHandle} · ${payoutScheduleLabel.value} payout`,
   },
 ])
@@ -143,6 +145,8 @@ const canSubmit = computed(() => data.value.confirmedAccurate)
       </template>
     </UCheckbox>
 
+    <p v-if="submitError" class="text-sm text-red-400">{{ submitError }}</p>
+
     <USeparator />
 
     <div class="flex justify-between">
@@ -151,12 +155,19 @@ const canSubmit = computed(() => data.value.confirmedAccurate)
         color="neutral"
         variant="soft"
         class="rounded-full bg-gray-800 px-8 py-2 text-base text-white hover:bg-gray-700"
+        :disabled="submitting"
         @click="emit('back')"
       >
         Back
       </UButton>
-      <UButton type="submit" color="primary" :disabled="!canSubmit" class="rounded-full px-8 py-2 text-base">
-        Submit application
+      <UButton
+        type="submit"
+        color="primary"
+        :disabled="!canSubmit || submitting"
+        :loading="submitting"
+        class="rounded-full px-8 py-2 text-base"
+      >
+        {{ submitting ? 'Submitting…' : 'Submit application' }}
       </UButton>
     </div>
   </form>

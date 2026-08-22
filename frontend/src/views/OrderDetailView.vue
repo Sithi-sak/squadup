@@ -1,0 +1,303 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { PhCaretLeft, PhCheck, PhLock, PhStar, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
+import coinIcon from '@/assets/squadup-coin.svg'
+import { useBookingsStore, type BookingStatus } from '@/stores/bookings'
+import { mockPlayers } from '@/mocks/players'
+import { getPlayerProfile } from '@/mocks/playerProfiles'
+import { orderStatusMeta, type OrderDisplayStatusKey } from '@/utils/orderStatus'
+import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
+import RefundModal from '@/components/modals/RefundModal.vue'
+
+const route = useRoute()
+const router = useRouter()
+const bookingsStore = useBookingsStore()
+const toast = useToast()
+
+const booking = computed(() => bookingsStore.getBooking(String(route.params.bookingId)))
+const player = computed(() => mockPlayers.find((p) => p.id === booking.value?.playerId) ?? null)
+const profile = computed(() => (player.value ? getPlayerProfile(player.value) : null))
+const detail = computed(() => (booking.value ? profile.value?.serviceDetails[booking.value.serviceId] : null))
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+function formatDateTime(iso: string) {
+  return `${formatDate(iso)} · ${formatTime(iso)}`
+}
+function formatScheduled(iso: string | null) {
+  if (!iso) return 'Start now'
+  const date = new Date(iso)
+  const isToday = date.toDateString() === new Date().toDateString()
+  return `${isToday ? 'Today' : formatDate(iso)} · ${formatTime(iso)}`
+}
+
+const status = computed(() => (booking.value ? orderStatusMeta(booking.value) : null))
+
+const statusBadgeStyles: Record<OrderDisplayStatusKey, string> = {
+  pending: 'bg-amber-500/10 text-amber-400',
+  scheduled: 'bg-sky-500/10 text-sky-400',
+  'in-progress': 'bg-brand-500/10 text-brand-400',
+  completed: 'bg-brand-500/10 text-brand-400',
+  cancelled: 'bg-red-500/10 text-red-400',
+}
+
+type StepState = 'done' | 'active' | 'pending' | 'cancelled'
+interface TimelineStep {
+  label: string
+  state: StepState
+  sublabel: string
+}
+
+const timelineSteps = computed<TimelineStep[]>(() => {
+  const b = booking.value
+  if (!b) return []
+
+  if (b.status === 'declined') {
+    return [
+      { label: 'Order placed', state: 'done', sublabel: formatDateTime(b.createdAt) },
+      { label: 'Order cancelled', state: 'cancelled', sublabel: 'Refunded to wallet' },
+    ]
+  }
+
+  const accepted = b.status === 'accepted' || b.status === 'completed'
+  const completed = b.status === 'completed'
+  const sessionStarted = accepted && (!b.scheduledFor || new Date(b.scheduledFor).getTime() <= Date.now())
+
+  return [
+    { label: 'Order placed', state: 'done', sublabel: formatDateTime(b.createdAt) },
+    { label: 'Pal accepted', state: accepted ? 'done' : 'pending', sublabel: accepted ? 'Confirmed' : 'Awaiting response' },
+    {
+      label: 'In session',
+      state: completed ? 'done' : sessionStarted ? 'active' : 'pending',
+      sublabel: completed
+        ? 'Finished'
+        : sessionStarted
+          ? 'In progress'
+          : b.scheduledFor
+            ? `Starts ${formatScheduled(b.scheduledFor)}`
+            : 'Pending',
+    },
+    { label: 'Completed', state: completed ? 'done' : 'pending', sublabel: completed ? 'Done' : 'Pending' },
+  ]
+})
+
+function isCancellable(bookingStatus: BookingStatus) {
+  return bookingStatus === 'pending' || bookingStatus === 'accepted'
+}
+
+const cancelModalOpen = ref(false)
+const refundModalOpen = ref(false)
+
+function confirmCancel() {
+  if (booking.value) bookingsStore.cancelBooking(booking.value.id)
+  cancelModalOpen.value = false
+}
+
+function confirmRefundRequest() {
+  toast.add({
+    title: 'Request submitted',
+    description: "We'll get back to you within 24 hours.",
+    color: 'success',
+  })
+}
+</script>
+
+<template>
+  <div v-if="!booking" class="flex min-h-[60vh] items-center justify-center px-4 py-16">
+    <UEmpty title="This order could not be found" description="It may have expired. Browse Pals to start a new booking.">
+      <template #actions>
+        <UButton color="primary" class="rounded-full" @click="router.push('/players')">Browse Players</UButton>
+      </template>
+    </UEmpty>
+  </div>
+
+  <div v-else class="mx-auto max-w-4/5 px-4 pt-8 pb-14 md:px-6">
+    <button
+      type="button"
+      class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white"
+      @click="router.push('/bookings')"
+    >
+      <PhCaretLeft :size="14" weight="bold" />
+      Order history
+    </button>
+
+    <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="text-3xl font-bold text-white">Order #{{ booking.orderNumber }}</h1>
+        <p class="mt-1 text-sm text-slate-400">Placed {{ formatDateTime(booking.createdAt) }}</p>
+      </div>
+      <span
+        v-if="status"
+        class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium"
+        :class="statusBadgeStyles[status.key]"
+      >
+        <span class="size-1.5 rounded-full bg-current" />
+        {{ status.label }}
+      </span>
+    </div>
+
+    <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+      <div class="flex flex-col gap-4">
+        <div class="rounded-xl bg-gray-800/70 p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <UAvatar size="lg" class="bg-white/10 text-slate-300">
+                <PhUserCircle :size="26" />
+              </UAvatar>
+              <div>
+                <p class="inline-flex items-center gap-1.5 font-semibold text-white">
+                  {{ player?.displayName ?? 'Pal' }}
+                  <span v-if="player?.rating" class="inline-flex items-center gap-1 text-sm font-normal text-amber-400">
+                    <PhStar :size="12" weight="fill" />
+                    {{ player.rating.toFixed(1) }}
+                  </span>
+                </p>
+                <p class="text-sm text-slate-400">
+                  {{ player?.games?.[0] }} · {{ detail?.title ?? booking.serviceTypeLabel }}
+                </p>
+              </div>
+            </div>
+            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="router.push('/messages')">
+              Message
+            </UButton>
+          </div>
+
+          <div class="mt-4 flex flex-col divide-y divide-white/10 border-t border-white/10 text-sm">
+            <div class="flex items-center justify-between py-3">
+              <span class="text-slate-400">Service type</span>
+              <span class="font-medium text-white">{{ detail?.title ?? booking.serviceTypeLabel }}</span>
+            </div>
+            <div class="flex items-center justify-between py-3">
+              <span class="text-slate-400">Games</span>
+              <span class="font-medium text-white">{{ booking.quantity }} game{{ booking.quantity === 1 ? '' : 's' }}</span>
+            </div>
+            <div class="flex items-center justify-between py-3">
+              <span class="text-slate-400">Scheduled</span>
+              <span class="font-medium text-white">{{ formatScheduled(booking.scheduledFor) }}</span>
+            </div>
+            <div class="flex items-center justify-between py-3">
+              <span class="text-slate-400">Platform</span>
+              <span class="font-medium text-white">SquadUp</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-800/70 p-5">
+          <h2 class="text-lg font-bold text-white">Order status</h2>
+          <div class="mt-4 flex flex-col">
+            <div v-for="(step, index) in timelineSteps" :key="step.label" class="flex gap-4">
+              <div class="flex flex-col items-center">
+                <span
+                  v-if="step.state === 'done'"
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-600"
+                >
+                  <PhCheck :size="14" weight="bold" class="text-white" />
+                </span>
+                <span
+                  v-else
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full border-2"
+                  :class="{
+                    'border-brand-500': step.state === 'active',
+                    'border-gray-700': step.state === 'pending',
+                    'border-red-500': step.state === 'cancelled',
+                  }"
+                >
+                  <span
+                    class="size-2 rounded-full"
+                    :class="{
+                      'bg-brand-400': step.state === 'active',
+                      'bg-gray-600': step.state === 'pending',
+                      'bg-red-500': step.state === 'cancelled',
+                    }"
+                  />
+                </span>
+                <span
+                  v-if="index < timelineSteps.length - 1"
+                  class="my-1 w-0.5 flex-1"
+                  :class="step.state === 'done' ? 'bg-brand-600' : 'bg-gray-700'"
+                />
+              </div>
+              <div class="pb-6">
+                <p class="font-semibold text-white">{{ step.label }}</p>
+                <p class="text-sm text-slate-400">{{ step.sublabel }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <div class="rounded-xl bg-gray-800/70 p-5">
+          <h2 class="text-lg font-bold text-white">Payment</h2>
+          <div class="mt-3 flex flex-col gap-2 text-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-400">Subtotal</span>
+              <span class="inline-flex items-center gap-1 font-medium text-white">
+                <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
+                {{ booking.subtotalCoins }}
+              </span>
+            </div>
+            <div v-if="booking.promoLabel" class="flex items-center justify-between">
+              <span class="text-slate-400">{{ booking.promoLabel }}</span>
+              <span class="text-slate-300">− {{ booking.discountCoins }} SC</span>
+            </div>
+          </div>
+
+          <div class="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+            <span class="text-base font-bold text-white">Total paid</span>
+            <span class="inline-flex items-center gap-1 text-lg font-bold text-brand-400">
+              <img :src="coinIcon" alt="" class="h-4 w-4" />
+              {{ booking.totalCoins }}
+            </span>
+          </div>
+
+          <div class="mt-4 flex items-start gap-2 rounded-lg bg-brand-500/10 p-3 text-xs text-brand-300">
+            <PhLock :size="16" weight="fill" class="mt-0.5 shrink-0" />
+            <span>Held in escrow, released to the Pal when the order completes.</span>
+          </div>
+        </div>
+
+        <UButton color="primary" block size="lg" class="rounded-full" @click="router.push('/messages')">
+          Message {{ player?.displayName ?? 'Pal' }}
+        </UButton>
+        <UButton color="neutral" variant="soft" block size="lg" class="rounded-full" @click="refundModalOpen = true">
+          Report an issue
+        </UButton>
+        <button
+          v-if="isCancellable(booking.status)"
+          type="button"
+          class="cursor-pointer py-1 text-sm font-medium text-red-400 hover:text-red-300"
+          @click="cancelModalOpen = true"
+        >
+          Cancel order
+        </button>
+      </div>
+    </div>
+
+    <CancelOrderModal
+      v-model:open="cancelModalOpen"
+      :order-number="booking.orderNumber"
+      :pal-name="player?.displayName ?? 'Pal'"
+      :service-title="detail?.title ?? booking.serviceTypeLabel"
+      :meta="`${booking.quantity} ${booking.quantity === 1 ? 'game' : 'games'} · ${status?.label ?? ''}`"
+      :total-coins="booking.totalCoins"
+      @confirm="confirmCancel"
+    />
+
+    <RefundModal
+      v-model:open="refundModalOpen"
+      :order-number="booking.orderNumber"
+      :pal-name="player?.displayName ?? 'Pal'"
+      :service-title="detail?.title ?? booking.serviceTypeLabel"
+      :meta="`${booking.quantity} ${booking.quantity === 1 ? 'game' : 'games'} · ${status?.label ?? ''}`"
+      :total-coins="booking.totalCoins"
+      @confirm="confirmRefundRequest"
+    />
+  </div>
+</template>

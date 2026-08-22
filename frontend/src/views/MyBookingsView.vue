@@ -2,24 +2,44 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type Booking, type BookingStatus } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
+import LeaveReviewModal from '@/components/modals/LeaveReviewModal.vue'
 
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+const toast = useToast()
 
 const cancelModalOpen = ref(false)
-const cancelTarget = ref<{ id: string; palName: string; refundCoins: number } | null>(null)
+const cancelTarget = ref<{
+  id: string
+  orderNumber: string
+  palName: string
+  serviceTitle: string
+  meta: string
+  totalCoins: number
+} | null>(null)
+
+const reviewModalOpen = ref(false)
+const reviewTarget = ref<{ palName: string; meta: string } | null>(null)
 
 function isCancellable(status: BookingStatus) {
   return status === 'pending' || status === 'accepted'
 }
 
-function openCancelModal(booking: Booking, palName: string) {
-  cancelTarget.value = { id: booking.id, palName, refundCoins: booking.totalCoins }
+function openCancelModal(booking: Booking, palName: string, serviceTitle: string) {
+  cancelTarget.value = {
+    id: booking.id,
+    orderNumber: booking.orderNumber,
+    palName,
+    serviceTitle,
+    meta: `${summaryText(booking)} · ${statusMeta[booking.status].label}`,
+    totalCoins: booking.totalCoins,
+  }
   cancelModalOpen.value = true
 }
 
@@ -63,7 +83,7 @@ const rows = computed(() => {
       const detail = profile?.serviceDetails[booking.serviceId] ?? null
       return { booking, player, detail }
     })
-    .filter(({ player, detail }) => {
+    .filter(({ booking, player, detail }) => {
       if (!query) return true
       return (
         player?.displayName.toLowerCase().includes(query) ||
@@ -95,11 +115,27 @@ function primaryActionLabel(booking: Booking) {
 }
 
 function handlePrimaryAction(booking: Booking) {
-  if (booking.status === 'completed' || booking.status === 'declined') {
+  if (booking.status === 'completed') {
+    const player = mockPlayers.find((p) => p.id === booking.playerId) ?? null
+    const detail = player ? getPlayerProfile(player).serviceDetails[booking.serviceId] : null
+    reviewTarget.value = {
+      palName: player?.displayName ?? 'Pal',
+      meta: `${detail?.title ?? booking.serviceTypeLabel} · ${summaryText(booking)} · ${formatDate(booking.createdAt)}`,
+    }
+    reviewModalOpen.value = true
+  } else if (booking.status === 'declined') {
     router.push(`/players/${booking.playerId}/services/${booking.serviceId}`)
   } else {
-    router.push(`/checkout/${booking.id}/confirmation`)
+    router.push(`/bookings/${booking.id}`)
   }
+}
+
+function confirmReview() {
+  toast.add({
+    title: 'Review submitted',
+    description: 'Thanks for the feedback!',
+    color: 'success',
+  })
 }
 </script>
 
@@ -192,7 +228,7 @@ function handlePrimaryAction(booking: Booking) {
                 variant="soft"
                 size="sm"
                 class="rounded-full text-red-400"
-                @click="openCancelModal(booking, player?.displayName ?? 'Pal')"
+                @click="openCancelModal(booking, player?.displayName ?? 'Pal', detail?.title ?? booking.serviceTypeLabel)"
               >
                 Cancel order
               </UButton>
@@ -215,9 +251,19 @@ function handlePrimaryAction(booking: Booking) {
 
       <CancelOrderModal
         v-model:open="cancelModalOpen"
+        :order-number="cancelTarget?.orderNumber ?? ''"
         :pal-name="cancelTarget?.palName ?? 'Pal'"
-        :refund-coins="cancelTarget?.refundCoins ?? 0"
+        :service-title="cancelTarget?.serviceTitle ?? ''"
+        :meta="cancelTarget?.meta ?? ''"
+        :total-coins="cancelTarget?.totalCoins ?? 0"
         @confirm="confirmCancel"
+      />
+
+      <LeaveReviewModal
+        v-model:open="reviewModalOpen"
+        :pal-name="reviewTarget?.palName ?? 'Pal'"
+        :meta="reviewTarget?.meta ?? ''"
+        @submit="confirmReview"
       />
     </div>
   </div>

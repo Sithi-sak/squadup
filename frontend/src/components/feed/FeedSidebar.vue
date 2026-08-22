@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { PhBookmarkSimple, PhCompass, PhHouse, PhPlus, PhUserCircle, PhUsersThree } from '@phosphor-icons/vue'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 
 defineProps<{
   active: 'feed' | 'following' | 'explore' | 'saved'
@@ -19,6 +20,8 @@ const navItems = [
   { key: 'explore', label: 'Explore', to: '/feed/explore', icon: PhCompass },
   { key: 'saved', label: 'Saved', to: '/feed/saved', icon: PhBookmarkSimple },
 ] as const
+
+const createPostOpen = ref(false)
 
 function formatCount(count: number) {
   if (count < 1000) return String(count)
@@ -82,9 +85,11 @@ function formatCount(count: number) {
       </router-link>
     </nav>
 
-    <UButton v-if="showCreatePost" color="primary" block class="rounded-full">
+    <UButton v-if="showCreatePost" color="primary" block class="rounded-full" @click="createPostOpen = true">
       <PhPlus :size="16" weight="bold" />
       Create post
     </UButton>
+
+    <CreatePostModal v-model:open="createPostOpen" />
   </aside>
 </template>

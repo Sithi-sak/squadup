@@ -23,7 +23,7 @@ const perks = [
         You don't have a Pal profile yet. Set up services, get discovered by buyers, and earn Squad
         Coin doing what you already love.
       </p>
-      <UButton color="primary" size="lg" class="mt-6 rounded-full px-6" @click="router.push('/become-player')">
+      <UButton color="primary" size="lg" class="mt-6 rounded-full px-6" @click="router.push('/become-a-pal')">
         Become a Pal
       </UButton>
 

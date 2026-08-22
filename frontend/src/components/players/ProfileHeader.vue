@@ -1,11 +1,38 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { PhCopy, PhDotsThree, PhPlus, PhUserCircle } from '@phosphor-icons/vue'
 import type { PlayerProfile, PlayerSummary } from '@/stores/players'
+import SubscriptionModal from './SubscriptionModal.vue'
+import ReportProfileModal from '@/components/modals/ReportProfileModal.vue'
+import BlockProfileModal from '@/components/modals/BlockProfileModal.vue'
 
 defineProps<{ player: PlayerSummary; profile: PlayerProfile }>()
 
 function copyLink() {
   navigator.clipboard?.writeText(window.location.href)
+}
+
+const subscriptionModalOpen = ref(false)
+const subscribed = ref(false)
+
+const reportModalOpen = ref(false)
+const blockModalOpen = ref(false)
+const blocked = ref(false)
+
+const profileMenuItems = computed(() => [
+  [
+    { label: 'Report', onSelect: (): void => { reportModalOpen.value = true } },
+    { label: 'Block', color: 'error' as const, onSelect: (): void => { blockModalOpen.value = true } },
+  ],
+])
+
+function submitReport(payload: { alsoBlock: boolean }) {
+  if (payload.alsoBlock) blocked.value = true
+}
+
+function confirmBlock() {
+  blocked.value = true
+  blockModalOpen.value = false
 }
 </script>
 
@@ -46,15 +73,17 @@ function copyLink() {
     </div>
 
     <div class="flex items-center gap-2">
-      <UButton
-        color="neutral"
-        variant="soft"
-        square
-        :ui="{ base: 'rounded-full' }"
-        aria-label="More options"
-      >
-        <PhDotsThree :size="18" weight="bold" />
-      </UButton>
+      <UDropdownMenu :items="profileMenuItems">
+        <UButton
+          color="neutral"
+          variant="soft"
+          square
+          :ui="{ base: 'rounded-full' }"
+          aria-label="More options"
+        >
+          <PhDotsThree :size="18" weight="bold" />
+        </UButton>
+      </UDropdownMenu>
       <UButton
         color="neutral"
         variant="soft"
@@ -74,9 +103,29 @@ function copyLink() {
       >
         <PhPlus :size="18" weight="bold" />
       </UButton>
-      <UButton v-if="profile.subscribeLabel" color="primary" variant="outline" class="rounded-full">
-        {{ profile.subscribeLabel }}
+      <UButton
+        v-if="profile.subscribeLabel"
+        color="primary"
+        :variant="subscribed ? 'soft' : 'outline'"
+        class="rounded-full"
+        :disabled="subscribed"
+        @click="subscriptionModalOpen = true"
+      >
+        {{ subscribed ? 'Subscribed' : profile.subscribeLabel }}
       </UButton>
     </div>
+
+    <SubscriptionModal
+      v-model:open="subscriptionModalOpen"
+      :pal-name="player.displayName"
+      :tagline="player.tagline ?? profile.tier"
+      :rating="player.rating"
+      :subscriber-count="profile.followersCount"
+      @subscribe="subscribed = true"
+    />
+
+    <ReportProfileModal v-model:open="reportModalOpen" :handle="profile.handle" @submit="submitReport" />
+
+    <BlockProfileModal v-model:open="blockModalOpen" :handle="profile.handle" @confirm="confirmBlock" />
   </div>
 </template>

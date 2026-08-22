@@ -103,6 +103,94 @@ export const mockFollowingPosts: FeedPost[] = [
   },
 ]
 
+export interface FeedPostDetail {
+  id: string
+  author: string
+  handle: string
+  tier: string | null
+  timeAgo: string
+  text: string
+  hasImage: boolean
+  likes: number
+  comments: number
+}
+
+/** Looks up a post across every feed source (main feed, following, saved) by id. */
+export function findFeedPost(id: string): FeedPostDetail | undefined {
+  const post = mockFeedPosts.find((p) => p.id === id) ?? mockFollowingPosts.find((p) => p.id === id)
+  if (post) return post
+
+  const saved = mockSavedItems.find((item) => item.kind === 'post' && item.id === id)
+  if (saved && saved.kind === 'post') {
+    return {
+      id: saved.id,
+      author: saved.author,
+      handle: saved.handle,
+      tier: saved.tier,
+      timeAgo: saved.savedAgo,
+      text: saved.text,
+      hasImage: saved.hasImage,
+      likes: saved.likes,
+      comments: saved.comments,
+    }
+  }
+
+  return undefined
+}
+
+export interface FeedComment {
+  id: string
+  author: string
+  timeAgo: string
+  text: string
+  likes: number
+  isCreator?: boolean
+  replies?: FeedComment[]
+}
+
+export const mockPostComments: Record<string, FeedComment[]> = {
+  fp1: [
+    {
+      id: 'c1',
+      author: 'KaiRuu',
+      timeAgo: '2h',
+      text: 'gg that duo was insane, ranked up twice 🔥 booking you again this weekend',
+      likes: 42,
+      replies: [
+        {
+          id: 'c1-r1',
+          author: 'Oomfie',
+          isCreator: true,
+          timeAgo: '1h',
+          text: "let's run it back tonight 💪 I'll hold a slot for you",
+          likes: 12,
+        },
+      ],
+    },
+    {
+      id: 'c2',
+      author: 'mochi',
+      timeAgo: '3h',
+      text: 'booking you this weekend! do you do unrated chill games too?',
+      likes: 18,
+    },
+    {
+      id: 'c3',
+      author: 'ZeroTwo',
+      timeAgo: '5h',
+      text: "what's your peak rank this act?",
+      likes: 7,
+    },
+    {
+      id: 'c4',
+      author: 'lunaaa',
+      timeAgo: '6h',
+      text: 'the pentakill clip was so clean 👏 saved it to my album',
+      likes: 23,
+    },
+  ],
+}
+
 export type SavedItem =
   | {
       kind: 'post'

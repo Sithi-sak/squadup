@@ -70,7 +70,9 @@ function formatScheduled(iso: string) {
             <span v-if="waitingCount"> · {{ waitingCount }} new order{{ waitingCount > 1 ? 's' : '' }} waiting</span>
           </p>
         </div>
-        <UButton color="primary" class="rounded-full" disabled>New Service</UButton>
+        <UButton color="primary" class="rounded-full" @click="router.push('/dashboard/player/services/new')">
+          New Service
+        </UButton>
       </div>
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">

@@ -30,9 +30,9 @@ const navLinks = [
   { label: 'Discover', to: '/home' },
   { label: 'Feed', to: '/feed' },
   { label: 'Games', to: '/services' },
-  { label: 'eStars' },
-  { label: 'Become a Pal', to: '/become-player' },
-  { label: 'Help' },
+  { label: 'eStars', to: '/estars' },
+  { label: 'Become a Pal', to: '/become-a-pal' },
+  { label: 'Help', to: '/help' },
 ]
 
 const dashboardPath = computed(() =>
@@ -44,6 +44,7 @@ const accountMenuItems = [
   [
     { label: 'My orders', to: '/bookings' },
     { label: 'Wallet', to: '/wallet' },
+    { label: 'Subscriptions', to: '/subscriptions' },
     { label: 'Settings', to: '/settings' },
   ],
   [{ label: 'Log out', onSelect: handleLogout }],
@@ -164,7 +165,7 @@ function handleSearch() {
         <router-link to="/login" class="text-sm text-slate-300 hover:text-white">
           Sign in
         </router-link>
-        <UButton to="/become-player" color="primary" class="rounded-full px-5">
+        <UButton to="/become-a-pal" color="primary" class="rounded-full px-5">
           Become a Pal
         </UButton>
       </div>
@@ -200,14 +201,16 @@ function handleSearch() {
             <router-link to="/home" class="text-base text-white">Discover</router-link>
             <router-link to="/feed" class="text-base text-white">Feed</router-link>
             <router-link to="/players" class="text-base text-white">Browse Players</router-link>
+            <router-link to="/estars" class="text-base text-white">eStars</router-link>
             <router-link to="/messages" class="text-base text-white">Messages</router-link>
             <router-link to="/notifications" class="text-base text-white">Notifications</router-link>
             <router-link to="/bookings" class="text-base text-white">My Bookings</router-link>
             <router-link to="/wallet" class="text-base text-white">Wallet</router-link>
+            <router-link to="/subscriptions" class="text-base text-white">Subscriptions</router-link>
             <router-link :to="dashboardPath" class="text-base text-white">Dashboard</router-link>
             <router-link to="/settings" class="text-base text-white">Settings</router-link>
             <USeparator />
-            <router-link to="/become-player" class="text-base text-white">
+            <router-link to="/become-a-pal" class="text-base text-white">
               Become a Pal
             </router-link>
           </nav>

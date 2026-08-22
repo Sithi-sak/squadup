@@ -245,7 +245,7 @@ function handleSearch() {
             color="neutral"
             variant="soft"
             class="rounded-full bg-squadup-dark px-5 text-white"
-            @click="router.push('/become-player')"
+            @click="router.push('/become-a-pal')"
           >
             Become a Pal
           </UButton>

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { PhStar } from '@phosphor-icons/vue'
 import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+
+const router = useRouter()
 
 const profile = mockPlayerProfiles.self!
 
@@ -25,7 +28,9 @@ const cards = ref(
           <h1 class="text-2xl font-bold text-white sm:text-3xl">My services</h1>
           <p class="mt-1 text-sm text-slate-400">Manage the services buyers can book from you</p>
         </div>
-        <UButton color="primary" class="rounded-full" disabled>New Service</UButton>
+        <UButton color="primary" class="rounded-full" @click="router.push('/dashboard/player/services/new')">
+          New Service
+        </UButton>
       </div>
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-4">

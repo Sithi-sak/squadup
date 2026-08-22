@@ -52,10 +52,10 @@ function toggleLike() {
         <PhHeart :size="18" :weight="liked[id] ? 'fill' : 'regular'" />
         {{ likes + (liked[id] ? 1 : 0) }}
       </button>
-      <span class="flex items-center gap-1.5">
+      <router-link :to="`/feed/${id}`" class="flex items-center gap-1.5 transition-colors hover:text-white">
         <PhChatCircle :size="18" />
         {{ comments }}
-      </span>
+      </router-link>
       <button type="button" class="ml-auto text-slate-400 transition-colors hover:text-white" aria-label="Share">
         <PhShareFat :size="18" />
       </button>

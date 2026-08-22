@@ -76,10 +76,22 @@ const router = createRouter({
       meta: { authenticated: true },
     },
     {
+      path: '/feed/:postId',
+      name: 'post-detail',
+      component: () => import('@/views/PostDetailView.vue'),
+      meta: { authenticated: true },
+    },
+    {
       path: '/players',
       name: 'players',
       component: () => import('@/views/PlayersView.vue'),
       meta: { authenticated: true },
+    },
+    {
+      path: '/estars',
+      name: 'estars-leaderboard',
+      component: () => import('@/views/EstarsLeaderboardView.vue'),
+      meta: { authenticated: true, hideFooter: true },
     },
     {
       path: '/players/:id',
@@ -100,9 +112,35 @@ const router = createRouter({
       meta: { hideChrome: true },
     },
     {
+      path: '/become-a-pal',
+      name: 'become-a-pal',
+      component: () => import('@/views/BecomeAPalView.vue'),
+    },
+    {
+      path: '/faq',
+      name: 'faq',
+      component: () => import('@/views/FaqView.vue'),
+    },
+    {
+      path: '/help',
+      name: 'help-center',
+      component: () => import('@/views/HelpCenterView.vue'),
+    },
+    {
+      path: '/terms',
+      name: 'terms-of-service',
+      component: () => import('@/views/TermsOfServiceView.vue'),
+    },
+    {
       path: '/bookings',
       name: 'my-bookings',
       component: () => import('@/views/MyBookingsView.vue'),
+      meta: { authenticated: true },
+    },
+    {
+      path: '/bookings/:bookingId',
+      name: 'order-detail',
+      component: () => import('@/views/OrderDetailView.vue'),
       meta: { authenticated: true },
     },
     {
@@ -130,6 +168,12 @@ const router = createRouter({
       meta: { authenticated: true, hideFooter: true },
     },
     {
+      path: '/dashboard/player/services/new',
+      name: 'player-dashboard-create-service',
+      component: () => import('@/views/CreateServiceView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
+    {
       path: '/dashboard/player/earnings',
       name: 'player-dashboard-earnings',
       component: () => import('@/views/PlayerEarningsView.vue'),
@@ -151,6 +195,18 @@ const router = createRouter({
       path: '/wallet',
       name: 'wallet',
       component: () => import('@/views/WalletView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
+    {
+      path: '/wallet/withdraw',
+      name: 'wallet-withdraw',
+      component: () => import('@/views/WithdrawView.vue'),
+      meta: { authenticated: true, hideFooter: true },
+    },
+    {
+      path: '/subscriptions',
+      name: 'subscriptions',
+      component: () => import('@/views/SubscriptionsView.vue'),
       meta: { authenticated: true, hideFooter: true },
     },
     {

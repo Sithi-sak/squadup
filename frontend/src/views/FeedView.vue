@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { PhCamera, PhFilmSlate, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
+import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import { mockFeedPosts } from '@/mocks/feed'
+
+const createPostOpen = ref(false)
 
 const following = reactive<Record<string, boolean>>({})
 function toggleFollow(id: string, current: boolean) {
@@ -25,27 +28,31 @@ function isFollowing(post: { id: string; following: boolean }) {
           placeholder="Share something with your squad..."
           variant="subtle"
           class="w-full rounded-full"
-          :ui="{ base: 'rounded-full' }"
+          :ui="{ base: 'rounded-full cursor-pointer' }"
+          readonly
+          @click="createPostOpen = true"
         />
       </div>
       <div class="mt-3 flex items-center justify-between gap-3">
         <div class="flex items-center gap-2">
-          <UButton color="neutral" variant="soft" size="sm" class="rounded-full">
+          <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
             <PhCamera :size="16" weight="bold" />
             Photo
           </UButton>
-          <UButton color="neutral" variant="soft" size="sm" class="rounded-full">
+          <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
             <PhFilmSlate :size="16" weight="bold" />
             Clip
           </UButton>
-          <UButton color="neutral" variant="soft" size="sm" class="rounded-full">
+          <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
             <PhSmiley :size="16" weight="bold" />
             Emoji
           </UButton>
         </div>
-        <UButton color="primary" class="rounded-full px-6">Post</UButton>
+        <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
       </div>
     </div>
+
+    <CreatePostModal v-model:open="createPostOpen" />
 
     <FeedPostCard
       v-for="post in mockFeedPosts"

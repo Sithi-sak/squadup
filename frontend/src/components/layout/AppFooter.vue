@@ -3,22 +3,38 @@ import brandLogo from '@/assets/brand.svg'
 
 const year = new Date().getFullYear()
 
-const columns = [
+type FooterLink = { label: string; to?: string | { path: string; query?: Record<string, string> } }
+
+const columns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: 'Support',
-    links: ['FAQ', 'Help Center', 'Report', 'Customer Service'],
+    links: [
+      { label: 'FAQ', to: '/faq' },
+      { label: 'Help Center', to: '/help' },
+      { label: 'Report' },
+      { label: 'Customer Service' },
+    ],
   },
   {
     heading: 'Company',
-    links: ['About Us', 'Update Log', 'Business Inquiry'],
+    links: [{ label: 'About Us' }, { label: 'Update Log' }, { label: 'Business Inquiry' }],
   },
   {
     heading: 'Legal',
-    links: ['Terms of Service', 'Privacy Policy', 'Community Guidelines'],
+    links: [
+      { label: 'Terms of Service', to: '/terms' },
+      { label: 'Privacy Policy', to: { path: '/terms', query: { tab: 'privacy' } } },
+      { label: 'Community Guidelines', to: { path: '/terms', query: { tab: 'guidelines' } } },
+    ],
   },
 ]
 
-const bottomLinks = ['Terms', 'Privacy', 'Guidelines', 'English (US)']
+const bottomLinks: FooterLink[] = [
+  { label: 'Terms', to: '/terms' },
+  { label: 'Privacy', to: { path: '/terms', query: { tab: 'privacy' } } },
+  { label: 'Guidelines', to: { path: '/terms', query: { tab: 'guidelines' } } },
+  { label: 'English (US)' },
+]
 </script>
 
 <template>
@@ -38,7 +54,12 @@ const bottomLinks = ['Terms', 'Privacy', 'Guidelines', 'English (US)']
 
       <div v-for="col in columns" :key="col.heading" class="flex flex-col gap-3">
         <h4 class="text-sm font-semibold text-white">{{ col.heading }}</h4>
-        <span v-for="link in col.links" :key="link" class="text-sm">{{ link }}</span>
+        <template v-for="link in col.links" :key="link.label">
+          <router-link v-if="link.to" :to="link.to" class="text-sm hover:text-white">
+            {{ link.label }}
+          </router-link>
+          <span v-else class="text-sm">{{ link.label }}</span>
+        </template>
       </div>
     </div>
 
@@ -47,7 +68,12 @@ const bottomLinks = ['Terms', 'Privacy', 'Guidelines', 'English (US)']
     >
       <span>© {{ year }} SquadUp. All rights reserved.</span>
       <nav class="flex gap-4">
-        <span v-for="link in bottomLinks" :key="link">{{ link }}</span>
+        <template v-for="link in bottomLinks" :key="link.label">
+          <router-link v-if="link.to" :to="link.to" class="hover:text-white">
+            {{ link.label }}
+          </router-link>
+          <span v-else>{{ link.label }}</span>
+        </template>
       </nav>
     </div>
   </footer>

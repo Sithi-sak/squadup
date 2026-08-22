@@ -162,12 +162,56 @@ interactive purely client-side, no backend needed to make them meaningful locall
 session list ("Sign out" removes a session from the local array, mirroring My Services' `active`
 toggle) and Payments tab's card "..." menu (set default / remove).
 
+**Additional pages (folded into later commits, never itemized above):** three public/legal pages
+are hardcoded content with no mock file, no backend implication: FAQ (`/faq`), Help Center
+(`/help`), Terms of Service (`/terms`, tabbed Terms/Privacy/Guidelines). Seven more do carry new
+mock/store data and are the reason Phase 2/3 below were rewritten: Estars Leaderboard (`/estars`,
+`mocks/estars.ts`, a Pal ranking by category/period), Notifications (`/notifications` + header
+dropdown, `stores/notifications.ts` wrapping `mocks/notifications.ts`), Subscriptions
+(`/subscriptions`, `mocks/subscriptions.ts`, recurring buyer→Pal billing, `CancelSubscriptionModal`),
+Order Detail (`/bookings/:bookingId`, buyer's single-order view with a timeline, wires
+`CancelOrderModal` and `RefundModal`/"report an issue"), Withdraw (`/wallet/withdraw`,
+`mocks/wallet.ts`'s payout methods + withdrawal history + platform fee), Create Service
+(`/dashboard/player/services/new` — supersedes the 1.12/1.13 note that `CREATE SERVICE.jpg` "was
+not built"; it has been, as its own route), and Post Detail (`/feed/:postId`, threaded comments on
+`mocks/feed.ts` posts). Settings also gained two modals implying flows not previously scoped:
+`TwoFactorAuthModal` and `DeleteAccountModal`.
+
+**Database schema (built for 2.3):** 28 tables, 18 enums, in
+`supabase/migrations/20260822070728_initial_schema.sql` (CLI-managed migrations, pushed with
+`bunx supabase db push`). Columns were matched against `stores/*.ts` interfaces and
+`mocks/*.ts` seed data rather than the 2.3 checklist line verbatim, which surfaced a few
+deviations:
+- `admin_disputes` was **not** created as a separate table from `order_disputes` — `AdminDispute`
+  (`mocks/admin.ts`) is just `order_disputes` joined back to `bookings`/`players`/`users`, so one
+  table backs both the buyer's "report an issue" flow (Order Detail / `RefundModal`) and the
+  admin Disputes tab. `admin_flags` (Flagged Players tab) stays its own table.
+- Three tables aren't in the 2.3 line but were required to represent what the mocks already
+  model: `message_threads` (one per user pair, `messages` alone can't express thread-level
+  `unreadCount`/`lastMessagePreview`), `addons` (the flat global catalog from `mockAddons`, with
+  `booking_addons` as a per-booking snapshot junction), and `topup_packages` (Wallet's top-up
+  tiers). `album_items` and `wish_items` were also added under the `players` domain to fully
+  back the Player Profile Album/Wish tabs, since "players" in the 2.3 line only named the table,
+  not its satellite data.
+- Estars leaderboard, Pal Dashboard stats, and the buyer directory (`mocks/estars.ts`,
+  `mocks/dashboardStats.ts`, `mocks/buyers.ts`) got **no tables** — all three are either cuttable
+  (3.12) or explicitly documented as derivable from `bookings`/`reviews`/`wallet_transactions`
+  (3.7), and `BuyerSummary` is just a subset of `users`. Revisit only if 3.7/3.12 turn out to need
+  a materialized/cached version instead of a live query.
+- Every table has RLS **enabled with zero policies**. `service_role` (the backend's client,
+  `core/supabase.py`) bypasses RLS and keeps working; `anon`/`authenticated` get zero access
+  until per-feature policies are written alongside real Supabase Auth (2.5) and each Phase 3
+  feature. Don't assume a table is reachable from the frontend just because it exists.
+- `players.user_id` is nullable (seed/demo Pals aren't linked to an account, matching
+  `mocks/players.ts` `p1`..`p8`); `bookings.order_number` is a unique text column but nothing
+  generates it server-side yet, that's still a 3.4 task per the Booking flow note above.
+
 ---
 
 ## Status
 
-- **Current phase:** Phase 1 — Frontend Pages (static UI, mock data only), complete
-- **Next task:** Phase 2 — Backend Foundations, starting with 2.1
+- **Current phase:** Phase 2 — Backend Foundations, in progress
+- **Next task:** 2.4 — Supabase Storage buckets
 - **Last updated:** 2026-08-22
 
 ---
@@ -235,26 +279,38 @@ Build in this order — each one is a single task:
       modal, mirroring `PlayerOrdersView`'s table/modal shape). Mock data in `mocks/admin.ts`.
 - [x] 1.16 Checkout (`/checkout/:bookingId`) — built early as part of 1.9's booking flow (payment
       summary UI shell only, no live payment logic — that's still Phase 4)
+- [x] 1.17 Additional pages folded in after 1.9-1.14, not previously itemized: FAQ (`/faq`), Help
+      Center (`/help`), Terms of Service (`/terms`), Estars Leaderboard (`/estars`), Notifications
+      (`/notifications`), Subscriptions (`/subscriptions`), Order Detail (`/bookings/:bookingId`),
+      Withdraw (`/wallet/withdraw`), Create Service (`/dashboard/player/services/new`), Post Detail
+      (`/feed/:postId`), plus Two-Factor Auth / Delete Account / Cancel Order / Cancel Subscription
+      confirmation modals — see note above.
 
 ## Phase 2 — Backend Foundations
 
-- [ ] 2.1 FastAPI app structure: routers per domain (players, bookings, messages, reviews, auth), `pydantic-settings` config, CORS for the Vite dev origin
-- [ ] 2.2 Supabase connection (service-role client for backend, anon client pattern documented for frontend)
-- [ ] 2.3 Database schema in Supabase: `users`, `players`, `bookings`, `messages`, `reviews` tables + relations
-- [ ] 2.4 Supabase Storage buckets: player avatars, rank verification screenshots
+- [x] 2.1 FastAPI app structure: routers per domain (players, bookings, messages, reviews, auth, feed, wallet, notifications, subscriptions, admin), `pydantic-settings` config, CORS for the Vite dev origin
+- [x] 2.2 Supabase connection (service-role client for backend, anon client pattern documented for frontend)
+- [x] 2.3 Database schema in Supabase: `users`, `players`, `services` (+ `service_pricing_options`, `service_promotions` for 1.17's Create Service), `bookings` (+ `order_cancellations`, `order_disputes` for Order Detail's cancel/report flows), `messages`, `reviews`, `posts` (+ `comments`, `follows`, `saved_items` for Feed/Post Detail), `notifications`, `subscriptions`, `wallet_transactions` (+ `payout_methods`, `withdrawals` for Wallet/Withdraw), `payment_cards`, `active_sessions` (Settings), `admin_flags`/`admin_disputes` tables + relations — match each table's shape against the corresponding `mocks/*.ts` file cataloged above before finalizing columns
+- [ ] 2.4 Supabase Storage buckets: player avatars, rank verification screenshots, Pal ID/KYC documents (1.7d), service cover images (Create Service), dispute/report attachments (Order Detail's "report an issue" flow)
 - [ ] 2.5 Auth wiring: Supabase Auth end-to-end (signup/login/logout, session persistence, route guards on frontend)
 
 ## Phase 3 — Backend Features (wire real data into Phase 1 pages)
 
-- [ ] 3.1 User profile CRUD + player profile CRUD + connect to Player Profile / Become a Player / Player Dashboard pages
+- [ ] 3.1 User profile CRUD + player profile CRUD + service CRUD (Create/Edit Service) + connect to Player Profile / Become a Player / Player Dashboard / Create Service pages
 - [ ] 3.2 Browse & filter endpoint + connect to Browse Players page
 - [ ] 3.3 Matching algorithm (weighted scoring: game 40 / rank 30 / role 20 / availability 10) + apply as default sort on Browse Players
-- [ ] 3.4 Booking request flow (create/accept/decline) + connect Booking / My Bookings / Player Dashboard
+- [ ] 3.4 Booking request flow (create/accept/decline/cancel + refund/dispute reporting) + connect Booking / My Bookings / Order Detail / Player Dashboard
 - [ ] 3.5 Realtime chat via Supabase Realtime + connect Messages page
 - [ ] 3.6 Ratings & reviews endpoint + connect to Player Profile and User Dashboard
 - [ ] 3.7 Player earnings tracker (derived from completed bookings) + connect to Player Dashboard
-- [ ] 3.8 Admin endpoints: player verification, dispute handling (cut if short)
-- [ ] 3.9 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
+- [ ] 3.8 Social feed endpoints: posts/comments/likes/follows/saved items + connect to Feed (all tabs), Post Detail, Player Profile Feed/Wish/Album tabs
+- [ ] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages
+- [ ] 3.10 Notifications endpoint (create on booking/message/review/payout events, mark read) + connect to header dropdown and Notifications page
+- [ ] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)
+- [ ] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)
+- [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals
+- [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
+- [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
 
 ## Phase 4 — Payment: ABA / KHQR / Stripe (final task)
 
@@ -269,6 +325,8 @@ Build in this order — each one is a single task:
 
 ## Cut list (only if time runs out)
 
-- Admin panel (1.15, 3.8)
+- Admin panel (1.15, 3.14)
 - Earnings tracker — fall back to plain booking history (3.7)
 - Matching algorithm — fall back to unsorted player list (3.3)
+- Subscriptions backend — fall back to the static mock page as-is (3.11)
+- Estars leaderboard backend — fall back to the static mock ranking as-is (3.12)

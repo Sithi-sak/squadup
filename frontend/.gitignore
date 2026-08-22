@@ -26,6 +26,9 @@ coverage
 
 *.tsbuildinfo
 
+# Environment variables
+.env
+
 .eslintcache
 
 # Nuxt UI auto-generated types

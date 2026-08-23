@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.6 done; next up is 3.7 (Player earnings tracker)
+- **Next task:** 3.7 done; next up is 3.8 (social feed endpoints)
 - **Last updated:** 2026-08-23
 
 ---
@@ -638,7 +638,43 @@ unchecked box until the whole thing is done.
   - [x] 3.6f Verification: `vue-tsc --build` and `eslint` clean (same two pre-existing unrelated
         eslint errors noted since 3.1k), `ruff check` clean. Manual browser walkthrough skipped
         per standing instruction not to run the `run` skill in this project.
-- [ ] 3.7 Player earnings tracker (derived from completed bookings) + connect to Player Dashboard
+- [x] 3.7 Player earnings tracker (derived from completed bookings) + connect to Player Dashboard
+  - [x] 3.7a Backend: `GET /players/me/earnings` (`routers/players.py`) — derives lifetime/this-month
+        earned coins, orders completed (total + this week), response rate, a 7-day earnings bar
+        series, and an 8-month earnings overview series, all computed in Python over one
+        `bookings` fetch scoped to the caller's `player_id` (same aggregate-in-Python approach as
+        3.2a/3.3a). Payout method/schedule/history/pending-clearance stay mock-backed since those
+        depend on `payout_methods`/`withdrawals` actually being written to, which is 3.9's job.
+  - [x] 3.7b Backend: live smoke test against the real Supabase project (a throwaway Pal with 6
+        `completed` bookings seeded directly via the service-role client - spread across this
+        week/this month/last month/~7 months ago - plus pending/accepted/declined noise, through
+        real HTTP with a real bearer token against a local uvicorn: `lifetimeEarnedCoins`,
+        `ordersCompleted`, `ordersCompletedThisWeek`, `responseRatePct` all matched hand-computed
+        expected values exactly; `coinsThisMonthChangePct`/`earningsOverview` correctly bucketed
+        the ~35-day-old booking into last month and the ~210-day-old one into the 8-month window's
+        oldest slot. A second throwaway user with no player profile got 404; no bearer token got
+        401. All rows/users cleaned up after, verified empty.
+  - [x] 3.7c Frontend: `stores/players.ts` `fetchEarnings()` + `PlayerEarnings` type.
+  - [x] 3.7d Frontend: `PlayerDashboardView.vue` now calls `playersStore.fetchMine()` +
+        `fetchEarnings()` alongside the existing `fetchIncoming()` on mount. "This month"/"Orders
+        completed"/"Response rate" cards and the "Earnings this week" chart read from
+        `playersStore.earnings`; "Avg rating" reads `mine.rating`/`mine.reviewCount` instead of
+        `mockPalDashboardStats` (rating/review count already real since 3.6, just never wired to
+        this page). "This month"'s USD figure is computed client-side with the same
+        `COINS_PER_USD = 99` constant already used on Wallet/Withdraw/Subscriptions, rather than
+        adding a backend field for an exchange rate that hasn't been decided (see the Booking flow
+        note). Dropped "Avg {{ responseTime }}" under Response rate - there's no
+        status-change timestamp in the `bookings` schema to derive it from, so it'd just be a
+        fabricated number; replaced with a plain "Accepted or declined vs received" label.
+  - [x] 3.7e Frontend: `PlayerEarningsView.vue` now calls `fetchEarnings()` on mount; "Lifetime
+        earned" and the "Earnings overview" chart read from `playersStore.earnings`. "Available
+        balance"/"Pending clearance"/payout method/schedule/history stay on
+        `mockPalDashboardStats` - those need a real payout ledger (`payout_methods`/
+        `withdrawals`, both already in the 2.3 schema but not written to by anything yet), which
+        is 3.9's job, not derivable from bookings alone.
+  - [x] 3.7f Verification: `vue-tsc --build` and `eslint` clean (same two pre-existing unrelated
+        eslint errors noted since 3.1k), `ruff check` clean. Manual browser walkthrough skipped
+        per standing instruction not to run the `run` skill in this project.
 - [ ] 3.8 Social feed endpoints: posts/comments/likes/follows/saved items + connect to Feed (all tabs), Post Detail, Player Profile Feed/Wish/Album tabs
 - [ ] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages
 - [ ] 3.10 Notifications endpoint (create on booking/message/review/payout events, mark read) + connect to header dropdown and Notifications page

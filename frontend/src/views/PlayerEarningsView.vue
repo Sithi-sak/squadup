@@ -1,11 +1,23 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPalDashboardStats } from '@/mocks/dashboardStats'
+import { usePlayersStore } from '@/stores/players'
 
+/** Payout method/schedule/history/pending clearance stay mock-backed - they need a real payout
+ * ledger (`payout_methods`/`withdrawals`), which is 3.9's job, not just booking history. */
 const stats = mockPalDashboardStats
+
+const playersStore = usePlayersStore()
+
+onMounted(() => {
+  playersStore.fetchEarnings()
+})
+
+const earnings = computed(() => playersStore.earnings)
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -46,9 +58,11 @@ function formatDate(iso: string) {
           <p class="text-sm text-slate-400">Lifetime earned</p>
           <p class="mt-2 inline-flex items-center gap-1.5 text-2xl font-bold text-white">
             <img :src="coinIcon" alt="" class="h-5 w-5" />
-            {{ stats.lifetimeEarnedCoins.toLocaleString() }}
+            {{ (earnings?.lifetimeEarnedCoins ?? 0).toLocaleString() }}
           </p>
-          <p class="mt-1 text-xs text-brand-400">+{{ stats.lifetimeEarnedChangePct }}% vs last month</p>
+          <p v-if="earnings?.lifetimeEarnedChangePct != null" class="mt-1 text-xs text-brand-400">
+            {{ earnings.lifetimeEarnedChangePct >= 0 ? '+' : '' }}{{ earnings.lifetimeEarnedChangePct }}% vs last month
+          </p>
         </div>
       </div>
 
@@ -56,10 +70,10 @@ function formatDate(iso: string) {
         <div class="rounded-xl bg-gray-800/70 p-5">
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold text-white">Earnings overview</h2>
-            <span class="text-sm text-slate-400">Last {{ stats.earningsOverview.length }} months</span>
+            <span class="text-sm text-slate-400">Last {{ (earnings?.earningsOverview ?? []).length }} months</span>
           </div>
           <div class="mt-6 h-48">
-            <DashboardBarChart :bars="stats.earningsOverview.map((b) => ({ label: b.month, value: b.coins }))" />
+            <DashboardBarChart :bars="(earnings?.earningsOverview ?? []).map((b) => ({ label: b.label, value: b.coins }))" />
           </div>
         </div>
 

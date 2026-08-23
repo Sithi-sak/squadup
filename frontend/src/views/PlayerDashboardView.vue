@@ -7,19 +7,28 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
-import { mockPalDashboardStats } from '@/mocks/dashboardStats'
 import { getBuyer } from '@/mocks/buyers'
 import { orderStatusMeta } from '@/utils/orderStatus'
 import { useBookingsStore, type Booking } from '@/stores/bookings'
+import { usePlayersStore } from '@/stores/players'
+
+/** Squad Coin → USD display rate, same constant used on Wallet/Withdraw/Subscriptions (no
+ * backend-decided exchange rate yet, see CHECKPOINT.md's Booking flow note). */
+const COINS_PER_USD = 99
 
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+const playersStore = usePlayersStore()
 const toast = useToast()
-const stats = mockPalDashboardStats
 
 onMounted(() => {
   bookingsStore.fetchIncoming()
+  playersStore.fetchMine()
+  playersStore.fetchEarnings()
 })
+
+const earnings = computed(() => playersStore.earnings)
+const usdThisMonth = computed(() => (earnings.value ? earnings.value.coinsThisMonth / COINS_PER_USD : 0))
 
 const actingOn = ref<string | null>(null)
 
@@ -100,33 +109,36 @@ function formatScheduled(iso: string) {
           <p class="text-sm text-slate-400">This month</p>
           <p class="mt-2 flex items-center gap-1.5 text-2xl font-bold text-white">
             <img :src="coinIcon" alt="" class="h-5 w-5" />
-            {{ mockCurrentUser.coinBalance.toLocaleString() }}
+            {{ (earnings?.coinsThisMonth ?? 0).toLocaleString() }}
           </p>
           <p class="mt-auto inline-flex items-center gap-1 pt-1 text-xs text-brand-400">
             <PhTrendUp :size="14" weight="bold" />
-            {{ stats.coinsThisMonthChangePct }}% · ~${{ stats.usdEquivalentThisMonth.toFixed(2) }}
+            <template v-if="earnings?.coinsThisMonthChangePct != null">
+              {{ earnings.coinsThisMonthChangePct }}% ·
+            </template>
+            ~${{ usdThisMonth.toFixed(2) }}
           </p>
         </div>
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="text-sm text-slate-400">Orders completed</p>
-          <p class="mt-2 text-2xl font-bold text-white">{{ stats.ordersCompleted }}</p>
+          <p class="mt-2 text-2xl font-bold text-white">{{ earnings?.ordersCompleted ?? 0 }}</p>
           <p class="mt-auto inline-flex items-center gap-1 pt-1 text-xs text-brand-400">
             <PhTrendUp :size="14" weight="bold" />
-            {{ stats.ordersCompletedThisWeek }} this week
+            {{ earnings?.ordersCompletedThisWeek ?? 0 }} this week
           </p>
         </div>
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="text-sm text-slate-400">Avg rating</p>
           <p class="mt-2 inline-flex items-center gap-1.5 text-2xl font-bold text-white">
             <PhStar :size="20" weight="fill" class="text-amber-400" />
-            {{ stats.avgRating.toFixed(1) }}
+            {{ (playersStore.mine?.rating ?? 0).toFixed(1) }}
           </p>
-          <p class="mt-auto pt-1 text-xs text-slate-400">From {{ stats.reviewCount }} reviews</p>
+          <p class="mt-auto pt-1 text-xs text-slate-400">From {{ playersStore.mine?.reviewCount ?? 0 }} reviews</p>
         </div>
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="text-sm text-slate-400">Response rate</p>
-          <p class="mt-2 text-2xl font-bold text-white">{{ stats.responseRatePct }}%</p>
-          <p class="mt-auto pt-1 text-xs text-slate-400">Avg {{ stats.avgResponseTime }}</p>
+          <p class="mt-2 text-2xl font-bold text-white">{{ earnings?.responseRatePct ?? 100 }}%</p>
+          <p class="mt-auto pt-1 text-xs text-slate-400">Accepted or declined vs received</p>
         </div>
       </div>
 
@@ -206,7 +218,7 @@ function formatScheduled(iso: string) {
           <div class="rounded-xl bg-gray-800/70 p-5">
             <h2 class="text-lg font-semibold text-white">Earnings this week</h2>
             <div class="mt-4 h-32">
-              <DashboardBarChart :bars="stats.earningsThisWeek.map((b) => ({ label: b.day, value: b.coins }))" />
+              <DashboardBarChart :bars="(earnings?.earningsThisWeek ?? []).map((b) => ({ label: b.label, value: b.coins }))" />
             </div>
           </div>
 

@@ -1,4 +1,6 @@
 import json
+from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -144,6 +146,27 @@ class ServiceUpdateIn(CamelModel):
     whats_included: list[str] | None = None
     avg_response_time: str | None = None
     active: bool | None = None
+
+
+class EarningsBar(CamelModel):
+    label: str
+    coins: int
+
+
+class EarningsOut(CamelModel):
+    """`GET /players/me/earnings` (3.7) — everything derivable from the Pal's own `bookings`
+    rows without a real payout ledger yet (that's 3.9): payout method/schedule/history/pending
+    clearance stay on `mocks/dashboardStats.ts` on the frontend for now."""
+
+    lifetime_earned_coins: int
+    lifetime_earned_change_pct: float | None
+    coins_this_month: int
+    coins_this_month_change_pct: float | None
+    orders_completed: int
+    orders_completed_this_week: int
+    response_rate_pct: int
+    earnings_this_week: list[EarningsBar]
+    earnings_overview: list[EarningsBar]
 
 
 # Helpers -----------------------------------------------------------------------------------
@@ -307,6 +330,69 @@ def _match_score(player: dict, *, game: str | None, rank: str | None, role: str 
     return score
 
 
+def _month_key(now: datetime, offset: int) -> tuple[int, int]:
+    year, month = now.year, now.month - offset
+    while month <= 0:
+        month += 12
+        year -= 1
+    return year, month
+
+
+def _pct_change(current: int, previous: int) -> float | None:
+    if previous == 0:
+        return None
+    return round((current - previous) / previous * 100, 1)
+
+
+def _compute_earnings(bookings: list[dict]) -> dict:
+    """Aggregates a Pal's own `bookings` rows into `EarningsOut` (3.7), same aggregate-in-Python
+    approach as `_match_score`/`list_players` (3.2a/3.3a) rather than composing this in SQL."""
+    now = datetime.now(UTC)
+    completed = [b for b in bookings if b["status"] == "completed"]
+
+    month_totals: dict[tuple[int, int], int] = defaultdict(int)
+    day_totals: dict[str, int] = defaultdict(int)
+    for b in completed:
+        dt = datetime.fromisoformat(b["created_at"])
+        month_totals[(dt.year, dt.month)] += b["total_coins"]
+        day_totals[dt.date().isoformat()] += b["total_coins"]
+
+    coins_this_month = month_totals.get(_month_key(now, 0), 0)
+    coins_last_month = month_totals.get(_month_key(now, 1), 0)
+    change_pct = _pct_change(coins_this_month, coins_last_month)
+
+    week_start = now - timedelta(days=6)
+    earnings_this_week = [
+        {"label": (now - timedelta(days=i)).strftime("%a")[0], "coins": day_totals.get((now - timedelta(days=i)).date().isoformat(), 0)}
+        for i in range(6, -1, -1)
+    ]
+
+    earnings_overview = []
+    for i in range(7, -1, -1):
+        key = _month_key(now, i)
+        earnings_overview.append(
+            {"label": datetime(key[0], key[1], 1, tzinfo=UTC).strftime("%b"), "coins": month_totals.get(key, 0)}
+        )
+
+    orders_completed_this_week = sum(
+        1 for b in completed if datetime.fromisoformat(b["created_at"]) >= week_start
+    )
+    responded = sum(1 for b in bookings if b["status"] != "pending")
+    response_rate_pct = round(responded / len(bookings) * 100) if bookings else 100
+
+    return {
+        "lifetime_earned_coins": sum(b["total_coins"] for b in completed),
+        "lifetime_earned_change_pct": change_pct,
+        "coins_this_month": coins_this_month,
+        "coins_this_month_change_pct": change_pct,
+        "orders_completed": len(completed),
+        "orders_completed_this_week": orders_completed_this_week,
+        "response_rate_pct": response_rate_pct,
+        "earnings_this_week": earnings_this_week,
+        "earnings_overview": earnings_overview,
+    }
+
+
 # Browse -------------------------------------------------------------------------------------
 # A distinct path shape from `/{player_id}` (no trailing segment), but kept above the catch-all
 # for readability alongside the other literal routes.
@@ -386,6 +472,25 @@ def list_players(
 @router.get("/me", response_model=PlayerDetailOut)
 def get_my_player(user_id: str = Depends(get_current_user_id)) -> dict:
     return _fetch_player_by_user_id(user_id, active_only=False)
+
+
+@router.get("/me/earnings", response_model=EarningsOut)
+def get_my_earnings(user_id: str = Depends(get_current_user_id)) -> dict:
+    """Player Dashboard / Earnings (3.7) - not a `_fetch_player_by_user_id` call since only the
+    player id is needed here, not the full serialized profile + services."""
+    client = get_supabase_client()
+    player = client.table("players").select("id").eq("user_id", user_id).maybe_single().execute()
+    if not player or not player.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
+    bookings = (
+        client.table("bookings")
+        .select("status, total_coins, created_at")
+        .eq("player_id", player.data["id"])
+        .execute()
+        .data
+        or []
+    )
+    return _compute_earnings(bookings)
 
 
 @router.post("/me", response_model=PlayerDetailOut, status_code=status.HTTP_201_CREATED)

@@ -224,6 +224,22 @@ export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
   }
 }
 
+/** `GET /players/me/earnings` response shape (backend's `EarningsOut`, 3.7) - everything
+ * derivable from the Pal's own completed bookings. Payout method/schedule/history/pending
+ * clearance stay on `mocks/dashboardStats.ts` for now since those need a real payout ledger
+ * (3.9), not just booking history. */
+export interface PlayerEarnings {
+  lifetimeEarnedCoins: number
+  lifetimeEarnedChangePct: number | null
+  coinsThisMonth: number
+  coinsThisMonthChangePct: number | null
+  ordersCompleted: number
+  ordersCompletedThisWeek: number
+  responseRatePct: number
+  earningsThisWeek: { label: string; coins: number }[]
+  earningsOverview: { label: string; coins: number }[]
+}
+
 /** `GET /reviews/player/{id}` response shape (backend's `ReviewOut`, grouped by `serviceId`). */
 interface ReviewApiOut {
   id: string
@@ -260,6 +276,10 @@ export const usePlayersStore = defineStore('players', () => {
   const mine = ref<MyPlayerProfile | null>(null)
   const mineLoading = ref(false)
   const mineError = ref<string | null>(null)
+
+  const earnings = ref<PlayerEarnings | null>(null)
+  const earningsLoading = ref(false)
+  const earningsError = ref<string | null>(null)
 
   function resetFilters() {
     filters.value = emptyFilters()
@@ -331,6 +351,24 @@ export const usePlayersStore = defineStore('players', () => {
     await fetchMine()
   }
 
+  /** Player Dashboard / Earnings (3.7): `GET /players/me/earnings`. A 404 (no Pal profile yet)
+   * just clears `earnings` rather than setting `earningsError`, same convention as `fetchMine`. */
+  async function fetchEarnings() {
+    earningsLoading.value = true
+    earningsError.value = null
+    try {
+      earnings.value = await api.get<PlayerEarnings>('/players/me/earnings')
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        earnings.value = null
+      } else {
+        earningsError.value = err instanceof Error ? err.message : 'Failed to load earnings'
+      }
+    } finally {
+      earningsLoading.value = false
+    }
+  }
+
   /** Loads any Pal's public profile (`GET /players/{id}`). Throws (404, or a Postgres error for
    * an id that isn't a valid uuid — e.g. the seed mock ids) when there's no DB-backed profile for
    * `id`; callers fall back to mock data in that case. */
@@ -367,5 +405,9 @@ export const usePlayersStore = defineStore('players', () => {
     deleteService,
     fetchPlayer,
     fetchPlayerReviews,
+    earnings,
+    earningsLoading,
+    earningsError,
+    fetchEarnings,
   }
 })

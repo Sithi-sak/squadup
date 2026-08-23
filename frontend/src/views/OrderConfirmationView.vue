@@ -16,6 +16,9 @@ const player = computed(() => mockPlayers.find((p) => p.id === booking.value?.pl
 const profile = computed(() => (player.value ? getPlayerProfile(player.value) : null))
 const detail = computed(() => (booking.value ? profile.value?.serviceDetails[booking.value.serviceId] : null))
 
+const palName = computed(() => booking.value?.playerDisplayName ?? player.value?.displayName ?? 'your Pal')
+const serviceTitle = computed(() => booking.value?.serviceName ?? detail.value?.title ?? booking.value?.serviceTypeLabel)
+
 const placedAt = computed(() => {
   if (!booking.value) return ''
   return new Date(booking.value.createdAt).toLocaleString('en-US', {
@@ -43,7 +46,7 @@ const placedAt = computed(() => {
     </div>
     <h1 class="mt-6 text-3xl font-bold text-white">Order placed!</h1>
     <p class="mt-2 text-sm text-slate-400">
-      Your request was sent to {{ player?.displayName }}. You can start chatting now, coins are only deducted when
+      Your request was sent to {{ palName }}. You can start chatting now, coins are only deducted when
       the session begins.
     </p>
 
@@ -56,11 +59,11 @@ const placedAt = computed(() => {
       <div class="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4 text-sm">
         <div class="flex items-center justify-between">
           <span class="text-slate-400">Pal</span>
-          <span class="font-medium text-white">{{ player?.displayName }}</span>
+          <span class="font-medium text-white">{{ palName }}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-slate-400">Service</span>
-          <span class="font-medium text-white">{{ detail?.title }} · {{ booking.serviceTypeLabel }}</span>
+          <span class="font-medium text-white">{{ serviceTitle }} · {{ booking.serviceTypeLabel }}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-slate-400">Quantity</span>

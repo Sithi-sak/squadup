@@ -1,26 +1,32 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhStar, PhTrendUp, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
-import { mockPlayerProfiles } from '@/mocks/playerProfiles'
-import { mockIncomingBookings } from '@/mocks/bookings'
 import { mockPalDashboardStats } from '@/mocks/dashboardStats'
 import { getBuyer } from '@/mocks/buyers'
 import { orderStatusMeta } from '@/utils/orderStatus'
-import type { Booking } from '@/stores/bookings'
+import { useBookingsStore, type Booking } from '@/stores/bookings'
 
 const router = useRouter()
+const bookingsStore = useBookingsStore()
+const toast = useToast()
 const stats = mockPalDashboardStats
-const profile = mockPlayerProfiles.self!
+
+onMounted(() => {
+  bookingsStore.fetchIncoming()
+})
+
+const actingOn = ref<string | null>(null)
 
 const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
 const activeOrders = computed(() =>
-  [...mockIncomingBookings]
+  [...bookingsStore.incoming]
     .filter((b) => b.status === 'pending' || b.status === 'accepted')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
 )
@@ -34,22 +40,36 @@ const upcomingSchedule = computed(() =>
 )
 
 const topServices = computed(() => {
-  const totals = new Map<string, number>()
-  for (const booking of mockIncomingBookings) {
+  const totals = new Map<string, { name: string; coins: number }>()
+  for (const booking of bookingsStore.incoming) {
     if (booking.status === 'declined') continue
-    totals.set(booking.serviceId, (totals.get(booking.serviceId) ?? 0) + booking.totalCoins)
+    const entry = totals.get(booking.serviceId) ?? { name: booking.serviceName ?? booking.serviceTypeLabel, coins: 0 }
+    entry.coins += booking.totalCoins
+    totals.set(booking.serviceId, entry)
   }
   return [...totals.entries()]
-    .map(([serviceId, coins]) => ({
-      serviceId,
-      name: profile.services.find((s) => s.id === serviceId)?.name ?? serviceId,
-      coins,
-    }))
+    .map(([serviceId, { name, coins }]) => ({ serviceId, name, coins }))
     .sort((a, b) => b.coins - a.coins)
 })
 
 function buyerName(booking: Booking) {
-  return getBuyer(booking.userId)?.displayName ?? 'Buyer'
+  return booking.buyerDisplayName ?? getBuyer(booking.userId)?.displayName ?? 'Buyer'
+}
+
+async function respond(booking: Booking, action: 'accept' | 'decline') {
+  actingOn.value = booking.id
+  try {
+    if (action === 'accept') await bookingsStore.acceptBooking(booking.id)
+    else await bookingsStore.declineBooking(booking.id)
+  } catch (err) {
+    toast.add({
+      title: 'Could not update order',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    actingOn.value = null
+  }
 }
 
 function formatScheduled(iso: string) {
@@ -154,8 +174,25 @@ function formatScheduled(iso: string) {
                   {{ booking.totalCoins }}
                 </span>
                 <template v-if="booking.status === 'pending'">
-                  <UButton color="primary" size="sm" class="rounded-full">Accept</UButton>
-                  <UButton color="neutral" variant="soft" size="sm" class="rounded-full">Decline</UButton>
+                  <UButton
+                    color="primary"
+                    size="sm"
+                    class="rounded-full"
+                    :loading="actingOn === booking.id"
+                    @click="respond(booking, 'accept')"
+                  >
+                    Accept
+                  </UButton>
+                  <UButton
+                    color="neutral"
+                    variant="soft"
+                    size="sm"
+                    class="rounded-full"
+                    :loading="actingOn === booking.id"
+                    @click="respond(booking, 'decline')"
+                  >
+                    Decline
+                  </UButton>
                 </template>
                 <span v-else class="text-sm font-medium" :class="orderStatusMeta(booking).class">
                   {{ orderStatusMeta(booking).label }}

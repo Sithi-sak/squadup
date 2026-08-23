@@ -1,14 +1,43 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { mockIncomingBookings } from '@/mocks/bookings'
 import { getBuyer } from '@/mocks/buyers'
 import { orderStatusMeta } from '@/utils/orderStatus'
-import type { Booking, BookingStatus } from '@/stores/bookings'
+import { useBookingsStore, type Booking, type BookingStatus } from '@/stores/bookings'
+
+const bookingsStore = useBookingsStore()
+const toast = useToast()
+
+onMounted(() => {
+  bookingsStore.fetchIncoming()
+})
 
 const viewing = ref<Booking | null>(null)
+const actingOn = ref<string | null>(null)
+
+function buyerName(booking: Booking) {
+  return booking.buyerDisplayName ?? getBuyer(booking.userId)?.displayName ?? 'Buyer'
+}
+
+async function respond(booking: Booking, action: 'accept' | 'decline' | 'complete') {
+  actingOn.value = booking.id
+  try {
+    if (action === 'accept') await bookingsStore.acceptBooking(booking.id)
+    else if (action === 'decline') await bookingsStore.declineBooking(booking.id)
+    else await bookingsStore.completeBooking(booking.id)
+  } catch (err) {
+    toast.add({
+      title: 'Could not update order',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    actingOn.value = null
+  }
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -35,14 +64,13 @@ function gamesLabel(booking: Booking) {
 
 const rows = computed(() => {
   const query = search.value.trim().toLowerCase()
-  return [...mockIncomingBookings]
+  return [...bookingsStore.incoming]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .filter((booking) => matchesFilter(booking.status))
     .filter((booking) => {
       if (!query) return true
-      const buyer = getBuyer(booking.userId)
       return (
-        buyer?.displayName.toLowerCase().includes(query) ||
+        buyerName(booking).toLowerCase().includes(query) ||
         booking.serviceTypeLabel.toLowerCase().includes(query) ||
         booking.orderNumber.toLowerCase().includes(query)
       )
@@ -114,7 +142,7 @@ const rows = computed(() => {
                     <PhUserCircle :size="22" />
                   </UAvatar>
                   <div>
-                    <p class="font-semibold text-white">{{ getBuyer(booking.userId)?.displayName ?? 'Buyer' }}</p>
+                    <p class="font-semibold text-white">{{ buyerName(booking) }}</p>
                     <p class="text-sm text-slate-400">{{ booking.serviceTypeLabel }}</p>
                   </div>
                 </div>
@@ -130,13 +158,47 @@ const rows = computed(() => {
                 {{ orderStatusMeta(booking).label }}
               </td>
               <td class="px-5 py-4 text-right">
-                <button
-                  type="button"
-                  class="cursor-pointer font-medium text-brand-400 hover:text-brand-300"
-                  @click="viewing = booking"
-                >
-                  View
-                </button>
+                <div class="flex items-center justify-end gap-3">
+                  <template v-if="booking.status === 'pending'">
+                    <UButton
+                      color="primary"
+                      size="xs"
+                      class="rounded-full"
+                      :loading="actingOn === booking.id"
+                      @click="respond(booking, 'accept')"
+                    >
+                      Accept
+                    </UButton>
+                    <UButton
+                      color="neutral"
+                      variant="soft"
+                      size="xs"
+                      class="rounded-full"
+                      :loading="actingOn === booking.id"
+                      @click="respond(booking, 'decline')"
+                    >
+                      Decline
+                    </UButton>
+                  </template>
+                  <UButton
+                    v-else-if="booking.status === 'accepted'"
+                    color="primary"
+                    variant="soft"
+                    size="xs"
+                    class="rounded-full"
+                    :loading="actingOn === booking.id"
+                    @click="respond(booking, 'complete')"
+                  >
+                    Mark complete
+                  </UButton>
+                  <button
+                    type="button"
+                    class="cursor-pointer font-medium text-brand-400 hover:text-brand-300"
+                    @click="viewing = booking"
+                  >
+                    View
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -153,7 +215,7 @@ const rows = computed(() => {
         <div v-if="viewing" class="flex flex-col gap-3 text-sm">
           <div class="flex items-center justify-between">
             <span class="text-slate-400">Buyer</span>
-            <span class="font-medium text-white">{{ getBuyer(viewing.userId)?.displayName ?? 'Buyer' }}</span>
+            <span class="font-medium text-white">{{ buyerName(viewing) }}</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-slate-400">Service</span>
@@ -182,6 +244,39 @@ const rows = computed(() => {
               {{ viewing.totalCoins }}
             </span>
           </div>
+
+          <div v-if="viewing.status === 'pending'" class="grid grid-cols-2 gap-3 pt-1">
+            <UButton
+              color="neutral"
+              variant="soft"
+              block
+              class="rounded-full"
+              :loading="actingOn === viewing.id"
+              @click="respond(viewing, 'decline'); viewing = null"
+            >
+              Decline
+            </UButton>
+            <UButton
+              color="primary"
+              block
+              class="rounded-full"
+              :loading="actingOn === viewing.id"
+              @click="respond(viewing, 'accept'); viewing = null"
+            >
+              Accept
+            </UButton>
+          </div>
+          <UButton
+            v-else-if="viewing.status === 'accepted'"
+            color="primary"
+            variant="soft"
+            block
+            class="rounded-full"
+            :loading="actingOn === viewing.id"
+            @click="respond(viewing, 'complete'); viewing = null"
+          >
+            Mark complete
+          </UButton>
         </div>
       </template>
     </UModal>

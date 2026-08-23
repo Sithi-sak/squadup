@@ -3,9 +3,8 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhMinus, PhPlus } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { useBookingsStore, type Booking, type BookingAddon } from '@/stores/bookings'
+import { useBookingsStore, type BookingAddon, type BookingDraft } from '@/stores/bookings'
 import { mockAddons } from '@/mocks/bookings'
-import { mockCurrentUser } from '@/mocks/users'
 import type { ServiceTypeOption } from '@/stores/players'
 
 const props = defineProps<{
@@ -76,18 +75,12 @@ const discount = computed(() =>
 )
 const total = computed(() => subtotal.value + addonsTotal.value - discount.value)
 
-function generateOrderNumber() {
-  return `SQ-${Math.floor(10000 + Math.random() * 90000)}`
-}
-
 function continueToCheckout() {
-  const booking: Booking = {
-    id: `bk-${Date.now()}`,
-    orderNumber: generateOrderNumber(),
+  const draft: BookingDraft = {
     playerId: props.playerId,
+    playerDisplayName: props.palName,
     serviceId: props.serviceId,
-    userId: mockCurrentUser.id,
-    status: 'pending',
+    serviceName: props.palTagline,
     serviceTypeLabel: props.serviceType.label,
     priceCoins: props.serviceType.priceCoins,
     priceUnit: props.serviceType.priceUnit,
@@ -98,13 +91,10 @@ function continueToCheckout() {
     addonsCoins: addonsTotal.value,
     discountCoins: discount.value,
     totalCoins: total.value,
-    paymentMethod: 'coins',
-    scheduledFor: null,
-    createdAt: new Date().toISOString(),
   }
-  bookingsStore.addBooking(booking)
+  bookingsStore.startDraft(draft)
   open.value = false
-  router.push(`/checkout/${booking.id}`)
+  router.push(`/checkout/draft-${Date.now()}`)
 }
 </script>
 

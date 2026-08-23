@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.3 done; next up is 3.4 (Booking request flow)
+- **Next task:** 3.4 done; next up is 3.5 (Realtime chat via Supabase Realtime)
 - **Last updated:** 2026-08-23
 
 ---
@@ -451,7 +451,66 @@ unchecked box until the whole thing is done.
         in 1.5's actual build (only `q`/`game` reach the backend, see 3.2's note), so those two
         score components stay backend-only until such UI exists. `vue-tsc --build` and `eslint`
         both clean (same two pre-existing, unrelated errors noted in 3.1k).
-- [ ] 3.4 Booking request flow (create/accept/decline/cancel + refund/dispute reporting) + connect Booking / My Bookings / Order Detail / Player Dashboard
+- [x] 3.4 Booking request flow (create/accept/decline/cancel + refund/dispute reporting) + connect Booking / My Bookings / Order Detail / Player Dashboard
+  - [x] 3.4a Backend: `routers/bookings.py` - `POST /bookings` (buyer submits, server-generates
+        `order_number` and validates the service belongs to the player), `GET /bookings/mine`
+        (buyer) / `GET /bookings/incoming` (Pal), `GET /bookings/{id}` (either party),
+        `POST /bookings/{id}/{accept,decline,complete,cancel}` (status-transition guards per
+        role), `POST /bookings/{id}/dispute` (buyer's "report an issue", writes `order_disputes`
+        - same table the future admin Disputes tab reads, per the 2.3 note). Resolves the
+        draft-vs-submitted question left open in the Booking flow note: "Continue to checkout"
+        stays a client-side-only draft (`stores/bookings.ts`'s `draft` state, not persisted),
+        and only Checkout's "Place order" actually calls `POST /bookings` - so an abandoned
+        checkout never creates a real `pending` row. Add-ons are still an unauthored flat
+        catalog (Booking flow note), so `_resolve_addon_id` self-heals the `addons` table by
+        label the first time each one is booked rather than requiring a seed migration. No
+        "mark complete" action existed in any mockup, but the schema's `booking_status` has
+        nowhere else to reach `completed` from, so `POST /bookings/{id}/complete` + a "Mark
+        complete" button on Pal Orders was added as the natural counterpart to accept/decline.
+  - [x] 3.4b Backend: live smoke test against the real Supabase project (two throwaway users -
+        buyer + Pal - a throwaway player/service, then the full lifecycle through real HTTP with
+        real bearer tokens: create -> appears in `mine`/`incoming` -> non-owner accept rejected
+        (404) -> accept -> double-accept rejected (409) -> complete -> dispute -> a second
+        booking through decline -> a third through cancel, confirming `order_cancellations`/
+        `order_disputes` rows land correctly and `booking_addons` self-heals into `addons`).
+        Caught one bug only a live run surfaces: `_SELECT`'s embed initially asked for
+        `users(display_name, avatar_url)`, but `public.users` (2.3) has no `avatar_url` column
+        (only `players` does) - fixed by dropping the column from the select and from
+        `BookingOut`/the frontend `Booking` type entirely (buyers have no avatar in this schema,
+        so a perpetually-null field wasn't worth keeping). All rows/users cleaned up after.
+  - [x] 3.4c Frontend: `stores/bookings.ts` rewritten around `draft` (the pre-submission
+        selection), `list`/`incoming` (fetched from `/bookings/mine` and `/bookings/incoming`,
+        each falling back to the existing mock fixtures on failure rather than replacing them
+        outright, same resilience convention as 3.1j/3.2d), and action methods
+        (`placeOrder`/`acceptBooking`/`declineBooking`/`completeBooking`/`cancelBooking`/
+        `reportIssue`) that call the new endpoints and patch the booking back into whichever
+        local list holds it. `Booking` gained optional denormalized `playerDisplayName`/
+        `playerAvatarUrl`/`serviceName`/`buyerDisplayName` fields the backend now joins in, so
+        list/detail views don't need a separate per-row player fetch (mock fixtures simply don't
+        set them, and views fall back to the old `mocks/players.ts` lookup when absent).
+  - [x] 3.4d Frontend: `BookingModal.vue` now builds a `BookingDraft` (carrying `palName`/
+        `palTagline` along as `playerDisplayName`/`serviceName` so Checkout never needs a mock
+        player lookup) and routes to Checkout without touching the backend. `CheckoutView.vue`
+        reads the draft instead of a pre-existing booking, and "Place order" calls
+        `bookingsStore.placeOrder(...)`, which is where the real `POST /bookings` happens; the
+        real booking's id (not a client-generated one) is what Order Confirmation routes to.
+  - [x] 3.4e Frontend: `MyBookingsView.vue` fetches `fetchList()` on mount and cancels through
+        `bookingsStore.cancelBooking(id, payload)` (the modal already emitted a full
+        reason/refundOption/refundCoins/note payload, it just wasn't wired to anything real).
+        `OrderDetailView.vue` resolves a booking by checking the store first, then
+        `GET /bookings/{id}` for a direct/deep link, then the mock fixtures as a last resort
+        (`mocks/bookings.ts`'s new `getMockBooking`); cancel and "Report an issue" both call the
+        real endpoints with toast error handling.
+  - [x] 3.4f Frontend: `PlayerDashboardView.vue` and `PlayerOrdersView.vue` fetch
+        `fetchIncoming()` on mount instead of reading `mockIncomingBookings` directly, and their
+        previously-inert Accept/Decline buttons (dashboard widget) plus a new Accept/Decline/Mark
+        complete set (Orders page table row and its detail modal) now call the real
+        accept/decline/complete actions with per-row loading state and toast error handling.
+        "Top services" (dashboard) now sums `bookingsStore.incoming` directly using each
+        booking's own `serviceName` rather than cross-referencing `mocks/playerProfiles.ts`.
+  - [x] 3.4g Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (same two
+        pre-existing unrelated eslint errors noted in 3.1k). Manual browser walkthrough skipped
+        per standing instruction not to run the `run` skill in this project.
 - [ ] 3.5 Realtime chat via Supabase Realtime + connect Messages page
 - [ ] 3.6 Ratings & reviews endpoint + connect to Player Profile and User Dashboard
 - [ ] 3.7 Player earnings tracker (derived from completed bookings) + connect to Player Dashboard

@@ -267,3 +267,9 @@ export const mockIncomingBookings: Booking[] = [
     createdAt: '2026-08-11T21:00:00.000Z',
   },
 ]
+
+/** Order Detail's fallback when a direct/deep link to a booking that failed to fetch from the
+ * backend isn't in either mock list. */
+export function getMockBooking(id: string): Booking | null {
+  return mockBookings.find((b) => b.id === id) ?? mockIncomingBookings.find((b) => b.id === id) ?? null
+}

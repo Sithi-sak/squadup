@@ -1,26 +1,28 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { PhCalendarBlank, PhCaretLeft, PhCreditCard } from '@phosphor-icons/vue'
 import { CalendarDateTime, getLocalTimeZone, now, toCalendarDate, type CalendarDate } from '@internationalized/date'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type PaymentMethod } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import { mockCurrentUser } from '@/mocks/users'
 
-const route = useRoute()
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+const toast = useToast()
 
-const booking = computed(() => bookingsStore.getBooking(String(route.params.bookingId)))
-const player = computed(() => mockPlayers.find((p) => p.id === booking.value?.playerId) ?? null)
+const draft = computed(() => bookingsStore.draft)
+const player = computed(() => mockPlayers.find((p) => p.id === draft.value?.playerId) ?? null)
 const profile = computed(() => (player.value ? getPlayerProfile(player.value) : null))
-const detail = computed(() => (booking.value ? profile.value?.serviceDetails[booking.value.serviceId] : null))
+const detail = computed(() => (draft.value ? profile.value?.serviceDetails[draft.value.serviceId] : null))
 
 const paymentMethod = ref<PaymentMethod>('coins')
 const startChoice = ref<'now' | 'schedule'>('now')
 const scheduledAt = ref<CalendarDateTime>()
+const submitting = ref(false)
 
 const scheduledDate = computed({
   get: (): CalendarDate | undefined => (scheduledAt.value ? toCalendarDate(scheduledAt.value) : undefined),
@@ -32,22 +34,35 @@ const scheduledDate = computed({
 })
 
 const remainingBalance = computed(() =>
-  booking.value ? mockCurrentUser.coinBalance - booking.value.totalCoins : mockCurrentUser.coinBalance,
+  draft.value ? mockCurrentUser.coinBalance - draft.value.totalCoins : mockCurrentUser.coinBalance,
 )
 
-function placeOrder() {
-  if (!booking.value) return
-  booking.value.paymentMethod = paymentMethod.value
-  booking.value.scheduledFor =
-    startChoice.value === 'schedule' && scheduledAt.value
-      ? scheduledAt.value.toDate(getLocalTimeZone()).toISOString()
-      : null
-  router.push(`/checkout/${booking.value.id}/confirmation`)
+async function placeOrder() {
+  if (!draft.value || submitting.value) return
+  submitting.value = true
+  try {
+    const booking = await bookingsStore.placeOrder({
+      paymentMethod: paymentMethod.value,
+      scheduledFor:
+        startChoice.value === 'schedule' && scheduledAt.value
+          ? scheduledAt.value.toDate(getLocalTimeZone()).toISOString()
+          : null,
+    })
+    router.push(`/checkout/${booking.id}/confirmation`)
+  } catch (err) {
+    toast.add({
+      title: 'Could not place order',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
 <template>
-  <div v-if="!booking" class="flex min-h-[60vh] items-center justify-center px-4 py-16">
+  <div v-if="!draft" class="flex min-h-[60vh] items-center justify-center px-4 py-16">
     <UEmpty title="This order could not be found" description="It may have expired. Browse Pals to start a new booking.">
       <template #actions>
         <UButton color="primary" class="rounded-full" @click="router.push('/players')">Browse Players</UButton>
@@ -69,25 +84,25 @@ function placeOrder() {
       <div class="flex flex-col gap-4">
         <div class="rounded-xl bg-gray-800/70 p-5">
           <h2 class="text-lg font-bold text-white">Order summary</h2>
-          <div v-if="player" class="mt-3 flex items-center gap-3">
+          <div class="mt-3 flex items-center gap-3">
             <div class="h-10 w-10 shrink-0 rounded-full bg-white/10" />
             <div>
-              <p class="font-medium text-white">{{ player.displayName }} · {{ detail?.title }}</p>
-              <p class="inline-flex items-center gap-1 text-xs text-slate-400">
-                ★ {{ detail?.rating ? detail.rating.toFixed(1) : '--' }} · {{ detail?.servedCount.toLocaleString() ?? 0 }} served
+              <p class="font-medium text-white">{{ draft.playerDisplayName }} · {{ draft.serviceName }}</p>
+              <p v-if="detail" class="inline-flex items-center gap-1 text-xs text-slate-400">
+                ★ {{ detail.rating ? detail.rating.toFixed(1) : '--' }} · {{ detail.servedCount.toLocaleString() }} served
               </p>
             </div>
           </div>
 
           <div class="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4 text-sm">
             <div class="flex items-center justify-between">
-              <span class="text-slate-300">{{ booking.serviceTypeLabel }} ×{{ booking.quantity }}</span>
+              <span class="text-slate-300">{{ draft.serviceTypeLabel }} ×{{ draft.quantity }}</span>
               <span class="inline-flex items-center gap-1 font-medium text-white">
                 <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
-                {{ booking.subtotalCoins }}
+                {{ draft.subtotalCoins }}
               </span>
             </div>
-            <div v-for="addon in booking.addons" :key="addon.id" class="flex items-center justify-between">
+            <div v-for="addon in draft.addons" :key="addon.id" class="flex items-center justify-between">
               <span class="text-slate-300">{{ addon.label }}</span>
               <span class="inline-flex items-center gap-1 font-medium text-white">
                 <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
@@ -191,21 +206,21 @@ function placeOrder() {
             <span class="text-slate-400">Subtotal</span>
             <span class="inline-flex items-center gap-1 font-medium text-white">
               <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
-              {{ booking.subtotalCoins }}
+              {{ draft.subtotalCoins }}
             </span>
           </div>
-          <div v-if="booking.addonsCoins > 0" class="flex items-center justify-between">
+          <div v-if="draft.addonsCoins > 0" class="flex items-center justify-between">
             <span class="text-slate-400">Add-ons</span>
             <span class="inline-flex items-center gap-1 font-medium text-white">
               <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
-              {{ booking.addonsCoins }}
+              {{ draft.addonsCoins }}
             </span>
           </div>
-          <div v-if="booking.discountCoins > 0" class="flex items-center justify-between text-brand-400">
+          <div v-if="draft.discountCoins > 0" class="flex items-center justify-between text-brand-400">
             <span>Discount</span>
             <span class="inline-flex items-center gap-1">
               <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
-              -{{ booking.discountCoins }}
+              -{{ draft.discountCoins }}
             </span>
           </div>
         </div>
@@ -214,11 +229,21 @@ function placeOrder() {
           <span class="text-lg font-bold text-white">Total</span>
           <span class="inline-flex items-center gap-1 text-lg font-bold text-white">
             <img :src="coinIcon" alt="" class="h-4 w-4" />
-            {{ booking.totalCoins }}
+            {{ draft.totalCoins }}
           </span>
         </div>
 
-        <UButton color="primary" block size="lg" class="mt-4 rounded-full" @click="placeOrder">Place order</UButton>
+        <UButton
+          color="primary"
+          block
+          size="lg"
+          class="mt-4 rounded-full"
+          :loading="submitting"
+          :disabled="submitting"
+          @click="placeOrder"
+        >
+          Place order
+        </UButton>
         <p class="mt-3 text-center text-xs text-slate-400">
           Coins are deducted when the session starts. By ordering you agree to the Pal Terms.
         </p>

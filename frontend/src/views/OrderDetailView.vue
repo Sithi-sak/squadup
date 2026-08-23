@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PhCaretLeft, PhCheck, PhLock, PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { useBookingsStore, type BookingStatus } from '@/stores/bookings'
+import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload, type DisputePayload } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
+import { getMockBooking } from '@/mocks/bookings'
 import { orderStatusMeta, type OrderDisplayStatusKey } from '@/utils/orderStatus'
 import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
 import RefundModal from '@/components/modals/RefundModal.vue'
@@ -16,10 +17,34 @@ const router = useRouter()
 const bookingsStore = useBookingsStore()
 const toast = useToast()
 
-const booking = computed(() => bookingsStore.getBooking(String(route.params.bookingId)))
+const booking = ref<Booking | null>(null)
+
+/** Prefers whatever's already in the store (populated by My Bookings / Pal Orders), falling
+ * back to `GET /bookings/{id}` for a direct/deep link, then to the static mock fixtures if
+ * that fails (signed out, network error) - same resilience pattern as the rest of Phase 3. */
+async function loadBooking() {
+  const id = String(route.params.bookingId)
+  const existing = bookingsStore.getBooking(id)
+  if (existing) {
+    booking.value = existing
+    return
+  }
+  try {
+    booking.value = await bookingsStore.fetchBooking(id)
+  } catch {
+    booking.value = getMockBooking(id)
+  }
+}
+
+onMounted(loadBooking)
+watch(() => route.params.bookingId, loadBooking)
+
 const player = computed(() => mockPlayers.find((p) => p.id === booking.value?.playerId) ?? null)
 const profile = computed(() => (player.value ? getPlayerProfile(player.value) : null))
 const detail = computed(() => (booking.value ? profile.value?.serviceDetails[booking.value.serviceId] : null))
+
+const palName = computed(() => booking.value?.playerDisplayName ?? player.value?.displayName ?? 'Pal')
+const serviceTitle = computed(() => booking.value?.serviceName ?? detail.value?.title ?? booking.value?.serviceTypeLabel ?? '')
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -94,17 +119,37 @@ function isCancellable(bookingStatus: BookingStatus) {
 const cancelModalOpen = ref(false)
 const refundModalOpen = ref(false)
 
-function confirmCancel() {
-  if (booking.value) bookingsStore.cancelBooking(booking.value.id)
-  cancelModalOpen.value = false
+async function confirmCancel(payload: CancelPayload) {
+  if (!booking.value) return
+  try {
+    booking.value = await bookingsStore.cancelBooking(booking.value.id, payload)
+  } catch (err) {
+    toast.add({
+      title: 'Could not cancel order',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    cancelModalOpen.value = false
+  }
 }
 
-function confirmRefundRequest() {
-  toast.add({
-    title: 'Request submitted',
-    description: "We'll get back to you within 24 hours.",
-    color: 'success',
-  })
+async function confirmRefundRequest(payload: DisputePayload) {
+  if (!booking.value) return
+  try {
+    await bookingsStore.reportIssue(booking.value.id, payload)
+    toast.add({
+      title: 'Request submitted',
+      description: "We'll get back to you within 24 hours.",
+      color: 'success',
+    })
+  } catch (err) {
+    toast.add({
+      title: 'Could not submit request',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
 }
 </script>
 
@@ -152,14 +197,14 @@ function confirmRefundRequest() {
               </UAvatar>
               <div>
                 <p class="inline-flex items-center gap-1.5 font-semibold text-white">
-                  {{ player?.displayName ?? 'Pal' }}
+                  {{ palName }}
                   <span v-if="player?.rating" class="inline-flex items-center gap-1 text-sm font-normal text-amber-400">
                     <PhStar :size="12" weight="fill" />
                     {{ player.rating.toFixed(1) }}
                   </span>
                 </p>
                 <p class="text-sm text-slate-400">
-                  {{ player?.games?.[0] }} · {{ detail?.title ?? booking.serviceTypeLabel }}
+                  <template v-if="player?.games?.[0]">{{ player.games[0] }} · </template>{{ serviceTitle }}
                 </p>
               </div>
             </div>
@@ -171,7 +216,7 @@ function confirmRefundRequest() {
           <div class="mt-4 flex flex-col divide-y divide-white/10 border-t border-white/10 text-sm">
             <div class="flex items-center justify-between py-3">
               <span class="text-slate-400">Service type</span>
-              <span class="font-medium text-white">{{ detail?.title ?? booking.serviceTypeLabel }}</span>
+              <span class="font-medium text-white">{{ serviceTitle }}</span>
             </div>
             <div class="flex items-center justify-between py-3">
               <span class="text-slate-400">Games</span>
@@ -264,7 +309,7 @@ function confirmRefundRequest() {
         </div>
 
         <UButton color="primary" block size="lg" class="rounded-full" @click="router.push('/messages')">
-          Message {{ player?.displayName ?? 'Pal' }}
+          Message {{ palName }}
         </UButton>
         <UButton color="neutral" variant="soft" block size="lg" class="rounded-full" @click="refundModalOpen = true">
           Report an issue
@@ -283,8 +328,8 @@ function confirmRefundRequest() {
     <CancelOrderModal
       v-model:open="cancelModalOpen"
       :order-number="booking.orderNumber"
-      :pal-name="player?.displayName ?? 'Pal'"
-      :service-title="detail?.title ?? booking.serviceTypeLabel"
+      :pal-name="palName"
+      :service-title="serviceTitle"
       :meta="`${booking.quantity} ${booking.quantity === 1 ? 'game' : 'games'} · ${status?.label ?? ''}`"
       :total-coins="booking.totalCoins"
       @confirm="confirmCancel"
@@ -293,8 +338,8 @@ function confirmRefundRequest() {
     <RefundModal
       v-model:open="refundModalOpen"
       :order-number="booking.orderNumber"
-      :pal-name="player?.displayName ?? 'Pal'"
-      :service-title="detail?.title ?? booking.serviceTypeLabel"
+      :pal-name="palName"
+      :service-title="serviceTitle"
       :meta="`${booking.quantity} ${booking.quantity === 1 ? 'game' : 'games'} · ${status?.label ?? ''}`"
       :total-coins="booking.totalCoins"
       @confirm="confirmRefundRequest"

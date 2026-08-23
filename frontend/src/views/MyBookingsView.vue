@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { useBookingsStore, type Booking, type BookingStatus } from '@/stores/bookings'
+import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
@@ -13,6 +13,10 @@ import LeaveReviewModal from '@/components/modals/LeaveReviewModal.vue'
 const router = useRouter()
 const bookingsStore = useBookingsStore()
 const toast = useToast()
+
+onMounted(() => {
+  bookingsStore.fetchList()
+})
 
 const cancelModalOpen = ref(false)
 const cancelTarget = ref<{
@@ -43,9 +47,19 @@ function openCancelModal(booking: Booking, palName: string, serviceTitle: string
   cancelModalOpen.value = true
 }
 
-function confirmCancel() {
-  if (cancelTarget.value) bookingsStore.cancelBooking(cancelTarget.value.id)
-  cancelModalOpen.value = false
+async function confirmCancel(payload: CancelPayload) {
+  if (!cancelTarget.value) return
+  try {
+    await bookingsStore.cancelBooking(cancelTarget.value.id, payload)
+  } catch (err) {
+    toast.add({
+      title: 'Could not cancel order',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    cancelModalOpen.value = false
+  }
 }
 
 const filters = [
@@ -72,22 +86,32 @@ function matchesFilter(status: BookingStatus) {
   return status === 'declined'
 }
 
+/** Real bookings (3.4) carry their own `playerDisplayName`/`serviceName`/`playerAvatarUrl` from
+ * the backend; only the static mock fixtures need this `mocks/players.ts` lookup. */
+function palName(booking: Booking) {
+  return booking.playerDisplayName ?? mockPlayers.find((p) => p.id === booking.playerId)?.displayName ?? 'Pal'
+}
+
+function palOnline(booking: Booking) {
+  return mockPlayers.find((p) => p.id === booking.playerId)?.online ?? false
+}
+
+function serviceTitle(booking: Booking) {
+  if (booking.serviceName) return booking.serviceName
+  const player = mockPlayers.find((p) => p.id === booking.playerId)
+  return player ? (getPlayerProfile(player).serviceDetails[booking.serviceId]?.title ?? booking.serviceTypeLabel) : booking.serviceTypeLabel
+}
+
 const rows = computed(() => {
   const query = search.value.trim().toLowerCase()
   return [...bookingsStore.list]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .filter((booking) => matchesFilter(booking.status))
-    .map((booking) => {
-      const player = mockPlayers.find((p) => p.id === booking.playerId) ?? null
-      const profile = player ? getPlayerProfile(player) : null
-      const detail = profile?.serviceDetails[booking.serviceId] ?? null
-      return { booking, player, detail }
-    })
-    .filter(({ booking, player, detail }) => {
+    .filter((booking) => {
       if (!query) return true
       return (
-        player?.displayName.toLowerCase().includes(query) ||
-        detail?.title.toLowerCase().includes(query) ||
+        palName(booking).toLowerCase().includes(query) ||
+        serviceTitle(booking).toLowerCase().includes(query) ||
         booking.orderNumber.toLowerCase().includes(query)
       )
     })
@@ -116,11 +140,9 @@ function primaryActionLabel(booking: Booking) {
 
 function handlePrimaryAction(booking: Booking) {
   if (booking.status === 'completed') {
-    const player = mockPlayers.find((p) => p.id === booking.playerId) ?? null
-    const detail = player ? getPlayerProfile(player).serviceDetails[booking.serviceId] : null
     reviewTarget.value = {
-      palName: player?.displayName ?? 'Pal',
-      meta: `${detail?.title ?? booking.serviceTypeLabel} · ${summaryText(booking)} · ${formatDate(booking.createdAt)}`,
+      palName: palName(booking),
+      meta: `${serviceTitle(booking)} · ${summaryText(booking)} · ${formatDate(booking.createdAt)}`,
     }
     reviewModalOpen.value = true
   } else if (booking.status === 'declined') {
@@ -187,7 +209,7 @@ function confirmReview() {
 
       <div v-else class="mt-6 flex flex-col gap-4">
         <div
-          v-for="{ booking, player, detail } in rows"
+          v-for="booking in rows"
           :key="booking.id"
           class="flex flex-col gap-4 rounded-xl bg-gray-800/70 p-5 sm:flex-row sm:items-center sm:justify-between"
         >
@@ -197,14 +219,14 @@ function confirmReview() {
                 <PhUserCircle :size="26" />
               </UAvatar>
               <span
-                v-if="player?.online"
+                v-if="palOnline(booking)"
                 class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
               />
             </div>
             <div>
               <p class="font-semibold text-white">
-                {{ player?.displayName ?? 'Pal' }}
-                <span class="font-normal text-slate-400">· {{ detail?.title ?? booking.serviceTypeLabel }}</span>
+                {{ palName(booking) }}
+                <span class="font-normal text-slate-400">· {{ serviceTitle(booking) }}</span>
               </p>
               <p class="text-sm text-slate-400">
                 Order #{{ booking.orderNumber }} · {{ formatDate(booking.createdAt) }}
@@ -228,7 +250,7 @@ function confirmReview() {
                 variant="soft"
                 size="sm"
                 class="rounded-full text-red-400"
-                @click="openCancelModal(booking, player?.displayName ?? 'Pal', detail?.title ?? booking.serviceTypeLabel)"
+                @click="openCancelModal(booking, palName(booking), serviceTitle(booking))"
               >
                 Cancel order
               </UButton>

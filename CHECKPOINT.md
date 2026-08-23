@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.4 done; next up is 3.5 (Realtime chat via Supabase Realtime)
+- **Next task:** 3.5 done; next up is 3.6 (Ratings & reviews endpoint)
 - **Last updated:** 2026-08-23
 
 ---
@@ -511,7 +511,83 @@ unchecked box until the whole thing is done.
   - [x] 3.4g Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (same two
         pre-existing unrelated eslint errors noted in 3.1k). Manual browser walkthrough skipped
         per standing instruction not to run the `run` skill in this project.
-- [ ] 3.5 Realtime chat via Supabase Realtime + connect Messages page
+- [x] 3.5 Realtime chat via Supabase Realtime + connect Messages page
+  - [x] 3.5a Backend: `routers/messages.py` - `GET /messages/threads` (list, joined participant
+        display name + last message preview + unread count, batched over one `message_threads`
+        fetch + one `messages` fetch scoped to those thread ids, same batching approach as
+        3.2a), `POST /messages/threads` (find-or-create by `participantId`, canonicalizing
+        `user_a_id`/`user_b_id` by sorting the two ids since the table's unique constraint is on
+        the ordered tuple and either party can be the one who starts a thread),
+        `GET /messages/threads/{id}/messages` (history, also marks the other party's unread
+        messages read - replaces the frontend-only `unreadCount = 0` `selectThread` previously
+        did), `POST /messages/threads/{id}/messages` (send). Already registered in
+        `routers/__init__.py` from the 2.1 skeleton, no `main.py` change needed. Note for 3.5d:
+        real threads carry a `participantId` that's a `users.id`, not a mock Pal id like
+        `mocks/messages.ts`'s `p1`/`p2`/`p3` - `MessagesPanel.vue`'s `mockPlayers` lookup for
+        online status/game tag will simply miss for real threads, same graceful-miss pattern as
+        other mock-fallback lookups elsewhere.
+  - [x] 3.5b Backend: `supabase/migrations/20260823055705_messages_realtime_rls.sql` - SELECT
+        policies on `message_threads`/`messages` for `authenticated`, scoped to rows the caller
+        is a participant in (the `messages` policy checks membership via a subquery join back to
+        `message_threads` since the row itself only carries `thread_id`). SELECT only, not
+        INSERT/UPDATE - every actual write still goes through `routers/messages.py`'s
+        service-role client, which bypasses RLS entirely, and Supabase Realtime authorizes each
+        `postgres_changes` event against the same RLS a SELECT would see, so SELECT is both
+        necessary and sufficient here. Also `alter publication supabase_realtime add table` for
+        both tables, a separate prerequisite from RLS - the publication starts empty on a fresh
+        project, so `postgres_changes` would never fire for these tables even with the policies
+        above. Pushed to the linked project with `bunx supabase db push`, confirmed in sync via
+        `bunx supabase migration list`.
+  - [x] 3.5c Backend: live smoke test against the real Supabase project (three throwaway
+        users - A, B, a non-participant C - through real HTTP with real bearer tokens against a
+        local uvicorn: A starts a thread with B, B starts one back with A, A starts again -
+        all three return the same thread id, confirming find-or-create dedups regardless of
+        initiator and never duplicates. Both sent a message; thread list showed the right
+        preview/unread count for each side; opening the thread marked only the counterpart's
+        messages read, leaving the other side's unread count untouched. Non-participant C got
+        404 on the thread's messages, self-thread and empty-body both got 400. Confirmed RLS
+        directly against PostgREST with each user's own anon-key+JWT: A could `select` the
+        thread and its messages, C got zero rows for both - so Realtime's `postgres_changes`
+        will authorize correctly once 3.5d subscribes.) All 21 checks passed with no bugs found
+        - `_THREAD_SELECT`'s explicit FK names and the RLS policies from 3.5b were correct on
+        the first live run. All rows/users cleaned up after, verified empty.
+  - [x] 3.5d Frontend: `stores/messages.ts` rewritten around real `fetchThreads`/
+        `fetchMessages`/`sendMessage`/`startThread` calls against `/messages/...`, mock fallback
+        on failure (same resilience convention as 3.1j/3.2d/3.4c), plus a Supabase Realtime
+        `postgres_changes` subscription (via `lib/supabase.ts`, already used for auth) on the
+        `messages` table scoped to the active thread, subscribing/unsubscribing as
+        `activeThreadId` changes, appending live inserts instead of polling. `MessageThread`'s
+        mock-era `participantName` renamed to `participantDisplayName` to match the backend's
+        `ThreadOut` field (`mocks/messages.ts` updated to match) - consistent with how
+        `Booking` picked up `playerDisplayName` in 3.4c rather than keeping the old mock name.
+        A shared `appendMessage` helper dedupes by message id since the sender's own `POST`
+        response and the Realtime `INSERT` event for that same row both land in the store.
+        `selectThread`/`fetchMessages` always refetch from the server rather than reusing a
+        cached thread's messages, since opening a thread is also what marks the other party's
+        messages read server-side. Left `MessagesPanel.vue` unwired to the new store shape -
+        that's 3.5e; confirmed the resulting `participantName` type errors are confined to that
+        one file via `vue-tsc --build`, `stores/messages.ts`/`mocks/messages.ts` themselves are
+        clean, and `eslint` is clean on both.
+  - [x] 3.5e Frontend: `MessagesPanel.vue` wired to the store's real loading/error state -
+        chat list and active thread each get their own loading text / `UEmpty` w/ Retry
+        (thread list also distinguishes "No chats yet" from a search yielding nothing), Send
+        gets a `sending` guard (disables the input, `UButton`'s `loading` prop) with a toast on
+        failure. `onMounted` calls `fetchThreads()` and auto-selects the first thread, replacing
+        the old mock-era default-selected-first-thread behavior. "New chat" stays a disabled
+        stub (`disabled` + `title="Coming soon"`, same plain-disabled convention as the "Edit"
+        button in `PlayerServicesView.vue`) since no user-search UI exists in any mockup.
+        Message-bubble alignment now compares `senderId` against a real `currentUserId`
+        (`authStore.user?.id`, falling back to `mockCurrentUser.id` when signed out or on a
+        mock-fallback thread) instead of the hardcoded mock id, since every message now carries
+        a real `users.id` sender. Remaining `participantName` → `participantDisplayName`
+        renames from 3.5d applied. `MessagesView.vue` needed no changes - it only picks a
+        layout by persona, which stays on `mockCurrentUser` along with the rest of the app's
+        not-yet-migrated persona/profile chrome (header, sidebar). `vue-tsc --build` and
+        `eslint` both clean (same two pre-existing unrelated eslint errors noted since 3.1k).
+  - [x] 3.5f Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (the
+        `eslint` run surfaces only the same two pre-existing unrelated errors noted since
+        3.1k - `StepRates.vue`/`RefundModal.vue` unused vars). Manual browser walkthrough
+        skipped per standing instruction not to run the `run` skill in this project.
 - [ ] 3.6 Ratings & reviews endpoint + connect to Player Profile and User Dashboard
 - [ ] 3.7 Player earnings tracker (derived from completed bookings) + connect to Player Dashboard
 - [ ] 3.8 Social feed endpoints: posts/comments/likes/follows/saved items + connect to Feed (all tabs), Post Detail, Player Profile Feed/Wish/Album tabs

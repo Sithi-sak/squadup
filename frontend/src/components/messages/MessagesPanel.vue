@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import {
   PhDotsThree,
   PhMagnifyingGlass,
@@ -10,6 +11,7 @@ import {
   PhUserCircle,
 } from '@phosphor-icons/vue'
 import { useMessagesStore } from '@/stores/messages'
+import { useAuthStore } from '@/stores/auth'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayers } from '@/mocks/players'
 
@@ -19,8 +21,23 @@ defineProps<{
 }>()
 
 const store = useMessagesStore()
+const authStore = useAuthStore()
+const toast = useToast()
 const search = ref('')
 const draft = ref('')
+const sending = ref(false)
+
+// Falls back to the mock identity when signed out (or on a mock-fallback thread), same
+// resilience convention `stores/messages.ts` uses for the thread/message data itself.
+const currentUserId = computed(() => authStore.user?.id ?? mockCurrentUser.id)
+
+onMounted(async () => {
+  await store.fetchThreads()
+  const firstThreadId = store.threads[0]?.id
+  if (!store.activeThreadId && firstThreadId) {
+    store.selectThread(firstThreadId)
+  }
+})
 
 const filteredThreads = computed(() => {
   const query = search.value.trim().toLowerCase()
@@ -28,7 +45,7 @@ const filteredThreads = computed(() => {
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   )
   if (!query) return sorted
-  return sorted.filter((thread) => thread.participantName.toLowerCase().includes(query))
+  return sorted.filter((thread) => thread.participantDisplayName.toLowerCase().includes(query))
 })
 
 const totalUnread = computed(() => store.threads.reduce((sum, t) => sum + t.unreadCount, 0))
@@ -54,10 +71,22 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function handleSend() {
-  if (!draft.value.trim()) return
-  store.sendMessage(draft.value)
-  draft.value = ''
+async function handleSend() {
+  if (!draft.value.trim() || sending.value) return
+  const body = draft.value
+  sending.value = true
+  try {
+    await store.sendMessage(body)
+    draft.value = ''
+  } catch (err) {
+    toast.add({
+      title: "Couldn't send message",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    sending.value = false
+  }
 }
 </script>
 
@@ -68,7 +97,7 @@ function handleSend() {
         <h1 class="text-3xl font-bold text-white">{{ title }}</h1>
         <p class="mt-1 text-sm text-slate-400">{{ subtitle }}</p>
       </div>
-      <UButton color="primary" class="rounded-full">
+      <UButton color="primary" class="rounded-full" disabled title="Coming soon">
         <PhPlus :size="16" weight="bold" />
         New chat
       </UButton>
@@ -99,39 +128,65 @@ function handleSend() {
         </div>
 
         <div class="mt-3 flex-1 overflow-y-auto">
-          <button
-            v-for="thread in filteredThreads"
-            :key="thread.id"
-            type="button"
-            class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
-            :class="thread.id === store.activeThreadId ? 'bg-brand-600/15' : 'hover:bg-white/5'"
-            @click="store.selectThread(thread.id)"
+          <div
+            v-if="store.threadsLoading && store.threads.length === 0"
+            class="py-10 text-center text-sm text-slate-400"
           >
-            <div class="relative shrink-0">
-              <UAvatar size="md" class="bg-white/10 text-slate-300">
-                <PhUserCircle :size="22" />
-              </UAvatar>
-              <span
-                v-if="participant(thread.participantId)?.online"
-                class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
-              />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold text-white">{{ thread.participantName }}</p>
-              <p class="truncate text-sm text-slate-400">{{ thread.lastMessagePreview }}</p>
-            </div>
-            <div class="flex shrink-0 flex-col items-end gap-1.5">
-              <span class="text-xs text-slate-500">{{ formatRelative(thread.updatedAt) }}</span>
-              <span
-                v-if="thread.unreadCount"
-                class="flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white"
-              >
-                {{ thread.unreadCount }}
-              </span>
-            </div>
-          </button>
+            Loading chats...
+          </div>
 
-          <UEmpty v-if="filteredThreads.length === 0" title="No chats found" class="py-10 text-white" />
+          <UEmpty
+            v-else-if="store.threadsError"
+            title="Couldn't load chats"
+            :description="store.threadsError"
+            class="py-10 text-white"
+          >
+            <template #actions>
+              <UButton color="primary" class="rounded-full" @click="store.fetchThreads()">Retry</UButton>
+            </template>
+          </UEmpty>
+
+          <template v-else>
+            <button
+              v-for="thread in filteredThreads"
+              :key="thread.id"
+              type="button"
+              class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
+              :class="thread.id === store.activeThreadId ? 'bg-brand-600/15' : 'hover:bg-white/5'"
+              @click="store.selectThread(thread.id)"
+            >
+              <div class="relative shrink-0">
+                <UAvatar size="md" class="bg-white/10 text-slate-300">
+                  <PhUserCircle :size="22" />
+                </UAvatar>
+                <span
+                  v-if="participant(thread.participantId)?.online"
+                  class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
+                />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-white">{{ thread.participantDisplayName }}</p>
+                <p class="truncate text-sm text-slate-400">{{ thread.lastMessagePreview }}</p>
+              </div>
+              <div class="flex shrink-0 flex-col items-end gap-1.5">
+                <span class="text-xs text-slate-500">{{ formatRelative(thread.updatedAt) }}</span>
+                <span
+                  v-if="thread.unreadCount"
+                  class="flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white"
+                >
+                  {{ thread.unreadCount }}
+                </span>
+              </div>
+            </button>
+
+            <UEmpty
+              v-if="filteredThreads.length === 0 && store.threads.length === 0"
+              title="No chats yet"
+              description="Start a conversation from a Pal's profile or booking to see it here."
+              class="py-10 text-white"
+            />
+            <UEmpty v-else-if="filteredThreads.length === 0" title="No chats found" class="py-10 text-white" />
+          </template>
         </div>
       </div>
 
@@ -142,7 +197,7 @@ function handleSend() {
               <PhUserCircle :size="22" />
             </UAvatar>
             <div>
-              <p class="font-semibold text-white">{{ store.activeThread.participantName }}</p>
+              <p class="font-semibold text-white">{{ store.activeThread.participantDisplayName }}</p>
               <p class="text-xs text-slate-400">
                 <span v-if="activeParticipant?.games?.[0]">{{ activeParticipant.games[0] }} · </span>
                 {{ activeParticipant?.online ? 'Online' : 'Offline' }}
@@ -161,23 +216,45 @@ function handleSend() {
 
         <div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div
-            v-for="message in store.activeMessages"
-            :key="message.id"
-            class="flex flex-col"
-            :class="message.senderId === mockCurrentUser.id ? 'items-end' : 'items-start'"
+            v-if="store.messagesLoading && store.activeMessages.length === 0"
+            class="py-10 text-center text-sm text-slate-400"
           >
-            <div
-              class="max-w-[75%] rounded-full px-4 py-2.5 text-sm"
-              :class="
-                message.senderId === mockCurrentUser.id
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-white/10 text-slate-100'
-              "
-            >
-              {{ message.body }}
-            </div>
-            <span class="mt-1 text-xs text-slate-500">{{ formatTime(message.createdAt) }}</span>
+            Loading messages...
           </div>
+
+          <UEmpty
+            v-else-if="store.messagesError"
+            title="Couldn't load messages"
+            :description="store.messagesError"
+            class="py-10 text-white"
+          >
+            <template #actions>
+              <UButton color="primary" class="rounded-full" @click="store.selectThread(store.activeThread.id)">
+                Retry
+              </UButton>
+            </template>
+          </UEmpty>
+
+          <template v-else>
+            <div
+              v-for="message in store.activeMessages"
+              :key="message.id"
+              class="flex flex-col"
+              :class="message.senderId === currentUserId ? 'items-end' : 'items-start'"
+            >
+              <div
+                class="max-w-[75%] rounded-full px-4 py-2.5 text-sm"
+                :class="
+                  message.senderId === currentUserId
+                    ? 'bg-brand-600 text-white'
+                    : 'bg-white/10 text-slate-100'
+                "
+              >
+                {{ message.body }}
+              </div>
+              <span class="mt-1 text-xs text-slate-500">{{ formatTime(message.createdAt) }}</span>
+            </div>
+          </template>
         </div>
 
         <div class="flex items-center gap-2 border-t border-white/10 px-4 py-3">
@@ -186,17 +263,20 @@ function handleSend() {
           </UButton>
           <UInput
             v-model="draft"
-            :placeholder="`Message ${store.activeThread.participantName}...`"
+            :placeholder="`Message ${store.activeThread.participantDisplayName}...`"
             variant="subtle"
             class="flex-1 rounded-full"
             :ui="{ base: 'rounded-full' }"
+            :disabled="sending"
             @keyup.enter="handleSend"
           >
             <template #trailing>
               <PhSmiley :size="18" class="text-slate-400" />
             </template>
           </UInput>
-          <UButton color="primary" class="rounded-full px-5" @click="handleSend">Send</UButton>
+          <UButton color="primary" class="rounded-full px-5" :loading="sending" @click="handleSend">
+            Send
+          </UButton>
         </div>
       </div>
 

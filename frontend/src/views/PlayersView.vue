@@ -8,7 +8,6 @@ import PlayerCard from '@/components/players/PlayerCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const playersStore = usePlayersStore()
-onMounted(() => playersStore.fetchList())
 
 /** Seed Pals (`mockPlayers`, `p1`..`p8`) stay in the catalog as demo content alongside whatever
  * real Pal profiles the backend returns (`GET /players`) — see the 3.1j/3.2 notes in
@@ -27,6 +26,12 @@ const router = useRouter()
 const query = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
 const gameFilter = computed(() => (typeof route.query.game === 'string' ? route.query.game : ''))
 const isGameMode = computed(() => gameFilter.value.length > 0)
+
+/** `game` drives the backend's match-score default order (3.3: game 40 / rank 30 / role 20 /
+ * availability 10) — refetch whenever it changes so the ranking stays relevant to the page
+ * being viewed, not just whatever game was active on first mount. */
+onMounted(() => playersStore.fetchList({ game: gameFilter.value || undefined }))
+watch(gameFilter, (game) => playersStore.fetchList({ game: game || undefined }))
 
 const searchInput = ref(query.value)
 watch(query, (value) => (searchInput.value = value))

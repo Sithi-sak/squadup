@@ -251,8 +251,8 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.2 done; next up is 3.3 (Matching algorithm)
-- **Last updated:** 2026-08-22
+- **Next task:** 3.3 done; next up is 3.4 (Booking request flow)
+- **Last updated:** 2026-08-23
 
 ---
 
@@ -427,7 +427,30 @@ unchecked box until the whole thing is done.
         client-side rather than becoming more backend query params, since they're presentation
         categories layered on the fetched list, not independent data filters. `vue-tsc --build`
         and `eslint` both clean.
-- [ ] 3.3 Matching algorithm (weighted scoring: game 40 / rank 30 / role 20 / availability 10) + apply as default sort on Browse Players
+- [x] 3.3 Matching algorithm (weighted scoring: game 40 / rank 30 / role 20 / availability 10) + apply as default sort on Browse Players
+  - [x] 3.3a Backend: `_match_score()` (`routers/players.py`) scores each `GET /players` result
+        against the `game`/`rank`/`role` query params already accepted by 3.2a. Those three
+        params moved out of `matches()`'s hard AND-filter and into scoring only, so a partial
+        match now ranks lower instead of being excluded (e.g. a Diamond Duo Queue search still
+        shows a Platinum Coaching Pal, just below exact matches). `online` stays a flat +10
+        bonus regardless of filters, there's no `availability` column (per 3.2a's note) so
+        "online now" is the only signal to score against. When `sort` isn't explicitly
+        `rating`/`price_asc`/`price_desc`, results are ordered by this score descending
+        (stable otherwise) - this is the "apply as default sort" half of the task.
+  - [x] 3.3b Backend: live smoke test against the real Supabase project (inserted 4 throwaway
+        `players` rows directly via the service-role client covering exact/partial/no-match
+        combinations, started uvicorn, curled `GET /players?game=Valorant&rank=Diamond&role=Duo
+        Queue` and confirmed the 100/70/50/10-score order, curled with no filters and confirmed
+        online-first default order, confirmed `sort=rating` still overrides it, deleted the
+        throwaway rows).
+  - [x] 3.3c Frontend: `PlayersView.vue` now passes `game` (from the existing `gameFilter` route
+        query) into `playersStore.fetchList()` on mount and on route change, so the backend's
+        match-scored order actually has a game to score against on the `/players?game=...`
+        pages; the plain `/players` browse page gets the online-first default with no changes
+        needed since "Relevance" already sends no `sort` param. No rank/role filter UI exists
+        in 1.5's actual build (only `q`/`game` reach the backend, see 3.2's note), so those two
+        score components stay backend-only until such UI exists. `vue-tsc --build` and `eslint`
+        both clean (same two pre-existing, unrelated errors noted in 3.1k).
 - [ ] 3.4 Booking request flow (create/accept/decline/cancel + refund/dispute reporting) + connect Booking / My Bookings / Order Detail / Player Dashboard
 - [ ] 3.5 Realtime chat via Supabase Realtime + connect Messages page
 - [ ] 3.6 Ratings & reviews endpoint + connect to Player Profile and User Dashboard
@@ -456,6 +479,5 @@ unchecked box until the whole thing is done.
 
 - Admin panel (1.15, 3.14)
 - Earnings tracker — fall back to plain booking history (3.7)
-- Matching algorithm — fall back to unsorted player list (3.3)
 - Subscriptions backend — fall back to the static mock page as-is (3.11)
 - Estars leaderboard backend — fall back to the static mock ranking as-is (3.12)

@@ -289,6 +289,24 @@ def _pricing_unit(pricing_model: str) -> str:
     return {"per-hour": "/hour", "per-session": "/session"}.get(pricing_model, "/game")
 
 
+def _match_score(player: dict, *, game: str | None, rank: str | None, role: str | None) -> int:
+    """Weighted relevance score used for `GET /players`'s default ordering (3.3): how well a
+    Pal matches the browse criteria the caller is searching with. Unlike `q`/`language`/
+    `max_price`/`online`/`is_new` below, game/rank/role no longer exclude a partial match (see
+    `matches()`), they just rank it lower - a Diamond duo Pal still shows up for a Platinum
+    search, just below the exact-rank matches."""
+    score = 0
+    if game and any(g.lower() == game.lower() for g in player["games"]):
+        score += 40
+    if rank and (player["rank"] or "").lower() == rank.lower():
+        score += 30
+    if role and (player["role"] or "").lower() == role.lower():
+        score += 20
+    if player["online"]:
+        score += 10
+    return score
+
+
 # Browse -------------------------------------------------------------------------------------
 # A distinct path shape from `/{player_id}` (no trailing segment), but kept above the catch-all
 # for readability alongside the other literal routes.
@@ -326,12 +344,7 @@ def list_players(
     summaries = [_player_summary(p, services_by_id.get(p.get("highlighted_service_id") or "")) for p in players]
 
     def matches(player: dict, summary: dict) -> bool:
-        if game and not any(g.lower() == game.lower() for g in player["games"]):
-            return False
-        if rank and (player["rank"] or "").lower() != rank.lower():
-            return False
-        if role and (player["role"] or "").lower() != role.lower():
-            return False
+        # game/rank/role are scored (`_match_score`), not filtered here - see that docstring.
         if language and not any(lang.lower() == language.lower() for lang in player["languages"]):
             return False
         if max_price is not None and summary["price_coins"] is not None and summary["price_coins"] > max_price:
@@ -347,16 +360,23 @@ def list_players(
                 return False
         return True
 
-    results = [summary for player, summary in zip(players, summaries) if matches(player, summary)]
+    results = [
+        (summary, _match_score(player, game=game, rank=rank, role=role))
+        for player, summary in zip(players, summaries)
+        if matches(player, summary)
+    ]
 
     if sort == "rating":
-        results.sort(key=lambda s: s["rating"] or 0, reverse=True)
+        results.sort(key=lambda item: item[0]["rating"] or 0, reverse=True)
     elif sort == "price_asc":
-        results.sort(key=lambda s: s["price_coins"] if s["price_coins"] is not None else float("inf"))
+        results.sort(key=lambda item: item[0]["price_coins"] if item[0]["price_coins"] is not None else float("inf"))
     elif sort == "price_desc":
-        results.sort(key=lambda s: s["price_coins"] or 0, reverse=True)
+        results.sort(key=lambda item: item[0]["price_coins"] or 0, reverse=True)
+    else:
+        # Default order (3.3): highest match score first, stable otherwise.
+        results.sort(key=lambda item: item[1], reverse=True)
 
-    return results
+    return [summary for summary, _score in results]
 
 
 # Own profile ---------------------------------------------------------------------------------

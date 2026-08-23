@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { api, ApiError } from '@/lib/api'
+import { formatTimeAgo } from '@/utils/timeAgo'
 
 export interface PlayerSummary {
   id: string
@@ -223,6 +224,32 @@ export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
   }
 }
 
+/** `GET /reviews/player/{id}` response shape (backend's `ReviewOut`, grouped by `serviceId`). */
+interface ReviewApiOut {
+  id: string
+  author: string
+  rating: number
+  text: string | null
+  sentiment: 'positive' | 'neutral' | 'negative'
+  createdAt: string
+}
+
+function reviewsFromApi(grouped: Record<string, ReviewApiOut[]>): Record<string, PlayerReview[]> {
+  return Object.fromEntries(
+    Object.entries(grouped).map(([serviceId, reviews]) => [
+      serviceId,
+      reviews.map((r) => ({
+        id: r.id,
+        author: r.author,
+        rating: r.rating,
+        text: r.text ?? '',
+        timeAgo: formatTimeAgo(r.createdAt),
+        sentiment: r.sentiment,
+      })),
+    ]),
+  )
+}
+
 export const usePlayersStore = defineStore('players', () => {
   const list = ref<PlayerSummary[]>([])
   const filters = ref<PlayerFilters>(emptyFilters())
@@ -311,6 +338,17 @@ export const usePlayersStore = defineStore('players', () => {
     return api.get<MyPlayerProfile>(`/players/${id}`)
   }
 
+  /** Player Profile's Services tab reviews (`GET /reviews/player/{id}`, public). Returns an
+   * empty record on failure rather than throwing, since a Pal with no reviews yet is a normal
+   * empty state, not an error. */
+  async function fetchPlayerReviews(id: string): Promise<Record<string, PlayerReview[]>> {
+    try {
+      return reviewsFromApi(await api.get<Record<string, ReviewApiOut[]>>(`/reviews/player/${id}`))
+    } catch {
+      return {}
+    }
+  }
+
   return {
     list,
     filters,
@@ -328,5 +366,6 @@ export const usePlayersStore = defineStore('players', () => {
     updateService,
     deleteService,
     fetchPlayer,
+    fetchPlayerReviews,
   }
 })

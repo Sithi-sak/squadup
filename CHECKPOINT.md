@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.5 done; next up is 3.6 (Ratings & reviews endpoint)
+- **Next task:** 3.6 done; next up is 3.7 (Player earnings tracker)
 - **Last updated:** 2026-08-23
 
 ---
@@ -588,7 +588,56 @@ unchecked box until the whole thing is done.
         `eslint` run surfaces only the same two pre-existing unrelated errors noted since
         3.1k - `StepRates.vue`/`RefundModal.vue` unused vars). Manual browser walkthrough
         skipped per standing instruction not to run the `run` skill in this project.
-- [ ] 3.6 Ratings & reviews endpoint + connect to Player Profile and User Dashboard
+- [x] 3.6 Ratings & reviews endpoint + connect to Player Profile and User Dashboard
+  - [x] 3.6a Backend: `routers/reviews.py` - `POST /reviews` (the buyer's `LeaveReviewModal`
+        submission: validates the booking is theirs and `completed`, rejects a second review for
+        the same booking, derives `sentiment` from `rating` since the modal never collects it
+        directly), `GET /reviews/player/{id}` (public, grouped by `service_id` - matches the
+        frontend's `PlayerProfile.reviews: Record<string, PlayerReview[]>` shape exactly, no
+        reshaping needed on the frontend side). A review recomputes both `services.rating` (that
+        service's reviews only) and `players.rating`/`review_count` (every review across all of
+        the Pal's services) from scratch each time - simple average over live rows, no running
+        total to keep in sync. `highlights`/`tipCoins` the modal collects stay UI-only, same
+        "stays UI-only" convention as Create Service's Category field - `reviews` (2.3) has no
+        highlights column, and tips need the wallet ledger (3.9). `bookings.py`'s `BookingOut`
+        gained `has_review` (a `reviews(id)` embed on the existing `_SELECT`) so My Bookings can
+        tell a reviewed order from one still awaiting a review without a separate lookup.
+  - [x] 3.6b Backend: live smoke test against the real Supabase project (a throwaway buyer + Pal
+        through real HTTP with real bearer tokens: create Pal profile/service, book, accept,
+        complete, submit a 5-star review -> `hasReview` flips true on `GET /bookings/{id}`,
+        `GET /reviews/player/{id}` returns it grouped under the right service id, `GET
+        /players/{id}` shows `rating: 5.0`/`reviewCount: 1` and the service's own `rating: 5.0`.
+        Also confirmed: a second review on the same booking gets 409, the Pal reviewing their own
+        booking gets 404 (not the buyer), a rating outside 1-5 gets 422, and reviewing a still-
+        `pending` booking gets 409. All rows/users cleaned up after, verified empty.
+  - [x] 3.6c Frontend: `stores/players.ts` gained `fetchPlayerReviews(id)`
+        (`GET /reviews/player/{id}`, swallows failures into `{}` since no reviews yet is a normal
+        empty state) plus a `reviewFromApi`-style converter that turns the backend's `createdAt`
+        into the mock-era short `timeAgo` string (new `utils/timeAgo.ts`, e.g. `"2d"`/`"1w"`,
+        matching `mocks/playerProfiles.ts`'s authored format). `stores/bookings.ts` gained
+        `Booking.hasReview` (optional, mock fixtures leave it unset = never reviewed) and
+        `submitReview(bookingId, {rating, text})` (`POST /reviews`, patches `hasReview` onto the
+        local booking rather than refetching).
+  - [x] 3.6d Frontend: `usePlayerProfileData` (shared by Player Profile and Service Detail, per
+        3.1j) now also calls `fetchPlayerReviews` alongside `fetchPlayer` and merges the result
+        into `profile.reviews` for a DB-backed player, so `ServiceReviewsPanel` (already wired to
+        `profile.reviews[selectedServiceId]`) needed no changes itself. A DB-backed Pal's
+        reviews/rating/reviewCount are now all real; the mock fallback (seed Pals `p1`..`p8`)
+        is untouched.
+  - [x] 3.6e Frontend + scope note: `MyBookingsView.vue`'s `LeaveReviewModal` (already built in
+        Phase 1 but never wired to anything) now calls `bookingsStore.submitReview` on submit,
+        with a toast on failure; a completed order that already has a review shows a disabled
+        "Reviewed" button instead of "Leave review", using the new `hasReview` field. **User
+        Dashboard deviation:** `UserDashboardView.vue` (1.13) is a static "Become a Pal" upsell
+        card for accounts with no `playerId` - it never grew a reviews section, and 1.13's own
+        note explicitly punted "reviews-left" to "wherever wallet/Settings ends up" without
+        landing it anywhere. There is no reviews surface on User Dashboard to connect. My
+        Bookings is the actual buyer-side page a review flow lives on in this build, so that's
+        where 3.6 connects instead - flagging this now rather than leaving the checklist line
+        looking unaddressed.
+  - [x] 3.6f Verification: `vue-tsc --build` and `eslint` clean (same two pre-existing unrelated
+        eslint errors noted since 3.1k), `ruff check` clean. Manual browser walkthrough skipped
+        per standing instruction not to run the `run` skill in this project.
 - [ ] 3.7 Player earnings tracker (derived from completed bookings) + connect to Player Dashboard
 - [ ] 3.8 Social feed endpoints: posts/comments/likes/follows/saved items + connect to Feed (all tabs), Post Detail, Player Profile Feed/Wish/Album tabs
 - [ ] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages

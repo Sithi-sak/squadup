@@ -79,13 +79,14 @@ class BookingOut(CamelModel):
     payment_method: str
     scheduled_for: str | None
     created_at: str
+    has_review: bool
 
 
 # Helpers -----------------------------------------------------------------------------------
 
 _SELECT = (
     "*, players(display_name, avatar_url), services(name), users(display_name), "
-    "booking_addons(id, label, price_coins)"
+    "booking_addons(id, label, price_coins), reviews(id)"
 )
 
 _OUTCOME_MAP = {"full": "full_refund", "partial": "partial_refund", "reporting": "reporting"}
@@ -102,6 +103,7 @@ def _booking_out(row: dict) -> dict:
         "service_name": service.get("name") or row["service_type_label"],
         "buyer_display_name": buyer.get("display_name") or "Buyer",
         "addons": row.get("booking_addons") or [],
+        "has_review": bool(row.get("reviews")),
     }
 
 

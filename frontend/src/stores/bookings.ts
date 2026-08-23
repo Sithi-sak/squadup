@@ -42,6 +42,15 @@ export interface Booking {
   /** `null` means "start now"; otherwise an ISO timestamp for a scheduled start. */
   scheduledFor: string | null
   createdAt: string
+  /** Whether a review already exists for this booking (`POST /reviews` is one-per-booking) -
+   * gates My Bookings' "Leave review" action. Absent on the static mock fixtures, which fall
+   * back to `false` (never reviewed). */
+  hasReview?: boolean
+}
+
+export interface ReviewPayload {
+  rating: number
+  text: string
 }
 
 /** A "Book a session" selection that hasn't been submitted yet - kept client-side only until
@@ -186,6 +195,15 @@ export const useBookingsStore = defineStore('bookings', () => {
     await api.post(`/bookings/${id}/dispute`, payload)
   }
 
+  /** My Bookings' `LeaveReviewModal` submit (`POST /reviews`). `highlights`/`tipCoins` the modal
+   * collects stay UI-only for now - see `routers/reviews.py`'s docstring. Patches `hasReview`
+   * onto the local booking rather than refetching, same as the other action methods. */
+  async function submitReview(bookingId: string, payload: ReviewPayload) {
+    await api.post(`/reviews`, { bookingId, ...payload })
+    const booking = getBooking(bookingId)
+    if (booking) replaceInPlace({ ...booking, hasReview: true })
+  }
+
   return {
     draft,
     current,
@@ -206,5 +224,6 @@ export const useBookingsStore = defineStore('bookings', () => {
     completeBooking,
     cancelBooking,
     reportIssue,
+    submitReview,
   }
 })

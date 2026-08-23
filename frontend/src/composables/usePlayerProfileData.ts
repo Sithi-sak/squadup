@@ -6,6 +6,7 @@ import {
   playerSummaryFromDetail,
   usePlayersStore,
   type PlayerProfile,
+  type PlayerReview,
   type PlayerSummary,
 } from '@/stores/players'
 
@@ -17,14 +18,17 @@ export function usePlayerProfileData(id: Ref<string>) {
 
   const loading = ref(true)
   const fetchedDetail = ref<Awaited<ReturnType<typeof playersStore.fetchPlayer>> | null>(null)
+  const fetchedReviews = ref<Record<string, PlayerReview[]>>({})
 
   watch(
     id,
     async (playerId) => {
       loading.value = true
       fetchedDetail.value = null
+      fetchedReviews.value = {}
       try {
         fetchedDetail.value = await playersStore.fetchPlayer(playerId)
+        fetchedReviews.value = await playersStore.fetchPlayerReviews(playerId)
       } catch {
         fetchedDetail.value = null
       } finally {
@@ -41,7 +45,7 @@ export function usePlayerProfileData(id: Ref<string>) {
   )
   const profile = computed<PlayerProfile>(() =>
     fetchedDetail.value
-      ? playerProfileFromDetail(fetchedDetail.value)
+      ? { ...playerProfileFromDetail(fetchedDetail.value), reviews: fetchedReviews.value }
       : getPlayerProfile(mockPlayer.value),
   )
 

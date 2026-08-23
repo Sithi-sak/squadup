@@ -29,7 +29,7 @@ const cancelTarget = ref<{
 } | null>(null)
 
 const reviewModalOpen = ref(false)
-const reviewTarget = ref<{ palName: string; meta: string } | null>(null)
+const reviewTarget = ref<{ bookingId: string; palName: string; meta: string } | null>(null)
 
 function isCancellable(status: BookingStatus) {
   return status === 'pending' || status === 'accepted'
@@ -133,14 +133,16 @@ function formatDate(iso: string) {
 }
 
 function primaryActionLabel(booking: Booking) {
-  if (booking.status === 'completed') return 'Leave review'
+  if (booking.status === 'completed') return booking.hasReview ? 'Reviewed' : 'Leave review'
   if (booking.status === 'declined') return 'Reorder'
   return 'View order'
 }
 
 function handlePrimaryAction(booking: Booking) {
   if (booking.status === 'completed') {
+    if (booking.hasReview) return
     reviewTarget.value = {
+      bookingId: booking.id,
       palName: palName(booking),
       meta: `${serviceTitle(booking)} · ${summaryText(booking)} · ${formatDate(booking.createdAt)}`,
     }
@@ -152,12 +154,22 @@ function handlePrimaryAction(booking: Booking) {
   }
 }
 
-function confirmReview() {
-  toast.add({
-    title: 'Review submitted',
-    description: 'Thanks for the feedback!',
-    color: 'success',
-  })
+async function confirmReview(payload: { rating: number; highlights: string[]; comment: string; tipCoins: number }) {
+  if (!reviewTarget.value) return
+  try {
+    await bookingsStore.submitReview(reviewTarget.value.bookingId, { rating: payload.rating, text: payload.comment })
+    toast.add({
+      title: 'Review submitted',
+      description: 'Thanks for the feedback!',
+      color: 'success',
+    })
+  } catch (err) {
+    toast.add({
+      title: 'Could not submit review',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
 }
 </script>
 
@@ -263,7 +275,13 @@ function confirmReview() {
               >
                 Message
               </UButton>
-              <UButton color="primary" size="sm" class="rounded-full" @click="handlePrimaryAction(booking)">
+              <UButton
+                color="primary"
+                size="sm"
+                class="rounded-full"
+                :disabled="booking.status === 'completed' && booking.hasReview"
+                @click="handlePrimaryAction(booking)"
+              >
                 {{ primaryActionLabel(booking) }}
               </UButton>
             </div>

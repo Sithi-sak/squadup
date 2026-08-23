@@ -19,3 +19,9 @@ def get_current_user_id(authorization: str | None = Header(default=None)) -> str
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return user_id
+
+
+def get_optional_user_id(authorization: str | None = Header(default=None)) -> str | None:
+    """For endpoints that stay public (browsing, per the 2.5 note) but personalize the response
+    - e.g. `liked`/`following` flags on feed posts - when a bearer token is present."""
+    return _resolve_user_id(authorization)

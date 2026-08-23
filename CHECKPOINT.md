@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.7 done; next up is 3.8 (social feed endpoints)
+- **Next task:** 3.8a done; next up is 3.8b (album/wish endpoints)
 - **Last updated:** 2026-08-23
 
 ---
@@ -676,6 +676,63 @@ unchecked box until the whole thing is done.
         eslint errors noted since 3.1k), `ruff check` clean. Manual browser walkthrough skipped
         per standing instruction not to run the `run` skill in this project.
 - [ ] 3.8 Social feed endpoints: posts/comments/likes/follows/saved items + connect to Feed (all tabs), Post Detail, Player Profile Feed/Wish/Album tabs
+  - [x] 3.8a Backend: `routers/feed.py` — posts (`GET /feed` main list, `GET /feed/following`
+        scoped to followed players, `POST /feed/posts` create, `GET /feed/posts/{id}` for Post
+        Detail), likes (`POST/DELETE /feed/posts/{id}/like`, `POST/DELETE
+        /feed/comments/{id}/like`), comments (`GET/POST /feed/posts/{id}/comments`, flat
+        `parent_comment_id` rows rebuilt into the nested tree `FeedComment.replies` already
+        expects), follows (`POST/DELETE /feed/follows/{playerId}`, table keys on `player_id` not
+        a user-to-user relation), and saved items (`GET /feed/saved`, `POST/DELETE /feed/saved` —
+        body picks `kind: 'post' | 'service'` per the `saved_items_kind_target_check` constraint).
+        `GET /feed`, `/feed/following`, and `GET /feed/posts/{id}` stay public (browsing, per the
+        2.5 note) via a new `get_optional_user_id` (`core/auth.py`) that returns `None` instead of
+        401ing, so `liked`/`following` personalize only when a bearer token is present. New
+        migration `supabase/migrations/20260823154043_feed_likes.sql` adds `post_likes`/
+        `comment_likes` join tables (same shape as `follows`) since 2.3's `posts.likes_count`/
+        `comments.likes_count` were plain counters with no per-user record to toggle against or
+        derive a viewer's own `liked` state from — pushed to the linked project, same RLS posture
+        as every other table (enabled, zero policies). `likes_count`/`comments_count`/
+        `posts_count`/`followers_count`/`following_count` are all recomputed from live rows on
+        every mutation rather than incremented, matching `reviews.py`'s "no running total to keep
+        in sync" convention. Explore's `ExplorePost`/`SuggestedPal`/`TrendingTopic` have no
+        backing tables and none were added — nothing in 1.8c's mock content (trending topics,
+        suggested-Pal blurbs like "Adding Socials") maps to real columns, so Explore stays
+        mock-only; not revisited unless a later pass decides it's worth deriving from
+        `posts`/`players`. Sanity-checked route registration + public/private split locally
+        (uvicorn, no live Supabase writes) - the real live smoke test is 3.8c.
+  - [ ] 3.8b Backend: `routers/players.py` — `GET /players/{id}/album`, `GET /players/{id}/wish`
+        (public reads for the Profile Album/Wish tabs). Decide `wish_items.saved` semantics before
+        wiring `ProfileWishTab`'s toggle (it's a column on the Pal's own row, not a per-viewer
+        saved flag like `saved_items` — confirm whether it's Pal-authored "still wished for" state
+        or should be dropped in favor of viewer-side `saved_items` with `kind: 'service'`).
+  - [ ] 3.8c Backend: live smoke test against the real Supabase project (throwaway Pal + two
+        buyer accounts through real HTTP with real bearer tokens: create post → appears in main
+        feed → follow the Pal → post appears in Following → like/unlike → comment + reply →
+        save/unsave a post and a service → confirm `saved_items` unique constraints reject
+        duplicates → album/wish reads for a seeded player). Clean up all rows/users after.
+  - [ ] 3.8d Frontend: new `stores/feed.ts` (`posts`/`following`/`saved` state, `fetchFeed`/
+        `fetchFollowing`/`createPost`/`toggleLike`/`toggleFollow`/`fetchComments`/`postComment`/
+        `toggleSaved` actions against `/feed/...`), same mock-fallback resilience convention as
+        `stores/players.ts`/`bookings.ts`/`messages.ts` (3.1j/3.2d/3.4c/3.5d).
+  - [ ] 3.8e Frontend: `FeedView.vue` + `FeedFollowingView.vue` wired to the new store — real
+        `createPost` from `CreatePostModal.vue` (drop the hardcoded `category: 'games'`),
+        `FeedPostCard.vue`'s `toggleLike` and each view's follow toggle persisted instead of
+        local-only reactive state.
+  - [ ] 3.8f Frontend: `FeedSavedView.vue` wired to real `saved` state with a working "Unsave"
+        button; `FeedExploreView.vue` stays on its mock fixtures per 3.8a's note unless that
+        subtask found real queries to back it.
+  - [ ] 3.8g Frontend: `PostDetailView.vue` wired — real comments/replies via the store,
+        `postComment()` persisted instead of pushing to a local `draftComments` array, like/follow
+        state shared with the feed store rather than a separate local `following` ref.
+  - [ ] 3.8h Frontend: Player Profile Feed/Album/Wish tabs wired for real (DB-backed) profiles.
+        Extend `usePlayerProfileData.ts` to fetch feed/album/wish alongside the existing
+        reviews fetch and stop hardcoding `feed: [], album: [], wish: []` in
+        `playerProfileFromDetail()` (`stores/players.ts`); mock fallback for seed Pals `p1`..`p8`
+        unchanged. `ProfileFeedsTab.vue`'s composer and like button, `ProfileAlbumTab.vue`'s
+        display grid, and `ProfileWishTab.vue`'s save toggle move off local-only state onto the
+        new store per 3.8b's decision on `wish_items.saved`.
+  - [ ] 3.8i Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean. Manual browser
+        walkthrough skipped per standing instruction not to run the `run` skill in this project.
 - [ ] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages
 - [ ] 3.10 Notifications endpoint (create on booking/message/review/payout events, mark read) + connect to header dropdown and Notifications page
 - [ ] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)
@@ -683,6 +740,39 @@ unchecked box until the whole thing is done.
 - [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
 - [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
+- [ ] 3.16 Clean out mock/demo data and fallback logic (do last, once every 3.x feature above is
+      backend-wired)
+  - [ ] 3.16a Audit every store's mock-fallback path (`stores/players.ts`, `bookings.ts`,
+        `messages.ts`, etc. — the "same resilience convention as 3.1j/3.2d/3.4c/3.5d" pattern used
+        throughout Phase 3) and remove the try/catch-to-mock branches now that each endpoint is
+        real and stable
+  - [ ] 3.16b Delete the now-unreferenced fixtures under `frontend/src/mocks/` (players, bookings,
+        messages, admin, feed, etc.)
+  - [ ] 3.16c Remove the client-side merge of seed Pals `p1`..`p8` into Browse Players/Player
+        Profile (`PlayersView.vue`'s `allPlayers`) now that 3.17's seeded accounts are real DB rows
+        instead
+  - [ ] 3.16d Verify via `vue-tsc --build`/`eslint` plus a manual walkthrough that no page silently
+        regresses to an empty state now that the mock fallback is gone
+- [ ] 3.17 Seed script: populate the real Supabase project with realistic demo content so the
+      marketplace looks alive (not test/throwaway rows — meant to stay through launch)
+  - [ ] 3.17a Backend: a one-off script (e.g. `backend/scripts/seed_demo_data.py`) using the
+        service-role client's admin API (`auth.admin.createUser`) to create a few hundred
+        `auth.users` rows with placeholder (non-deliverable) emails — no real Gmail needed since
+        these accounts are never meant to log in, just to exist as FK targets, same as the
+        `on_auth_user_created` trigger from `auth_wiring.sql` handles for a real Google signup.
+        Then create matching realistic `players`/`services`/`service_pricing_options`/
+        `service_promotions` rows (varied games/ranks/roles/pricing) for each
+  - [ ] 3.17b Seed a smaller number of `bookings`/reviews and `message_threads`/`messages` between
+        seeded accounts so Player Dashboard/Order history/Messages thread lists have real
+        history to show, not empty states — this is just for populated-looking history, not a
+        substitute for the live two-way Realtime demo (that stays on the 2 real Gmail accounts
+        signed in for that purpose)
+  - [ ] 3.17c Make the script idempotent (safe to re-run without duplicating) or pair it with a
+        teardown script that deletes every seeded row by a marker (e.g. a shared email domain
+        suffix), so the seed set can be regenerated or wiped cleanly
+  - [ ] 3.17d Verification: run against the linked Supabase project, spot-check row counts and
+        relations, confirm Browse Players/Player Profile/Dashboard render populated real data end
+        to end with no mock fallback needed
 
 ## Phase 4 — Payment: ABA / KHQR / Stripe (final task)
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import { PhChatCircle, PhHeart, PhShareFat, PhUserCircle } from '@phosphor-icons/vue'
 
 const props = defineProps<{
@@ -12,11 +12,26 @@ const props = defineProps<{
   hasImage?: boolean
   likes: number
   comments: number
+  /** Omit for local-only mock views (`FeedSavedView`/`PostDetailView`, still on mock fixtures
+   * until 3.8f/3.8g); pass it once a view is store-backed to make the like state controlled and
+   * emit `toggle-like` for the parent to persist instead of toggling local state. */
+  liked?: boolean
 }>()
 
-const liked = reactive<Record<string, boolean>>({})
+const emit = defineEmits<{ 'toggle-like': [] }>()
+
+const localLiked = reactive<Record<string, boolean>>({})
+const isLiked = computed(() => (props.liked !== undefined ? props.liked : (localLiked[props.id] ?? false)))
+const displayLikes = computed(() =>
+  props.liked !== undefined ? props.likes : props.likes + (localLiked[props.id] ? 1 : 0),
+)
+
 function toggleLike() {
-  liked[props.id] = !liked[props.id]
+  if (props.liked !== undefined) {
+    emit('toggle-like')
+    return
+  }
+  localLiked[props.id] = !localLiked[props.id]
 }
 </script>
 
@@ -46,11 +61,11 @@ function toggleLike() {
       <button
         type="button"
         class="flex items-center gap-1.5 transition-colors hover:text-white"
-        :class="liked[id] && 'text-brand-400'"
+        :class="isLiked && 'text-brand-400'"
         @click="toggleLike"
       >
-        <PhHeart :size="18" :weight="liked[id] ? 'fill' : 'regular'" />
-        {{ likes + (liked[id] ? 1 : 0) }}
+        <PhHeart :size="18" :weight="isLiked ? 'fill' : 'regular'" />
+        {{ displayLikes }}
       </button>
       <router-link :to="`/feed/${id}`" class="flex items-center gap-1.5 transition-colors hover:text-white">
         <PhChatCircle :size="18" />

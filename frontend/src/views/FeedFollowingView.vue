@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhCactus } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { mockFollowingPosts } from '@/mocks/feed'
+import { useFeedStore, type FeedPost } from '@/stores/feed'
+import { formatTimeAgo } from '@/utils/timeAgo'
 
 const router = useRouter()
+const feedStore = useFeedStore()
+const toast = useToast()
+
+onMounted(() => {
+  feedStore.fetchFollowing()
+})
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -20,10 +28,22 @@ const filters = [
 const activeFilter = ref<(typeof filters)[number]['key']>('all')
 
 const visiblePosts = computed(() => {
-  if (activeFilter.value === 'all') return mockFollowingPosts
-  if (activeFilter.value === 'online') return mockFollowingPosts.filter((p) => p.online)
-  return mockFollowingPosts.filter((p) => p.category === activeFilter.value)
+  if (activeFilter.value === 'all') return feedStore.following
+  if (activeFilter.value === 'online') return feedStore.following.filter((p) => p.online)
+  return feedStore.following.filter((p) => p.category === activeFilter.value)
 })
+
+async function toggleLike(post: FeedPost) {
+  try {
+    await feedStore.toggleLike(post)
+  } catch (err) {
+    toast.add({
+      title: 'Could not update like',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
 </script>
 
 <template>
@@ -42,7 +62,7 @@ const visiblePosts = computed(() => {
       </UButton>
     </div>
 
-    <div v-if="mockFollowingPosts.length === 0" class="py-6">
+    <div v-if="feedStore.following.length === 0" class="py-6">
       <EmptyState
         :icon="PhCactus"
         badge="Quiet in here"
@@ -66,13 +86,15 @@ const visiblePosts = computed(() => {
       :key="post.id"
       :id="post.id"
       :author="post.author"
-      :handle="post.handle"
+      :handle="post.handle ?? ''"
       :tier="post.tier"
-      :time-ago="post.timeAgo"
-      :text="post.text"
+      :time-ago="formatTimeAgo(post.createdAt)"
+      :text="post.text ?? ''"
       :has-image="post.hasImage"
       :likes="post.likes"
       :comments="post.comments"
+      :liked="post.liked"
+      @toggle-like="toggleLike(post)"
     >
       <template #action>
         <UButton color="neutral" variant="soft" size="sm" class="rounded-full">Following</UButton>

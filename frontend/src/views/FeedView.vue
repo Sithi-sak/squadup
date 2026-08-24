@@ -1,19 +1,44 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { PhCamera, PhFilmSlate, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
-import { mockFeedPosts } from '@/mocks/feed'
+import { useFeedStore, type FeedPost } from '@/stores/feed'
+import { formatTimeAgo } from '@/utils/timeAgo'
+
+const feedStore = useFeedStore()
+const toast = useToast()
+
+onMounted(() => {
+  feedStore.fetchFeed()
+})
 
 const createPostOpen = ref(false)
 
-const following = reactive<Record<string, boolean>>({})
-function toggleFollow(id: string, current: boolean) {
-  following[id] = !current
+async function toggleFollow(post: FeedPost) {
+  try {
+    await feedStore.toggleFollow(post.playerId, post.following)
+  } catch (err) {
+    toast.add({
+      title: post.following ? 'Could not unfollow' : 'Could not follow',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
 }
-function isFollowing(post: { id: string; following: boolean }) {
-  return following[post.id] ?? post.following
+
+async function toggleLike(post: FeedPost) {
+  try {
+    await feedStore.toggleLike(post)
+  } catch (err) {
+    toast.add({
+      title: 'Could not update like',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
 }
 </script>
 
@@ -55,27 +80,29 @@ function isFollowing(post: { id: string; following: boolean }) {
     <CreatePostModal v-model:open="createPostOpen" />
 
     <FeedPostCard
-      v-for="post in mockFeedPosts"
+      v-for="post in feedStore.posts"
       :key="post.id"
       :id="post.id"
       :author="post.author"
-      :handle="post.handle"
+      :handle="post.handle ?? ''"
       :tier="post.tier"
-      :time-ago="post.timeAgo"
-      :text="post.text"
+      :time-ago="formatTimeAgo(post.createdAt)"
+      :text="post.text ?? ''"
       :has-image="post.hasImage"
       :likes="post.likes"
       :comments="post.comments"
+      :liked="post.liked"
+      @toggle-like="toggleLike(post)"
     >
       <template #action>
         <UButton
-          :color="isFollowing(post) ? 'neutral' : 'primary'"
-          :variant="isFollowing(post) ? 'soft' : 'solid'"
+          :color="post.following ? 'neutral' : 'primary'"
+          :variant="post.following ? 'soft' : 'solid'"
           size="sm"
           class="rounded-full"
-          @click="toggleFollow(post.id, isFollowing(post))"
+          @click="toggleFollow(post)"
         >
-          {{ isFollowing(post) ? 'Following' : 'Follow' }}
+          {{ post.following ? 'Following' : 'Follow' }}
         </UButton>
       </template>
     </FeedPostCard>

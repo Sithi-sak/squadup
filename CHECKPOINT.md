@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.8a-3.8d done; next up is 3.8e (wire `FeedView.vue`/`FeedFollowingView.vue`)
+- **Next task:** 3.8a-3.8e done; next up is 3.8f (wire `FeedSavedView.vue`)
 - **Last updated:** 2026-08-24
 
 ---
@@ -761,10 +761,25 @@ unchecked box until the whole thing is done.
         `feedCommentFromMock`/`savedItemFromMock`, synthesizing `createdAt`/`playerId`/`liked`
         stand-ins), leaving `mocks/feed.ts` untouched for now. `vue-tsc --build` and `eslint`
         both clean (only the same two pre-existing unrelated eslint errors noted since 3.1k).
-  - [ ] 3.8e Frontend: `FeedView.vue` + `FeedFollowingView.vue` wired to the new store — real
-        `createPost` from `CreatePostModal.vue` (drop the hardcoded `category: 'games'`),
-        `FeedPostCard.vue`'s `toggleLike` and each view's follow toggle persisted instead of
-        local-only reactive state.
+  - [x] 3.8e Frontend: `FeedView.vue` + `FeedFollowingView.vue` wired to the new store —
+        `onMounted` calls `fetchFeed`/`fetchFollowing`, list renders off `feedStore.posts`/
+        `feedStore.following` instead of `mockFeedPosts`/`mockFollowingPosts`, `formatTimeAgo`
+        (`utils/timeAgo.ts`, already used by reviews) turns the store's ISO `createdAt` into the
+        mock's short display form since the real `FeedPost` type has no `timeAgo` field.
+        `CreatePostModal.vue` now calls `feedStore.createPost({ text })` instead of unshifting
+        onto `mockFeedPosts` directly, dropping the hardcoded `category: 'games'` so the
+        backend's own default applies; file attachments stay visual-only (no upload endpoint
+        exists yet, out of scope here). `FeedPostCard.vue` gained an optional `liked` prop +
+        `toggle-like` emit - when `liked` is passed the like button is controlled and persists
+        via `feedStore.toggleLike`, when omitted it falls back to its old local-only reactive
+        toggle so `FeedSavedView.vue`/`PostDetailView.vue` (still mock-only until 3.8f/3.8g)
+        keep working unchanged. Both views' follow toggle now calls `feedStore.toggleFollow`
+        against `post.playerId`/`post.following` instead of a per-view local `following` map.
+        Mutation failures (`toggleLike`/`toggleFollow`/`createPost`, none of which have a mock
+        fallback) surface via `useToast`, matching `MyBookingsView.vue`'s `confirmCancel`
+        pattern; the fetches themselves stay silent on failure since `fetchFeed`/`fetchFollowing`
+        already fall back to mock fixtures. `vue-tsc --build` and `eslint` both clean (same two
+        pre-existing unrelated eslint errors noted since 3.1k).
   - [ ] 3.8f Frontend: `FeedSavedView.vue` wired to real `saved` state with a working "Unsave"
         button; `FeedExploreView.vue` stays on its mock fixtures per 3.8a's note unless that
         subtask found real queries to back it.

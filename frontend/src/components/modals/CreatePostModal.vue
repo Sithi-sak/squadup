@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { PhCaretDown, PhGlobe, PhImage, PhPencilSimple, PhPlus, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
-import { mockFeedPosts } from '@/mocks/feed'
+import { useFeedStore } from '@/stores/feed'
 
 const open = defineModel<boolean>('open', { required: true })
+
+const feedStore = useFeedStore()
+const toast = useToast()
 
 const myPlayerProfile = computed(() =>
   mockCurrentUser.playerId ? (mockPlayerProfiles[mockCurrentUser.playerId] ?? null) : null,
@@ -22,6 +26,7 @@ const availableTags = computed(() => myPlayerProfile.value?.services.map((servic
 const text = ref('')
 const selectedTags = ref<string[]>([])
 const files = ref<File[] | null>(null)
+const posting = ref(false)
 
 watch(open, (isOpen) => {
   if (isOpen) return
@@ -37,27 +42,24 @@ function toggleTag(tag: string) {
     : [...selectedTags.value, tag]
 }
 
-const canPost = computed(() => text.value.trim().length > 0)
+const canPost = computed(() => text.value.trim().length > 0 && !posting.value)
 
-function submitPost() {
+async function submitPost() {
   if (!canPost.value) return
 
-  mockFeedPosts.unshift({
-    id: `fp-${Date.now()}`,
-    author: mockCurrentUser.displayName ?? 'You',
-    handle: myPlayerProfile.value?.handle ?? '',
-    tier: myPlayerProfile.value?.tier ?? null,
-    timeAgo: 'just now',
-    text: text.value.trim(),
-    hasImage: !!files.value?.length,
-    likes: 0,
-    comments: 0,
-    following: false,
-    online: true,
-    category: 'games',
-  })
-
-  open.value = false
+  posting.value = true
+  try {
+    await feedStore.createPost({ text: text.value.trim() })
+    open.value = false
+  } catch (err) {
+    toast.add({
+      title: 'Could not create post',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    posting.value = false
+  }
 }
 </script>
 

@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.8a-3.8h done; next up is 3.8i (verification: `vue-tsc --build`/`eslint`/`ruff check`)
+- **Next task:** 3.8 (social feed) done; next up is 3.9 (Wallet & payouts)
 - **Last updated:** 2026-08-24
 
 ---
@@ -675,7 +675,7 @@ unchecked box until the whole thing is done.
   - [x] 3.7f Verification: `vue-tsc --build` and `eslint` clean (same two pre-existing unrelated
         eslint errors noted since 3.1k), `ruff check` clean. Manual browser walkthrough skipped
         per standing instruction not to run the `run` skill in this project.
-- [ ] 3.8 Social feed endpoints: posts/comments/likes/follows/saved items + connect to Feed (all tabs), Post Detail, Player Profile Feed/Wish/Album tabs
+- [x] 3.8 Social feed endpoints: posts/comments/likes/follows/saved items + connect to Feed (all tabs), Post Detail, Player Profile Feed/Wish/Album tabs
   - [x] 3.8a Backend: `routers/feed.py` — posts (`GET /feed` main list, `GET /feed/following`
         scoped to followed players, `POST /feed/posts` create, `GET /feed/posts/{id}` for Post
         Detail), likes (`POST/DELETE /feed/posts/{id}/like`, `POST/DELETE
@@ -856,8 +856,11 @@ unchecked box until the whole thing is done.
         `app.openapi()['paths']` that `/players/{player_id}/feed` registers correctly alongside
         the existing `/players/{player_id}` catch-all and `/album`/`/wish`, same "different path
         shape, no ordering conflict" already established for those two in 3.8b.
-  - [ ] 3.8i Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean. Manual browser
-        walkthrough skipped per standing instruction not to run the `run` skill in this project.
+  - [x] 3.8i Verification: `vue-tsc --build` clean, `ruff check` clean (backend), `eslint` clean
+        on every file touched by 3.8a-3.8h (only the same two pre-existing unrelated errors in
+        `StepRates.vue`/`RefundModal.vue`, noted since 3.1k — untouched by this feature). Manual
+        browser walkthrough skipped per standing instruction not to run the `run` skill in this
+        project.
 - [ ] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages
 - [ ] 3.10 Notifications endpoint (create on booking/message/review/payout events, mark read) + connect to header dropdown and Notifications page
 - [ ] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)

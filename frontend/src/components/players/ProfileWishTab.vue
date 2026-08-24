@@ -5,7 +5,11 @@ import { PhHeart } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import type { WishItem } from '@/stores/players'
 
-const props = defineProps<{ playerId: string; wish: WishItem[] }>()
+/** `mockToggle` gates the heart button's interactivity: `wish_items.saved` is Pal-authored state
+ * with no per-viewer mutation for a DB-backed profile (3.8b's decision), so it only stays
+ * clickable against the authored mock fixtures, which predate that decision and have no backing
+ * endpoint to call anyway. */
+const props = defineProps<{ playerId: string; wish: WishItem[]; mockToggle?: boolean }>()
 
 const router = useRouter()
 
@@ -14,6 +18,7 @@ const saved = reactive<Record<string, boolean>>(
 )
 
 function toggleSaved(id: string) {
+  if (!props.mockToggle) return
   saved[id] = !saved[id]
 }
 </script>
@@ -33,6 +38,7 @@ function toggleSaved(id: string) {
           <button
             type="button"
             class="absolute top-3 right-3 flex size-8 items-center justify-center rounded-full bg-squadup-dark/60 text-white"
+            :class="!mockToggle && 'cursor-default'"
             :aria-label="saved[item.id] ? 'Remove from wishlist' : 'Add to wishlist'"
             @click="toggleSaved(item.id)"
           >
@@ -42,7 +48,7 @@ function toggleSaved(id: string) {
         <div class="flex items-center justify-between gap-3 p-4">
           <div class="min-w-0">
             <p class="truncate font-semibold text-white">{{ item.title }}</p>
-            <p class="text-sm text-slate-400">{{ item.game }} · {{ item.type }}</p>
+            <p class="text-sm text-slate-400">{{ [item.game, item.type].filter(Boolean).join(' · ') }}</p>
           </div>
           <div class="flex shrink-0 items-center gap-3">
             <span class="inline-flex items-center gap-1 text-sm font-semibold text-white">
@@ -50,6 +56,7 @@ function toggleSaved(id: string) {
               {{ item.priceCoins }}
             </span>
             <UButton
+              v-if="item.serviceId"
               color="primary"
               size="sm"
               class="rounded-full"

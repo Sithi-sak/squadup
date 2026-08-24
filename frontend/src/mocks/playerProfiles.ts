@@ -1,11 +1,27 @@
+import type { FeedPost } from '@/stores/feed'
 import type { PlayerProfile, PlayerServiceDetail, PlayerSummary } from '@/stores/players'
+
+/** Authored feed entries predate `stores/feed.ts`'s `FeedPost` (3.8) and only carry what the
+ * profile page itself renders (no `playerId`/`liked`/`createdAt` - those come from the player's
+ * own summary/tier/handle plus a parsed `timeAgo`, via `feedPostFromMockEntry` below), same
+ * "adapt at the boundary" shape `stores/feed.ts`'s own `feedPostFromMock` uses. */
+interface MockProfilePost {
+  id: string
+  timeAgo: string
+  text: string
+  hasImage: boolean
+  likes: number
+  comments: number
+}
+
+type MockPlayerProfile = Omit<PlayerProfile, 'feed'> & { feed: MockProfilePost[] }
 
 /**
  * Fully authored Player Profile detail, keyed by `PlayerSummary.id`. Only `p1` gets the full
  * treatment for now (see squadup_ui/PROFILE/*.jpg); every other mock player falls back to
  * `buildGenericProfile` below.
  */
-export const mockPlayerProfiles: Record<string, PlayerProfile> = {
+export const mockPlayerProfiles: Record<string, MockPlayerProfile> = {
   p1: {
     id: 'p1',
     handle: '@1525835767',
@@ -291,7 +307,7 @@ export function fallbackServiceDetail(name: string, priceCoins: number, priceUni
 }
 
 /** Lightweight profile for mock players without an authored `mockPlayerProfiles` entry. */
-function buildGenericProfile(player: PlayerSummary): PlayerProfile {
+function buildGenericProfile(player: PlayerSummary): MockPlayerProfile {
   const serviceId = 'main'
   return {
     id: player.id,
@@ -336,6 +352,35 @@ function buildGenericProfile(player: PlayerSummary): PlayerProfile {
   }
 }
 
+function timeAgoToIso(timeAgo: string): string {
+  const match = /^(\d+)([hd])$/.exec(timeAgo)
+  if (!match) return new Date().toISOString()
+  const amount = Number(match[1])
+  const ms = match[2] === 'h' ? amount * 3_600_000 : amount * 86_400_000
+  return new Date(Date.now() - ms).toISOString()
+}
+
+function feedPostFromMockEntry(profile: MockPlayerProfile, player: PlayerSummary, entry: MockProfilePost): FeedPost {
+  return {
+    id: entry.id,
+    playerId: player.id,
+    author: player.displayName,
+    handle: profile.handle,
+    tier: profile.tier,
+    avatarUrl: player.avatarUrl,
+    online: player.online,
+    text: entry.text,
+    hasImage: entry.hasImage,
+    category: 'games',
+    likes: entry.likes,
+    comments: entry.comments,
+    liked: false,
+    following: false,
+    createdAt: timeAgoToIso(entry.timeAgo),
+  }
+}
+
 export function getPlayerProfile(player: PlayerSummary): PlayerProfile {
-  return mockPlayerProfiles[player.id] ?? buildGenericProfile(player)
+  const profile = mockPlayerProfiles[player.id] ?? buildGenericProfile(player)
+  return { ...profile, feed: profile.feed.map((entry) => feedPostFromMockEntry(profile, player, entry)) }
 }

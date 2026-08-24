@@ -91,7 +91,9 @@ function formatDuration(seconds: number) {
         />
 
         <div class="flex items-end justify-between gap-2">
-          <span class="text-sm font-medium text-white">{{ item.label }}</span>
+          <span class="text-sm font-medium text-white">
+            {{ item.label ?? (item.kind === 'clip' ? 'Clip' : 'Screenshot') }}
+          </span>
           <span v-if="item.durationSeconds" class="text-xs text-slate-300">
             {{ formatDuration(item.durationSeconds) }}
           </span>

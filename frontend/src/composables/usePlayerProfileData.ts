@@ -1,13 +1,16 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
+import type { FeedPost } from '@/stores/feed'
 import {
   playerProfileFromDetail,
   playerSummaryFromDetail,
   usePlayersStore,
+  type AlbumItem,
   type PlayerProfile,
   type PlayerReview,
   type PlayerSummary,
+  type WishItem,
 } from '@/stores/players'
 
 /** Backs both the Player Profile page and Service Detail page: loads a Pal's profile from
@@ -19,6 +22,9 @@ export function usePlayerProfileData(id: Ref<string>) {
   const loading = ref(true)
   const fetchedDetail = ref<Awaited<ReturnType<typeof playersStore.fetchPlayer>> | null>(null)
   const fetchedReviews = ref<Record<string, PlayerReview[]>>({})
+  const fetchedFeed = ref<FeedPost[]>([])
+  const fetchedAlbum = ref<AlbumItem[]>([])
+  const fetchedWish = ref<WishItem[]>([])
 
   watch(
     id,
@@ -26,9 +32,17 @@ export function usePlayerProfileData(id: Ref<string>) {
       loading.value = true
       fetchedDetail.value = null
       fetchedReviews.value = {}
+      fetchedFeed.value = []
+      fetchedAlbum.value = []
+      fetchedWish.value = []
       try {
         fetchedDetail.value = await playersStore.fetchPlayer(playerId)
-        fetchedReviews.value = await playersStore.fetchPlayerReviews(playerId)
+        ;[fetchedReviews.value, fetchedFeed.value, fetchedAlbum.value, fetchedWish.value] = await Promise.all([
+          playersStore.fetchPlayerReviews(playerId),
+          playersStore.fetchPlayerFeed(playerId),
+          playersStore.fetchPlayerAlbum(playerId),
+          playersStore.fetchPlayerWish(playerId),
+        ])
       } catch {
         fetchedDetail.value = null
       } finally {
@@ -45,9 +59,19 @@ export function usePlayerProfileData(id: Ref<string>) {
   )
   const profile = computed<PlayerProfile>(() =>
     fetchedDetail.value
-      ? { ...playerProfileFromDetail(fetchedDetail.value), reviews: fetchedReviews.value }
+      ? {
+          ...playerProfileFromDetail(fetchedDetail.value),
+          reviews: fetchedReviews.value,
+          feed: fetchedFeed.value,
+          album: fetchedAlbum.value,
+          wish: fetchedWish.value,
+        }
       : getPlayerProfile(mockPlayer.value),
   )
+  /** Whether `profile` came from a real (DB-backed) row vs. the authored mock fixtures - callers
+   * use this to gate features that only make sense against real data, e.g. `ProfileWishTab.vue`'s
+   * save toggle (3.8b's `wish_items.saved` decision). */
+  const isMockProfile = computed(() => !fetchedDetail.value)
 
-  return { loading, player, profile }
+  return { loading, player, profile, isMockProfile }
 }

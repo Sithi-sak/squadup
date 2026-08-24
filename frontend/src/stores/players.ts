@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { api, ApiError } from '@/lib/api'
 import { formatTimeAgo } from '@/utils/timeAgo'
+import type { FeedPost } from './feed'
 
 export interface PlayerSummary {
   id: string
@@ -66,19 +67,10 @@ export interface PlayerReview {
   sentiment: 'positive' | 'neutral' | 'negative'
 }
 
-export interface FeedPost {
-  id: string
-  timeAgo: string
-  text: string
-  hasImage: boolean
-  likes: number
-  comments: number
-}
-
 export interface AlbumItem {
   id: string
   kind: 'clip' | 'screenshot'
-  label: string
+  label: string | null
   views: number
   likes: number
   shares: number
@@ -88,12 +80,13 @@ export interface AlbumItem {
 export interface WishItem {
   id: string
   title: string
-  game: string
-  type: string
+  game: string | null
+  type: string | null
   priceCoins: number
   saved: boolean
-  /** Which of the Pal's `services` entries "Book" on this wish item opens the Service Detail page for. */
-  serviceId: string
+  /** Which of the Pal's `services` entries "Book" on this wish item opens the Service Detail page
+   * for - null means the Pal hasn't linked one, per `WishItemOut.service_id`'s nullable column. */
+  serviceId: string | null
 }
 
 /** Full Player Profile page data (`/players/:id`), backing all 4 tabs. */
@@ -200,8 +193,9 @@ export function playerSummaryFromDetail(p: MyPlayerProfile): PlayerSummary {
 }
 
 /** Expands a `GET /players/{id}` response into the full `PlayerProfile` shape the Player
- * Profile page's tabs expect. Reviews/feed/album/wish are still mock-only (3.6/3.8), so they
- * come back empty for a real (DB-backed) profile rather than falling back to authored mock data. */
+ * Profile page's tabs expect. Reviews/feed/album/wish come back empty here since they're fetched
+ * separately (`fetchPlayerReviews`/`fetchPlayerFeed`/`fetchPlayerAlbum`/`fetchPlayerWish`) and
+ * merged in by `usePlayerProfileData` (3.8h) - this only covers the core detail response. */
 export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
   return {
     id: p.id,
@@ -387,6 +381,35 @@ export const usePlayersStore = defineStore('players', () => {
     }
   }
 
+  /** Player Profile's Feeds tab (`GET /players/{id}/feed`, public, 3.8h). Same empty-on-failure
+   * convention as `fetchPlayerReviews` - a Pal with no posts yet is a normal empty state. */
+  async function fetchPlayerFeed(id: string): Promise<FeedPost[]> {
+    try {
+      return await api.get<FeedPost[]>(`/players/${id}/feed`)
+    } catch {
+      return []
+    }
+  }
+
+  /** Player Profile's Album tab (`GET /players/{id}/album`, public, 3.8h). */
+  async function fetchPlayerAlbum(id: string): Promise<AlbumItem[]> {
+    try {
+      return await api.get<AlbumItem[]>(`/players/${id}/album`)
+    } catch {
+      return []
+    }
+  }
+
+  /** Player Profile's Wish tab (`GET /players/{id}/wish`, public, 3.8h). Already filtered to
+   * `saved = true` server-side (3.8b), so every item here is "still wished for". */
+  async function fetchPlayerWish(id: string): Promise<WishItem[]> {
+    try {
+      return await api.get<WishItem[]>(`/players/${id}/wish`)
+    } catch {
+      return []
+    }
+  }
+
   return {
     list,
     filters,
@@ -405,6 +428,9 @@ export const usePlayersStore = defineStore('players', () => {
     deleteService,
     fetchPlayer,
     fetchPlayerReviews,
+    fetchPlayerFeed,
+    fetchPlayerAlbum,
+    fetchPlayerWish,
     earnings,
     earningsLoading,
     earningsError,

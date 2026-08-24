@@ -13,7 +13,7 @@ import ProfileWishTab from '@/components/players/ProfileWishTab.vue'
 const route = useRoute()
 
 const playerId = computed(() => String(route.params.id))
-const { loading, player, profile } = usePlayerProfileData(playerId)
+const { loading, player, profile, isMockProfile } = usePlayerProfileData(playerId)
 
 const tabItems = [
   { label: 'Services', value: 'services' },
@@ -80,6 +80,7 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
           v-else-if="activeTab === 'wish'"
           :player-id="player.id"
           :wish="profile.wish"
+          :mock-toggle="isMockProfile"
         />
       </div>
     </template>

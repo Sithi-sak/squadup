@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.8a-3.8g done; next up is 3.8h (wire Player Profile Feed/Album/Wish tabs)
+- **Next task:** 3.8a-3.8h done; next up is 3.8i (verification: `vue-tsc --build`/`eslint`/`ruff check`)
 - **Last updated:** 2026-08-24
 
 ---
@@ -817,13 +817,45 @@ unchecked box until the whole thing is done.
         fallback (real mutations only) and surface failures via `useToast`, matching 3.8e/3.8f.
         `vue-tsc --build` and `eslint` both clean (same two pre-existing unrelated eslint errors
         noted since 3.1k).
-  - [ ] 3.8h Frontend: Player Profile Feed/Album/Wish tabs wired for real (DB-backed) profiles.
-        Extend `usePlayerProfileData.ts` to fetch feed/album/wish alongside the existing
-        reviews fetch and stop hardcoding `feed: [], album: [], wish: []` in
-        `playerProfileFromDetail()` (`stores/players.ts`); mock fallback for seed Pals `p1`..`p8`
-        unchanged. `ProfileFeedsTab.vue`'s composer and like button, `ProfileAlbumTab.vue`'s
-        display grid, and `ProfileWishTab.vue`'s save toggle move off local-only state onto the
-        new store per 3.8b's decision on `wish_items.saved`.
+  - [x] 3.8h Frontend + Backend: Player Profile Feed/Album/Wish tabs wired for real (DB-backed)
+        profiles. New `GET /players/{id}/feed` (`routers/players.py`) reuses `feed.py`'s
+        `PostOut`/`_POST_SELECT`/`_serialize_posts` rather than duplicating that 12-field shape,
+        scoped to one Pal's own posts with the same per-viewer `liked`/`following` `feed.py`
+        already computes for the main timeline - the first cross-router import in the routers
+        package, one-directional (`players.py` → `feed.py`, no cycle) and ruff-clean on the
+        leading-underscore names. `stores/players.ts` gained `fetchPlayerFeed`/`fetchPlayerAlbum`/
+        `fetchPlayerWish` (same empty-on-404 convention as `fetchPlayerReviews`); its own `FeedPost`
+        interface is gone in favor of importing `stores/feed.ts`'s (`PlayerProfile.feed` is now
+        that richer shape) so `ProfileFeedsTab.vue` can reuse `feedStore.toggleLike` directly
+        instead of duplicating the like mutation. `AlbumItem.label` / `WishItem.game`/`type`/
+        `serviceId` widened to nullable per 3.8b's note on `AlbumItemOut`/`WishItemOut`; `Book`
+        button on a wish card now guards on `serviceId` and the game/type line joins only the
+        parts that exist. `usePlayerProfileData.ts` fetches reviews/feed/album/wish in parallel
+        (`Promise.all`) and merges them into the `profile` computed the same way it already merged
+        reviews; also exposes `isMockProfile` (`!fetchedDetail`) for the one place that still needs
+        to know. Mock fallback (seed Pals `p1`..`p8`) unchanged in substance: authored feed entries
+        in `mocks/playerProfiles.ts` keep their old minimal shape (`MockProfilePost`, no
+        `playerId`/`liked`/`createdAt`) and get adapted into a real `FeedPost` in
+        `feedPostFromMockEntry` (parsing the old `timeAgo` display string into an approximate ISO
+        date) - same "adapt at the boundary" approach `stores/feed.ts`'s `feedPostFromMock` and
+        `PostDetailView.vue`'s `postFromMockDetail` already use, rather than reshaping the mock
+        literals themselves. `ProfileFeedsTab.vue`'s composer was a dead stub (no v-model, no
+        click handler at all) - replaced with the exact same `CreatePostModal` trigger pattern
+        `FeedView.vue` uses (readonly input + Photo/Clip/Emoji/Post buttons all open the modal),
+        rather than inventing a second composer implementation; its like button now calls
+        `feedStore.toggleLike` against a local reactive copy of the `feed` prop (the profile page's
+        per-player feed isn't part of `feedStore`'s own `posts`/`following` arrays, so there's
+        nothing for `patchPost` to patch in place otherwise) and a per-post tier badge now reads
+        `post.tier` instead of a hardcoded "Pal 2". `ProfileWishTab.vue`'s heart toggle takes a new
+        `mockToggle` prop (`PlayerProfileView.vue` passes `isMockProfile`): stays interactive
+        against the mock fixtures, renders static (no mutation to call) against a DB-backed
+        profile, per 3.8b's decision that `wish_items.saved` is Pal-authored state with no
+        per-viewer save/unsave endpoint. `ProfileAlbumTab.vue` falls back to "Clip"/"Screenshot"
+        when `label` is null. `vue-tsc --build` and `eslint` both clean (same two pre-existing
+        unrelated eslint errors noted since 3.1k); `ruff check` clean; confirmed via
+        `app.openapi()['paths']` that `/players/{player_id}/feed` registers correctly alongside
+        the existing `/players/{player_id}` catch-all and `/album`/`/wish`, same "different path
+        shape, no ordering conflict" already established for those two in 3.8b.
   - [ ] 3.8i Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean. Manual browser
         walkthrough skipped per standing instruction not to run the `run` skill in this project.
 - [ ] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages

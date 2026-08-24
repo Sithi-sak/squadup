@@ -6,10 +6,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, ValidationError
 
-from ..core.auth import get_current_user_id
+from ..core.auth import get_current_user_id, get_optional_user_id
 from ..core.schema import CamelModel
 from ..core.storage import upload_file
 from ..core.supabase import get_supabase_client
+from .feed import _POST_SELECT, PostOut, _serialize_posts
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -721,6 +722,26 @@ def delete_my_service(service_id: str, user_id: str = Depends(get_current_user_i
 @router.get("/{player_id}", response_model=PlayerDetailOut)
 def get_player(player_id: str) -> dict:
     return _fetch_player_by_id(player_id, active_only=True)
+
+
+@router.get("/{player_id}/feed", response_model=list[PostOut])
+def get_player_feed(player_id: str, user_id: str | None = Depends(get_optional_user_id)) -> list[dict]:
+    """Public Feed tab (3.8h) - reuses `feed.py`'s `PostOut`/`_serialize_posts` so a Pal's own
+    posts carry the same `liked`/`following` per-viewer fields the main Feed/Following pages do,
+    just scoped to this one Pal instead of the global timeline."""
+    _require_player_exists(player_id)
+    client = get_supabase_client()
+    rows = (
+        client.table("posts")
+        .select(_POST_SELECT)
+        .eq("player_id", player_id)
+        .order("created_at", desc=True)
+        .limit(50)
+        .execute()
+        .data
+        or []
+    )
+    return _serialize_posts(client, rows, user_id)
 
 
 @router.get("/{player_id}/album", response_model=list[AlbumItemOut])

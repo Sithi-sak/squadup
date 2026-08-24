@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { PhBookmarkSimple } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
-import { mockSavedItems } from '@/mocks/feed'
+import { useFeedStore, type FeedSavedItem } from '@/stores/feed'
+import { formatTimeAgo } from '@/utils/timeAgo'
+
+const feedStore = useFeedStore()
+const toast = useToast()
+
+onMounted(() => {
+  feedStore.fetchSaved()
+})
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -17,9 +26,21 @@ const filters = [
 const activeFilter = ref<(typeof filters)[number]['key']>('all')
 
 const visibleItems = computed(() => {
-  if (activeFilter.value === 'all') return mockSavedItems
-  return mockSavedItems.filter((item) => item.kind === activeFilter.value)
+  if (activeFilter.value === 'all') return feedStore.saved
+  return feedStore.saved.filter((item) => item.kind === activeFilter.value)
 })
+
+async function unsave(item: FeedSavedItem) {
+  try {
+    await feedStore.toggleSaved(item.kind, (item.kind === 'post' ? item.postId : item.serviceId) ?? item.id)
+  } catch (err) {
+    toast.add({
+      title: 'Could not unsave',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
 </script>
 
 <template>
@@ -48,18 +69,25 @@ const visibleItems = computed(() => {
     <template v-for="item in visibleItems" :key="item.id">
       <FeedPostCard
         v-if="item.kind === 'post'"
-        :id="item.id"
-        :author="item.author"
-        :handle="item.handle"
+        :id="item.postId ?? item.id"
+        :author="item.author ?? ''"
+        :handle="item.handle ?? ''"
         :tier="item.tier"
-        :time-ago="item.savedAgo"
-        :text="item.text"
-        :has-image="item.hasImage"
-        :likes="item.likes"
-        :comments="item.comments"
+        :time-ago="formatTimeAgo(item.createdAt)"
+        :text="item.text ?? ''"
+        :has-image="item.hasImage ?? false"
+        :likes="item.likes ?? 0"
+        :comments="item.comments ?? 0"
       >
         <template #action>
-          <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Unsave">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            square
+            :ui="{ base: 'rounded-full' }"
+            aria-label="Unsave"
+            @click="unsave(item)"
+          >
             <PhBookmarkSimple :size="18" weight="fill" class="text-brand-400" />
           </UButton>
         </template>
@@ -77,7 +105,14 @@ const visibleItems = computed(() => {
           </p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
-          <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Unsave">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            square
+            :ui="{ base: 'rounded-full' }"
+            aria-label="Unsave"
+            @click="unsave(item)"
+          >
             <PhBookmarkSimple :size="18" weight="fill" class="text-brand-400" />
           </UButton>
           <UButton color="primary" size="sm" class="rounded-full">Book</UButton>

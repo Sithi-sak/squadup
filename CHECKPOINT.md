@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.8a-3.8e done; next up is 3.8f (wire `FeedSavedView.vue`)
+- **Next task:** 3.8a-3.8f done; next up is 3.8g (wire `PostDetailView.vue`)
 - **Last updated:** 2026-08-24
 
 ---
@@ -780,9 +780,20 @@ unchecked box until the whole thing is done.
         pattern; the fetches themselves stay silent on failure since `fetchFeed`/`fetchFollowing`
         already fall back to mock fixtures. `vue-tsc --build` and `eslint` both clean (same two
         pre-existing unrelated eslint errors noted since 3.1k).
-  - [ ] 3.8f Frontend: `FeedSavedView.vue` wired to real `saved` state with a working "Unsave"
-        button; `FeedExploreView.vue` stays on its mock fixtures per 3.8a's note unless that
-        subtask found real queries to back it.
+  - [x] 3.8f Frontend: `FeedSavedView.vue` wired to real `saved` state — `onMounted` calls
+        `feedStore.fetchSaved()`, filters and both card branches (post/service) render off
+        `feedStore.saved` instead of `mockSavedItems`. Post cards use `item.postId` (the actual
+        post id `FeedPostCard`'s `router-link` needs) not `item.id` (the `saved_items` row id),
+        `formatTimeAgo(item.createdAt)` in place of the mock's canned `savedAgo` string, and `??`
+        fallbacks for the nullable `FeedSavedItem` fields (`author`/`handle`/`text`/`hasImage`/
+        `likes`/`comments`) since the flat store type allows nulls the old discriminated-union
+        mock type didn't. Both "Unsave" buttons (post and service branches) call a new `unsave()`
+        that resolves `feedStore.toggleSaved(item.kind, item.postId ?? item.serviceId ?? item.id)`
+        - toggleSaved deletes the existing row since `saved` is fetched fresh, so no re-save
+        branch is reachable here - and surface failures via `useToast`, matching 3.8e's
+        `toggleLike`/`toggleFollow` pattern. `FeedExploreView.vue` untouched, stays on its mock
+        fixtures per 3.8a's note. `vue-tsc --build` clean; `eslint` clean on the touched files
+        (same two pre-existing unrelated errors elsewhere, noted since 3.1k).
   - [ ] 3.8g Frontend: `PostDetailView.vue` wired — real comments/replies via the store,
         `postComment()` persisted instead of pushing to a local `draftComments` array, like/follow
         state shared with the feed store rather than a separate local `following` ref.

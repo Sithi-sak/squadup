@@ -92,10 +92,10 @@ class SavedItemOut(CamelModel):
 # Helpers -----------------------------------------------------------------------------------
 
 _POST_SELECT = "*, players(user_id, display_name, handle, tier, avatar_url, online)"
-_COMMENT_SELECT = "*, users(display_name)"
+_COMMENT_SELECT = "*, users!comments_author_id_fkey(display_name)"
 _SAVED_SELECT = (
-    "*, posts(*, players(display_name, handle, tier)), "
-    "services(*, players(display_name), service_pricing_options(*), service_promotions(*))"
+    "*, posts(*, players!posts_player_id_fkey(display_name, handle, tier)), "
+    "services(*, players!services_player_id_fkey(display_name), service_pricing_options(*), service_promotions(*))"
 )
 
 

@@ -251,8 +251,8 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.8a done; next up is 3.8b (album/wish endpoints)
-- **Last updated:** 2026-08-23
+- **Next task:** 3.8a-3.8d done; next up is 3.8e (wire `FeedView.vue`/`FeedFollowingView.vue`)
+- **Last updated:** 2026-08-24
 
 ---
 
@@ -700,20 +700,67 @@ unchecked box until the whole thing is done.
         mock-only; not revisited unless a later pass decides it's worth deriving from
         `posts`/`players`. Sanity-checked route registration + public/private split locally
         (uvicorn, no live Supabase writes) - the real live smoke test is 3.8c.
-  - [ ] 3.8b Backend: `routers/players.py` — `GET /players/{id}/album`, `GET /players/{id}/wish`
-        (public reads for the Profile Album/Wish tabs). Decide `wish_items.saved` semantics before
-        wiring `ProfileWishTab`'s toggle (it's a column on the Pal's own row, not a per-viewer
-        saved flag like `saved_items` — confirm whether it's Pal-authored "still wished for" state
-        or should be dropped in favor of viewer-side `saved_items` with `kind: 'service'`).
-  - [ ] 3.8c Backend: live smoke test against the real Supabase project (throwaway Pal + two
-        buyer accounts through real HTTP with real bearer tokens: create post → appears in main
-        feed → follow the Pal → post appears in Following → like/unlike → comment + reply →
-        save/unsave a post and a service → confirm `saved_items` unique constraints reject
-        duplicates → album/wish reads for a seeded player). Clean up all rows/users after.
-  - [ ] 3.8d Frontend: new `stores/feed.ts` (`posts`/`following`/`saved` state, `fetchFeed`/
+  - [x] 3.8b Backend: `routers/players.py` — `GET /players/{id}/album`, `GET /players/{id}/wish`
+        (public reads for the Profile Album/Wish tabs), both 404 via a new `_require_player_exists`
+        if the id doesn't match a row. `wish_items.saved` decision: it's a column on the Pal's own
+        row (keyed by `player_id`, not by viewer), so it's Pal-authored "still wished for" state,
+        not the buyer-side bookmark concept `saved_items` (3.8a) already covers under
+        `kind: 'service'`. `GET /players/{id}/wish` filters to `saved = true`, the same way
+        `_fetch_services` filters the public services list to `active = true` — there's no
+        save/unsave mutation for a viewer to call here. This means `ProfileWishTab.vue`'s heart
+        toggle (currently local-only, toggling `saved` per viewer) is the wrong shape for what the
+        column actually means; 3.8h should drop that toggle for a DB-backed profile (or repoint it
+        at `saved_items`/`kind: 'service'` as a distinct "I bookmarked this" feature) rather than
+        wiring it to a mutation that doesn't exist. `AlbumItemOut`/`WishItemOut` (`CamelModel`)
+        mirror the DB columns directly (`album_items`/`wish_items` from 2.3), nullable where the
+        schema allows null (`label`, `game`, `type`, `service_id`) even though the frontend's mock-
+        era `AlbumItem`/`WishItem` types declare those as required strings — 3.8h reconciles that
+        when it wires a DB-backed profile. Confirmed via `app.openapi()['paths']` that both routes
+        register correctly alongside the existing `/players/{player_id}` catch-all (different path
+        shape, no ordering conflict). `ruff check` clean.
+  - [x] 3.8c Backend: live smoke test against the real Supabase project (a throwaway Pal + two
+        buyer accounts - through real HTTP with real bearer tokens against a local uvicorn: create
+        post → appears in main feed → follow the Pal → post appears in buyer_a's Following feed,
+        absent from buyer_b's → like/unlike (`liked`/`likes` correct per-viewer) → comment + reply
+        (nested tree, `isCreator` correct) → comment like/unlike → save a post and a service →
+        both appear in `GET /feed/saved` → re-saving the same post returns the existing row
+        (app-level find-or-create) → a raw duplicate insert via the service-role client (bypassing
+        that app-level guard) confirmed the DB-level `unique(user_id, post_id)`/
+        `unique(user_id, service_id)` constraints reject it directly → unsave → a non-owner's
+        delete on someone else's saved-item id is a silent no-op, row still there → 401 with no
+        bearer token, 400 on a Pal following themself → album/wish reads for the seeded player
+        (2 album items, wish filtered to the 2 `saved = true` of 3 seeded, 404 for a bogus player
+        id on both). 34/34 checks passed after two fixes; all rows/users cleaned up after,
+        verified empty (no leftover `squadup-test.invalid` auth users). Caught two bugs only a
+        live run surfaces, both the same "ambiguous PostgREST embed" class as 3.1e's fix:
+        (1) `_COMMENT_SELECT`'s `users(display_name)` embed became ambiguous once 3.8a's own
+        `comment_likes` join table added a second `comments`↔`users` relationship path - fixed by
+        naming the FK explicitly (`users!comments_author_id_fkey(display_name)`), which broke
+        `create_comment`, `list_comments`, and comment like/unlike (all three shared the constant).
+        (2) `_SAVED_SELECT`'s `services(players(display_name))` embed was ambiguous against
+        `players.highlighted_service_id` (the same second-FK situation 3.1e already hit on
+        `services`↔`players`) - fixed the same way (`players!services_player_id_fkey`), and the
+        parallel `posts(players(...))` embed was named explicit too
+        (`players!posts_player_id_fkey`) even though only one FK path exists there, for
+        consistency and to preempt the same class if a second one is ever added. `ruff check`
+        clean after both fixes.
+  - [x] 3.8d Frontend: new `stores/feed.ts` (`posts`/`following`/`saved` state, `fetchFeed`/
         `fetchFollowing`/`createPost`/`toggleLike`/`toggleFollow`/`fetchComments`/`postComment`/
         `toggleSaved` actions against `/feed/...`), same mock-fallback resilience convention as
-        `stores/players.ts`/`bookings.ts`/`messages.ts` (3.1j/3.2d/3.4c/3.5d).
+        `stores/players.ts`/`bookings.ts`/`messages.ts` (3.1j/3.2d/3.4c/3.5d). Also added
+        `fetchPost` (Post Detail's direct/deep-link fetch, the `fetchBooking`/`selectThread`
+        counterpart) and `toggleCommentLike` (the backend already exposes `POST/DELETE
+        /feed/comments/{id}/like` from 3.8a, and `FeedCommentItem.vue` already has a like
+        button) - both straightforward extensions of the literal action list above. Types
+        (`FeedPost`/`FeedComment`/`FeedSavedItem`) mirror the backend's camelCase response
+        shapes (`PostOut`/`CommentOut`/`SavedItemOut`) rather than the older, thinner
+        `mocks/feed.ts` shapes (no `playerId`/`liked`/`createdAt`, a display-only `timeAgo`
+        instead) - since reshaping `mocks/feed.ts` itself would break every currently-compiling
+        feed view (still on 3.8a-c's mock/local-only state, wired for real in 3.8e-h), the mock
+        fixtures are adapted at the store boundary instead (`feedPostFromMock`/
+        `feedCommentFromMock`/`savedItemFromMock`, synthesizing `createdAt`/`playerId`/`liked`
+        stand-ins), leaving `mocks/feed.ts` untouched for now. `vue-tsc --build` and `eslint`
+        both clean (only the same two pre-existing unrelated eslint errors noted since 3.1k).
   - [ ] 3.8e Frontend: `FeedView.vue` + `FeedFollowingView.vue` wired to the new store — real
         `createPost` from `CreatePostModal.vue` (drop the hardcoded `category: 'games'`),
         `FeedPostCard.vue`'s `toggleLike` and each view's follow toggle persisted instead of

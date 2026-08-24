@@ -153,6 +153,26 @@ class EarningsBar(CamelModel):
     coins: int
 
 
+class AlbumItemOut(CamelModel):
+    id: str
+    kind: str
+    label: str | None
+    views: int
+    likes: int
+    shares: int
+    duration_seconds: int | None
+
+
+class WishItemOut(CamelModel):
+    id: str
+    title: str
+    game: str | None
+    type: str | None
+    price_coins: int
+    saved: bool
+    service_id: str | None
+
+
 class EarningsOut(CamelModel):
     """`GET /players/me/earnings` (3.7) — everything derivable from the Pal's own `bookings`
     rows without a real payout ledger yet (that's 3.9): payout method/schedule/history/pending
@@ -292,6 +312,12 @@ def _fetch_player_by_user_id(user_id: str, *, active_only: bool) -> dict:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
     services = _fetch_services(result.data["id"], active_only=active_only)
     return _serialize_player(result.data, services)
+
+
+def _require_player_exists(player_id: str) -> None:
+    result = get_supabase_client().table("players").select("id").eq("id", player_id).maybe_single().execute()
+    if not result or not result.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
 
 
 def _get_owned_service(user_id: str, service_id: str) -> dict:
@@ -695,3 +721,39 @@ def delete_my_service(service_id: str, user_id: str = Depends(get_current_user_i
 @router.get("/{player_id}", response_model=PlayerDetailOut)
 def get_player(player_id: str) -> dict:
     return _fetch_player_by_id(player_id, active_only=True)
+
+
+@router.get("/{player_id}/album", response_model=list[AlbumItemOut])
+def get_player_album(player_id: str) -> list[dict]:
+    _require_player_exists(player_id)
+    return (
+        get_supabase_client()
+        .table("album_items")
+        .select("*")
+        .eq("player_id", player_id)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+
+
+@router.get("/{player_id}/wish", response_model=list[WishItemOut])
+def get_player_wish(player_id: str) -> list[dict]:
+    """Public Wish tab (3.8b). `wish_items.saved` is a column on the Pal's own row, not a
+    per-viewer flag - so it's Pal-authored "still wished for" state, not the buyer-side bookmark
+    concept `saved_items` (3.8a) already covers under `kind: 'service'`. The public read filters
+    to `saved = true`, mirroring how `_fetch_services` filters the public services list to
+    `active = true`; there's no save/unsave mutation here for a viewer to call."""
+    _require_player_exists(player_id)
+    return (
+        get_supabase_client()
+        .table("wish_items")
+        .select("*")
+        .eq("player_id", player_id)
+        .eq("saved", True)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )

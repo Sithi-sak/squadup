@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.8a-3.8f done; next up is 3.8g (wire `PostDetailView.vue`)
+- **Next task:** 3.8a-3.8g done; next up is 3.8h (wire Player Profile Feed/Album/Wish tabs)
 - **Last updated:** 2026-08-24
 
 ---
@@ -794,9 +794,29 @@ unchecked box until the whole thing is done.
         `toggleLike`/`toggleFollow` pattern. `FeedExploreView.vue` untouched, stays on its mock
         fixtures per 3.8a's note. `vue-tsc --build` clean; `eslint` clean on the touched files
         (same two pre-existing unrelated errors elsewhere, noted since 3.1k).
-  - [ ] 3.8g Frontend: `PostDetailView.vue` wired — real comments/replies via the store,
+  - [x] 3.8g Frontend: `PostDetailView.vue` wired — real comments/replies via the store,
         `postComment()` persisted instead of pushing to a local `draftComments` array, like/follow
-        state shared with the feed store rather than a separate local `following` ref.
+        state shared with the feed store rather than a separate local `following` ref. Post load
+        follows `OrderDetailView.vue`'s `loadBooking` pattern exactly (3.8d's docstring already
+        called `fetchPost` the `fetchBooking` counterpart): a new `feedStore.getPost` prefers a
+        post already loaded by Feed/Following, then `GET /feed/posts/{id}` for a direct/deep link,
+        then `findFeedPost` (mocks) adapted into a `FeedPost` via a local `postFromMockDetail`
+        (same "adapt at the boundary" shape as the store's own `feedPostFromMock`, since
+        `findFeedPost`'s return type is thinner and `feedPostFromMock` isn't exported). `liked`/
+        `toggle-like` wiring on the post reuses 3.8e's `FeedPostCard` controlled-prop pattern
+        unchanged. `FeedCommentItem.vue` was refactored from six scalar props to a single
+        `comment: FeedComment` prop (store type, not the old mocks one) plus a `toggle-like` emit
+        that bubbles a comment (including nested replies) up to `PostDetailView`, which calls the
+        already-built `feedStore.toggleCommentLike` (added in 3.8d as a "straightforward
+        extension" anticipating this) - the checklist text only names post like/follow, but
+        leaving the comment heart button on its old component-local `reactive` toggle would've
+        meant the real `comment.liked` field the backend now returns goes fetched-but-ignored, so
+        it's wired the same way. Comment sort ('top'/'newest') now compares `likes`/`createdAt`
+        directly instead of regex-parsing the old mock `timeAgo` display string (`parseHoursAgo`
+        deleted). `postComment`/`toggleFollow`/`toggleLike`/`toggleCommentLike` all have no mock
+        fallback (real mutations only) and surface failures via `useToast`, matching 3.8e/3.8f.
+        `vue-tsc --build` and `eslint` both clean (same two pre-existing unrelated eslint errors
+        noted since 3.1k).
   - [ ] 3.8h Frontend: Player Profile Feed/Album/Wish tabs wired for real (DB-backed) profiles.
         Extend `usePlayerProfileData.ts` to fetch feed/album/wish alongside the existing
         reviews fetch and stop hardcoding `feed: [], album: [], wish: []` in

@@ -1,18 +1,69 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PhCaretDown, PhCaretLeft, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedCommentItem from '@/components/feed/FeedCommentItem.vue'
-import { findFeedPost, mockPostComments } from '@/mocks/feed'
+import { useFeedStore, type FeedComment, type FeedPost } from '@/stores/feed'
+import { findFeedPost, type FeedPostDetail } from '@/mocks/feed'
+import { formatTimeAgo } from '@/utils/timeAgo'
 
 const route = useRoute()
 const router = useRouter()
+const feedStore = useFeedStore()
+const toast = useToast()
 
 const postId = computed(() => String(route.params.postId))
-const post = computed(() => findFeedPost(postId.value))
+const post = ref<FeedPost | null>(null)
 
-const following = ref(false)
+/** Adapts `findFeedPost`'s thinner mock shape into a `FeedPost` for the fallback path, same
+ * "adapt at the boundary" approach `stores/feed.ts`'s `feedPostFromMock` uses. */
+function postFromMockDetail(detail: FeedPostDetail): FeedPost {
+  return {
+    id: detail.id,
+    playerId: detail.id,
+    author: detail.author,
+    handle: detail.handle,
+    tier: detail.tier,
+    avatarUrl: null,
+    online: false,
+    text: detail.text,
+    hasImage: detail.hasImage,
+    category: 'games',
+    likes: detail.likes,
+    comments: detail.comments,
+    liked: false,
+    following: false,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+/** Prefers a post already loaded by Feed/Following (`feedStore.getPost`), then `GET
+ * /feed/posts/{id}` for a direct/deep link, then the mock fixtures - same resilience pattern as
+ * `OrderDetailView.vue`'s `loadBooking`. */
+async function loadPost() {
+  const id = postId.value
+  const existing = feedStore.getPost(id)
+  if (existing) {
+    post.value = existing
+    return
+  }
+  try {
+    post.value = await feedStore.fetchPost(id)
+  } catch {
+    const detail = findFeedPost(id)
+    post.value = detail ? postFromMockDetail(detail) : null
+  }
+}
+
+function load() {
+  loadPost()
+  feedStore.fetchComments(postId.value)
+}
+
+onMounted(load)
+watch(() => route.params.postId, load)
 
 const sort = ref<'top' | 'newest'>('top')
 const sortItems = [
@@ -22,32 +73,67 @@ const sortItems = [
   ],
 ]
 
-function parseHoursAgo(timeAgo: string) {
-  const match = /^(\d+)h$/.exec(timeAgo)
-  return match ? Number(match[1]) : Number.POSITIVE_INFINITY
-}
-
 const comments = computed(() => {
-  const list = [...(mockPostComments[postId.value] ?? [])]
+  const list = [...(feedStore.commentsByPost[postId.value] ?? [])]
   return sort.value === 'top'
     ? list.sort((a, b) => b.likes - a.likes)
-    : list.sort((a, b) => parseHoursAgo(a.timeAgo) - parseHoursAgo(b.timeAgo))
+    : list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 })
 
 const newComment = ref('')
-const draftComments = reactive<{ id: string; author: string; timeAgo: string; text: string; likes: number }[]>([])
 
-function postComment() {
+async function postComment() {
   const text = newComment.value.trim()
   if (!text) return
-  draftComments.unshift({
-    id: `draft-${Date.now()}`,
-    author: 'You',
-    timeAgo: 'now',
-    text,
-    likes: 0,
-  })
-  newComment.value = ''
+  try {
+    await feedStore.postComment(postId.value, text)
+    newComment.value = ''
+  } catch (err) {
+    toast.add({
+      title: 'Could not post comment',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
+async function toggleCommentLike(comment: FeedComment) {
+  try {
+    await feedStore.toggleCommentLike(postId.value, comment)
+  } catch (err) {
+    toast.add({
+      title: 'Could not update like',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
+async function toggleFollow() {
+  if (!post.value) return
+  try {
+    const result = await feedStore.toggleFollow(post.value.playerId, post.value.following)
+    post.value.following = result.following
+  } catch (err) {
+    toast.add({
+      title: post.value.following ? 'Could not unfollow' : 'Could not follow',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
+async function toggleLike() {
+  if (!post.value) return
+  try {
+    post.value = await feedStore.toggleLike(post.value)
+  } catch (err) {
+    toast.add({
+      title: 'Could not update like',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
 }
 </script>
 
@@ -67,23 +153,25 @@ function postComment() {
         <FeedPostCard
           :id="post.id"
           :author="post.author"
-          :handle="post.handle"
+          :handle="post.handle ?? ''"
           :tier="post.tier"
-          :time-ago="post.timeAgo"
-          :text="post.text"
+          :time-ago="formatTimeAgo(post.createdAt)"
+          :text="post.text ?? ''"
           :has-image="post.hasImage"
           :likes="post.likes"
           :comments="post.comments"
+          :liked="post.liked"
+          @toggle-like="toggleLike"
         >
           <template #action>
             <UButton
-              :color="following ? 'neutral' : 'primary'"
-              :variant="following ? 'soft' : 'solid'"
+              :color="post.following ? 'neutral' : 'primary'"
+              :variant="post.following ? 'soft' : 'solid'"
               size="sm"
               class="rounded-full"
-              @click="following = !following"
+              @click="toggleFollow"
             >
-              {{ following ? 'Following' : 'Follow' }}
+              {{ post.following ? 'Following' : 'Follow' }}
             </UButton>
           </template>
         </FeedPostCard>
@@ -114,31 +202,17 @@ function postComment() {
         </div>
 
         <UEmpty
-          v-if="draftComments.length === 0 && comments.length === 0"
+          v-if="comments.length === 0"
           title="No comments yet"
           description="Be the first to share your thoughts."
           class="py-12 text-white"
         />
         <div v-else class="flex flex-col gap-4">
           <FeedCommentItem
-            v-for="comment in draftComments"
-            :key="comment.id"
-            :id="comment.id"
-            :author="comment.author"
-            :time-ago="comment.timeAgo"
-            :text="comment.text"
-            :likes="comment.likes"
-          />
-          <FeedCommentItem
             v-for="comment in comments"
             :key="comment.id"
-            :id="comment.id"
-            :author="comment.author"
-            :time-ago="comment.timeAgo"
-            :text="comment.text"
-            :likes="comment.likes"
-            :is-creator="comment.isCreator"
-            :replies="comment.replies"
+            :comment="comment"
+            @toggle-like="toggleCommentLike"
           />
         </div>
       </template>

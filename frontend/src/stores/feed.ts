@@ -226,6 +226,12 @@ export const useFeedStore = defineStore('feed', () => {
     return current.value
   }
 
+  /** Prefers an already-loaded post (from `fetchFeed`/`fetchFollowing`) over a network round-trip,
+   * mirroring `bookingsStore.getBooking`. */
+  function getPost(id: string): FeedPost | undefined {
+    return posts.value.find((p) => p.id === id) ?? following.value.find((p) => p.id === id)
+  }
+
   /** Feed composer (`CreatePostModal.vue`). */
   async function createPost(payload: CreatePostPayload) {
     const post = await api.post<FeedPost>('/feed/posts', payload)
@@ -359,6 +365,7 @@ export const useFeedStore = defineStore('feed', () => {
     fetchFeed,
     fetchFollowing,
     fetchPost,
+    getPost,
     createPost,
     toggleLike,
     toggleFollow,

@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.12b (Estars leaderboard live smoke test) done; next up is 3.12c (frontend store)
+- **Next task:** 3.12c (Estars leaderboard frontend store) done; next up is 3.12d (wire the view)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1082,9 +1082,13 @@ unchecked box until the whole thing is done.
         rank order, `trend` always `'flat'`, and case-insensitive `category` filtering (matching
         `.lower()` in `estars.py`) all matched hand-computed expectations. No bugs found. All
         rows and the throwaway auth user cleaned up after, verified empty.
-  - [ ] 3.12c Frontend: new `stores/estars.ts` (`fetchLeaderboard(period, category)` against
+  - [x] 3.12c Frontend: new `stores/estars.ts` (`fetchLeaderboard(period, category)` against
         `/estars/leaderboard`), same mock-fallback resilience convention as every other Phase 3
-        store (`mockEstarsLeaderboard` adapted at the store boundary on failure).
+        store (`stores/bookings.ts`'s `fetchList`/`fetchIncoming`). No adapter function needed on
+        fallback (unlike `stores/subscriptions.ts`'s `subscriptionFromMock`) since
+        `mockEstarsLeaderboard`'s entries already satisfy the store's `EstarEntry` type as-is -
+        its `category`/`rating` are just narrower (always non-null) than the backend's nullable
+        fields. `vue-tsc --build` and `eslint` both clean.
   - [ ] 3.12d Frontend: `EstarsLeaderboardView.vue` wired to the store instead of
         `mockEstarsLeaderboard` — period buttons and the category `USelect` trigger a refetch,
         loading guard before the top-three/rest layout renders.

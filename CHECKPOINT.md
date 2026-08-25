@@ -1158,10 +1158,16 @@ unchecked box until the whole thing is done.
         (confirms every guessed default constraint name — Postgres's `{table}_{column}_fkey`
         convention — was right). `ruff check` clean; `DELETE /users/me` confirmed registered via
         `app.openapi()['paths']`.
-  - [ ] 3.13d Backend: live smoke test against the real Supabase project (throwaway user through
+  - [x] 3.13d Backend: live smoke test against the real Supabase project (throwaway user through
         real HTTP with a real bearer token: seed + list + set-default + remove a payment card,
         seed + list a session + sign-out-one + sign-out-others, then delete the account and
-        confirm the user/player/service rows are actually gone).
+        confirm the user/player/service rows are actually gone). All 35 checks passed on the
+        first run, no bugs found - also exercised `POST /settings/sessions`'s upsert-by-device
+        (touching twice with the same `User-Agent` reused the same row rather than duplicating
+        it) and confirmed the 3.13c cascade migration: after `DELETE /users/me`, the seeded
+        player/service/payment_cards/active_sessions rows and the `auth.users` row itself were
+        all gone, not just `public.users`. Smoke script was a throwaway (real HTTP against a
+        local uvicorn, admin client for seeding/teardown), not committed.
   - [ ] 3.13e Frontend: new `stores/settings.ts` wired to `/settings/...`, same mock-fallback
         resilience convention as every other Phase 3 store (falls back to `mocks/settings.ts` on
         failure).

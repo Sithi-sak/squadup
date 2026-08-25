@@ -1,34 +1,45 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { PhArrowUp, PhHourglass, PhArrowCounterClockwise, PhProhibit } from '@phosphor-icons/vue'
+import { ref, computed, onMounted } from 'vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
+import { PhArrowUp, PhArrowDown, PhHourglass, PhArrowCounterClockwise, PhProhibit } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { mockCurrentUser } from '@/mocks/users'
 import { mockPaymentCards } from '@/mocks/settings'
-import { mockTopUpPackages, mockWalletActivity, type WalletActivityIcon } from '@/mocks/wallet'
+import { useWalletStore, type WalletActivity } from '@/stores/wallet'
 
 /** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
 const COINS_PER_USD = 99
 
-const balance = computed(() => mockCurrentUser.coinBalance)
+const walletStore = useWalletStore()
+const toast = useToast()
+
+onMounted(() => {
+  walletStore.fetchWallet()
+  walletStore.fetchTopupPackages()
+})
+
+const balance = computed(() => walletStore.balance)
 const usdBalance = computed(() => (balance.value / COINS_PER_USD).toFixed(2))
 
-const selectedPackageId = ref(mockTopUpPackages.find((p) => p.isBaseRate)?.id ?? mockTopUpPackages[0]!.id)
+const selectedPackageId = ref<string | null>(null)
+const basePackageId = computed(
+  () => walletStore.topupPackages.find((p) => p.isBaseRate)?.id ?? walletStore.topupPackages[0]?.id ?? null,
+)
 
 const cardLabels = mockPaymentCards.map((card) => card.label)
 const selectedCardLabel = ref(mockPaymentCards.find((card) => card.isDefault)?.label ?? cardLabels[0])
 
-const activityIcon: Record<WalletActivityIcon, typeof PhArrowUp> = {
-  topup: PhArrowUp,
-  pending: PhHourglass,
-  refund: PhArrowCounterClockwise,
-  blocked: PhProhibit,
+function activityIcon(activity: WalletActivity) {
+  if (activity.status === 'blocked') return PhProhibit
+  if (activity.kind === 'topup') return PhArrowUp
+  if (activity.kind === 'refund') return PhArrowCounterClockwise
+  if (activity.kind === 'payout') return PhArrowDown
+  return PhHourglass
 }
-const activityIconClass: Record<WalletActivityIcon, string> = {
-  topup: 'text-brand-400',
-  pending: 'text-amber-400',
-  refund: 'text-brand-400',
-  blocked: 'text-red-400',
+function activityIconClass(activity: WalletActivity) {
+  if (activity.status === 'blocked') return 'text-red-400'
+  if (activity.kind === 'topup' || activity.kind === 'refund') return 'text-brand-400'
+  return 'text-amber-400'
 }
 
 function formatDateTime(iso: string) {
@@ -37,11 +48,38 @@ function formatDateTime(iso: string) {
   const time = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
   return `${day} · ${time}`
 }
+
+const toppingUp = ref(false)
+
+async function topUp(packageId: string | null) {
+  if (!packageId || toppingUp.value) return
+  toppingUp.value = true
+  try {
+    await walletStore.topUp(packageId, selectedCardLabel.value)
+    toast.add({ title: 'Top-up successful', description: 'Squad Coin added to your wallet.', color: 'success' })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't complete top-up",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    toppingUp.value = false
+  }
+}
+
+function confirmTopUp() {
+  topUp(selectedPackageId.value ?? basePackageId.value)
+}
 </script>
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] px-4 py-14 md:px-6">
-    <div v-if="balance === 0" class="flex min-h-[60vh] items-center justify-center">
+    <div v-if="walletStore.loading" class="flex min-h-[60vh] items-center justify-center text-sm text-slate-400">
+      Loading wallet...
+    </div>
+
+    <div v-else-if="balance === 0" class="flex min-h-[60vh] items-center justify-center">
       <EmptyState
         tone="gold"
         badge="0 SC"
@@ -52,7 +90,9 @@ function formatDateTime(iso: string) {
           <img :src="coinIcon" alt="" class="h-9 w-9" />
         </template>
         <template #actions>
-          <UButton color="primary" class="rounded-full px-6">Top up now</UButton>
+          <UButton color="primary" class="rounded-full px-6" :loading="toppingUp" @click="topUp(basePackageId)">
+            Top up now
+          </UButton>
           <UButton color="neutral" variant="soft" class="rounded-full px-6" to="/settings">
             How it works
           </UButton>
@@ -84,12 +124,12 @@ function formatDateTime(iso: string) {
         <h2 class="text-lg font-semibold text-white">Top up Squad Coins</h2>
         <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <button
-            v-for="pkg in mockTopUpPackages"
+            v-for="pkg in walletStore.topupPackages"
             :key="pkg.id"
             type="button"
             class="cursor-pointer rounded-xl border bg-gray-800/70 p-5 text-left transition-colors"
             :class="
-              selectedPackageId === pkg.id
+              (selectedPackageId ?? basePackageId) === pkg.id
                 ? 'border-brand-400'
                 : 'border-transparent hover:border-white/10'
             "
@@ -122,23 +162,34 @@ function formatDateTime(iso: string) {
             :ui="{ base: 'rounded-full bg-white/5 px-3.5 py-1.5 text-sm ring-white/10 hover:bg-white/10' }"
           />
         </div>
-        <UButton color="primary" class="rounded-full px-6" disabled>Confirm Top-Up</UButton>
+        <UButton
+          color="primary"
+          class="rounded-full px-6"
+          :loading="toppingUp"
+          :disabled="!selectedPackageId && !basePackageId"
+          @click="confirmTopUp"
+        >
+          Confirm Top-Up
+        </UButton>
       </div>
 
       <div class="rounded-xl bg-gray-800/70 p-5">
         <h2 class="text-lg font-semibold text-white">Recent activity</h2>
-        <div class="mt-2 flex flex-col divide-y divide-white/5">
-          <div v-for="activity in mockWalletActivity" :key="activity.id" class="flex items-center gap-3 py-3.5">
+        <p v-if="walletStore.activity.length === 0" class="mt-2 text-sm text-slate-400">No activity yet.</p>
+        <div v-else class="mt-2 flex flex-col divide-y divide-white/5">
+          <div v-for="activity in walletStore.activity" :key="activity.id" class="flex items-center gap-3 py-3.5">
             <component
-              :is="activityIcon[activity.icon]"
+              :is="activityIcon(activity)"
               :size="20"
               weight="bold"
-              :class="activityIconClass[activity.icon]"
+              :class="activityIconClass(activity)"
               class="shrink-0"
             />
             <div class="min-w-0 flex-1">
-              <p class="font-medium text-white">{{ activity.label }} · {{ activity.detail }}</p>
-              <p class="text-sm text-slate-400">{{ formatDateTime(activity.date) }}</p>
+              <p class="font-medium text-white">
+                {{ activity.label }}<template v-if="activity.detail"> · {{ activity.detail }}</template>
+              </p>
+              <p class="text-sm text-slate-400">{{ formatDateTime(activity.createdAt) }}</p>
             </div>
             <span
               class="inline-flex shrink-0 items-center gap-1 font-semibold"

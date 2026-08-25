@@ -251,8 +251,8 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.8 (social feed) done; next up is 3.9 (Wallet & payouts)
-- **Last updated:** 2026-08-24
+- **Next task:** 3.9 (Wallet & payouts) done; next up is 3.10 (Notifications endpoint)
+- **Last updated:** 2026-08-25
 
 ---
 
@@ -861,7 +861,78 @@ unchecked box until the whole thing is done.
         `StepRates.vue`/`RefundModal.vue`, noted since 3.1k — untouched by this feature). Manual
         browser walkthrough skipped per standing instruction not to run the `run` skill in this
         project.
-- [ ] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages
+- [x] 3.9 Wallet & payouts: coin balance ledger, top-up, payout methods, withdrawal requests + connect to Wallet and Withdraw pages
+  - [x] 3.9a Backend: `routers/wallet.py` (currently an empty skeleton from 2.1) — `GET /wallet/me`
+        (balance from `users.coin_balance`, pending clearance derived from the caller's own
+        `accepted`-but-not-`completed` bookings as a Pal, recent activity from `wallet_transactions`
+        — mirrors `mockWalletActivity`'s shape), `GET /wallet/topup-packages` (public read of
+        `topup_packages`), `POST /wallet/topup` (mock payment — credits `coin_balance` and writes a
+        `wallet_transactions` row, `kind='topup'`), `GET /wallet/payout-methods` (Pal's own
+        `payout_methods` rows), `GET /wallet/withdrawals` (Pal's own `withdrawals` history),
+        `POST /wallet/withdrawals` (validates against balance minus pending clearance, computes
+        `fee_coins` at a hardcoded platform-fee pct matching the frontend's existing
+        `mockWithdrawalPlatformFeePct = 10`, decrements `coin_balance`, inserts a `withdrawals` row
+        plus a `wallet_transactions` row `kind='payout'`). No payout-method create/delete endpoint —
+        both pages' "+ Add payout method" stays a disabled stub, no form exists in any mockup, same
+        convention as "Edit" in 3.1i.
+  - [x] 3.9b Backend: migration seeding `topup_packages` with the 4 rows `mocks/wallet.ts`'s
+        `mockTopUpPackages` already authors (495/990/2750/6000 coins) — the 2.3 migration created
+        the table with no rows, so `GET /wallet/topup-packages` has nothing to read without this.
+        Pushed to the linked project with `bunx supabase db push`.
+  - [x] 3.9c Backend: live smoke test against the real Supabase project (a throwaway buyer user
+        through real HTTP with a real bearer token against a local uvicorn: fresh
+        `GET /wallet/me` is 0 balance/0 pending/empty activity, `GET /wallet/topup-packages`
+        returns the 4 seeded rows with correct coins/price/bonus, two `POST /wallet/topup` calls
+        credit `coin_balance` by coins+bonus and each writes an activity row with the passed
+        payment label, a bogus package id 404s, a non-Pal hitting `GET /wallet/payout-methods`
+        404s, no bearer token 401s. A throwaway Pal with 2 `accepted` + 1 `completed` + 1
+        `pending` booking seeded directly via the service-role client: `pendingClearanceCoins`
+        summed only the 2 `accepted` rows (800), a payout method seeded directly showed up on
+        `GET /wallet/payout-methods`, a withdrawal over the available amount (balance minus
+        pending) got 409, a bogus payout method id got 404, a withdrawal within the available
+        amount got 201 with correct `feeCoins` (10%), debited `coin_balance` by the full
+        withdrawal amount, landed both the `withdrawals` and `wallet_transactions` (`kind=payout`)
+        rows, and showed up on `GET /wallet/withdrawals`; a 0-coin withdrawal got 422. 30/30
+        checks passed with no bugs found. All rows/users cleaned up after, verified empty (no
+        leftover `squadup-test.invalid` auth users).
+  - [x] 3.9d Frontend: new `stores/wallet.ts` (`balance`/`pendingClearanceCoins`/`activity`/
+        `topupPackages`/`payoutMethods`/`withdrawals` state, `fetchWallet`/`fetchTopupPackages`/
+        `topUp`/`fetchPayoutMethods`/`fetchWithdrawals`/`requestWithdrawal` actions), same
+        mock-fallback resilience convention as `stores/players.ts`/`bookings.ts`/etc. Types
+        mirror the backend's camelCase shapes (`WalletActivity`/`TopupPackage`/`PayoutMethod`/
+        `Withdrawal`), with `mocks/wallet.ts`'s fixtures adapted at the store boundary
+        (`walletActivityFromMock`/etc., same "adapt at the boundary" approach `stores/feed.ts`
+        uses) since the mock's `icon`-based `WalletActivity` shape predates real `kind`/`status`
+        enum fields. `topUp`/`requestWithdrawal` are real mutations only (no mock fallback), same
+        convention as `feedStore.createPost`; `requestWithdrawal` refetches the wallet afterward
+        so balance/activity reflect the debit. `vue-tsc --build` and `eslint` both clean.
+  - [x] 3.9e Frontend: `WalletView.vue` wired — balance/USD-equivalent and recent activity read from
+        the store instead of `mockCurrentUser.coinBalance`/`mockWalletActivity`, "Confirm Top-Up"
+        enabled and calls `walletStore.topUp(...)` with a loading/error toast state (was a disabled
+        stub). Added a loading guard (was previously absent anywhere in this view) so the zero-balance
+        `EmptyState` doesn't flash before the fetch resolves; the empty state's "Top up now" button
+        also now purchases the base-rate package directly (no package grid to pick from there).
+        Activity icon/color is now derived from the real `kind`/`status` fields via a small
+        `activityIcon()`/`activityIconClass()` function pair (replacing the mock-era
+        `WalletActivityIcon`-keyed lookup objects), with a new `payout` case (`PhArrowDown`) the mock
+        shape never had.
+  - [x] 3.9f Frontend: `WithdrawView.vue` wired — available/pending/payout methods/history from the
+        store instead of `mocks/wallet.ts`, "Withdraw" enabled and calls
+        `walletStore.requestWithdrawal(...)` with a loading/error toast state (was a disabled stub).
+        "Available to withdraw" is now `balance - pendingClearanceCoins` (the mock version never
+        subtracted pending, unlike the real backend's cap) so the page's own preview matches what
+        `POST /wallet/withdrawals` will actually accept. `PlayerEarningsView.vue`'s "Available
+        balance"/"Pending clearance"/payout method/history section (explicitly deferred to 3.9 in
+        the 3.7e note) wired to the same store data, both "Withdraw" buttons now link to
+        `/wallet/withdraw` instead of being disabled stubs; `payoutSchedule`/`nextPayoutDate`
+        ("Weekly payout") has no real scheduling concept behind it, so that stays presentation-only
+        off `mocks/dashboardStats.ts`, not a blocker for this task. "+ Add payout method" / "Change
+        payout settings" stay disabled stubs on both pages, no add/edit form exists in any mockup,
+        same convention as 3.1i's "Edit".
+  - [x] 3.9g Verification: `vue-tsc --build`, `eslint` (only the same two pre-existing unrelated
+        errors noted since 3.1k - `StepRates.vue`/`RefundModal.vue` unused vars), and `ruff check`
+        all clean. Manual browser walkthrough skipped per standing instruction not to run the `run`
+        skill in this project.
 - [ ] 3.10 Notifications endpoint (create on booking/message/review/payout events, mark read) + connect to header dropdown and Notifications page
 - [ ] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)
 - [ ] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)

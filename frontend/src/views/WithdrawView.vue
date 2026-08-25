@@ -1,27 +1,32 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhCaretLeft, PhPaypalLogo, PhCheck } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import visaIcon from '@/assets/visa.svg'
-import { mockCurrentUser } from '@/mocks/users'
-import {
-  mockPayoutMethods,
-  mockPendingCoins,
-  mockWithdrawalHistory,
-  mockWithdrawalPlatformFeePct,
-} from '@/mocks/wallet'
+import { mockWithdrawalPlatformFeePct } from '@/mocks/wallet'
+import { useWalletStore } from '@/stores/wallet'
 
 /** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
 const COINS_PER_USD = 99
 
 const router = useRouter()
+const walletStore = useWalletStore()
+const toast = useToast()
 
-const availableCoins = computed(() => mockCurrentUser.coinBalance)
+const availableCoins = computed(() => Math.max(0, walletStore.balance - walletStore.pendingClearanceCoins))
 const usdAvailable = computed(() => (availableCoins.value / COINS_PER_USD).toFixed(2))
 
-const amount = ref(availableCoins.value)
-const selectedMethodId = ref(mockPayoutMethods.find((m) => m.isDefault)?.id ?? mockPayoutMethods[0]!.id)
+const amount = ref(0)
+const selectedMethodId = ref<string | null>(null)
+
+onMounted(async () => {
+  await Promise.all([walletStore.fetchWallet(), walletStore.fetchPayoutMethods(), walletStore.fetchWithdrawals()])
+  amount.value = availableCoins.value
+  selectedMethodId.value =
+    walletStore.payoutMethods.find((m) => m.isDefault)?.id ?? walletStore.payoutMethods[0]?.id ?? null
+})
 
 const feeCoins = computed(() => Math.round((amount.value * mockWithdrawalPlatformFeePct) / 100))
 const receiveCoins = computed(() => amount.value - feeCoins.value)
@@ -29,6 +34,30 @@ const receiveUsd = computed(() => (receiveCoins.value / COINS_PER_USD).toFixed(2
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function methodLabel(payoutMethodId: string | null) {
+  return walletStore.payoutMethods.find((m) => m.id === payoutMethodId)?.label ?? 'Withdrawal'
+}
+
+const submitting = ref(false)
+
+async function submitWithdrawal() {
+  if (submitting.value || amount.value <= 0 || amount.value > availableCoins.value) return
+  submitting.value = true
+  try {
+    await walletStore.requestWithdrawal(amount.value, selectedMethodId.value ?? undefined)
+    toast.add({ title: 'Withdrawal requested', description: 'Funds are on their way.', color: 'success' })
+    amount.value = availableCoins.value
+  } catch (err) {
+    toast.add({
+      title: "Couldn't request withdrawal",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -58,7 +87,7 @@ function formatDate(iso: string) {
           </p>
           <p class="mt-1 text-sm text-slate-400">≈ ${{ usdAvailable }} USD</p>
         </div>
-        <p class="text-sm text-white">Pending: {{ mockPendingCoins.toLocaleString() }}</p>
+        <p class="text-sm text-white">Pending: {{ walletStore.pendingClearanceCoins.toLocaleString() }}</p>
       </div>
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -108,9 +137,12 @@ function formatDate(iso: string) {
           </div>
 
           <p class="mt-6 text-sm text-slate-400">Payout method</p>
-          <div class="mt-3 flex flex-col gap-3">
+          <p v-if="walletStore.payoutMethods.length === 0" class="mt-3 text-sm text-slate-400">
+            No payout method on file yet.
+          </p>
+          <div v-else class="mt-3 flex flex-col gap-3">
             <button
-              v-for="method in mockPayoutMethods"
+              v-for="method in walletStore.payoutMethods"
               :key="method.id"
               type="button"
               class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border bg-gray-700/40 px-4 py-3 text-left transition-colors"
@@ -149,21 +181,34 @@ function formatDate(iso: string) {
             <span class="text-slate-400"> · Arrives in 1-3 business days</span>
           </p>
 
-          <UButton color="primary" size="lg" block class="mt-4 rounded-full" disabled>
+          <UButton
+            color="primary"
+            size="lg"
+            block
+            class="mt-4 rounded-full"
+            :loading="submitting"
+            :disabled="amount <= 0 || amount > availableCoins || walletStore.payoutMethods.length === 0"
+            @click="submitWithdrawal"
+          >
             Withdraw ${{ receiveUsd }}
           </UButton>
         </div>
 
         <div class="rounded-xl bg-gray-800/70 p-5">
           <h2 class="text-lg font-semibold text-white">Withdrawal history</h2>
-          <div class="mt-2 flex flex-col divide-y divide-white/5">
-            <div v-for="withdrawal in mockWithdrawalHistory" :key="withdrawal.id" class="flex items-center justify-between gap-3 py-3">
+          <p v-if="walletStore.withdrawals.length === 0" class="mt-2 text-sm text-slate-400">
+            No withdrawals yet.
+          </p>
+          <div v-else class="mt-2 flex flex-col divide-y divide-white/5">
+            <div v-for="withdrawal in walletStore.withdrawals" :key="withdrawal.id" class="flex items-center justify-between gap-3 py-3">
               <div>
                 <p class="inline-flex items-center gap-1 font-semibold text-white">
                   <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
                   {{ withdrawal.coins.toLocaleString() }}
                 </p>
-                <p class="text-sm text-slate-400">{{ formatDate(withdrawal.date) }} · {{ withdrawal.method }}</p>
+                <p class="text-sm text-slate-400">
+                  {{ formatDate(withdrawal.createdAt) }} · {{ methodLabel(withdrawal.payoutMethodId) }}
+                </p>
               </div>
               <span
                 class="shrink-0 text-sm font-medium"

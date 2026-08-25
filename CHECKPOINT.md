@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.12a (Estars leaderboard backend) done; next up is 3.12b (live smoke test)
+- **Next task:** 3.12b (Estars leaderboard live smoke test) done; next up is 3.12c (frontend store)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1074,10 +1074,14 @@ unchecked box until the whole thing is done.
         response-time stat, not dropped from the schema since the frontend type already expects it.
         Registered in `routers/__init__.py` + `routers` list; confirmed via `app.openapi()['paths']`
         that `/estars/leaderboard` registers correctly. `ruff check` clean.
-  - [ ] 3.12b Backend: live smoke test against the real Supabase project (throwaway players with
-        varied completed-booking coin totals across this week/this month/older, confirm ranking
-        order and period bucketing match hand-computed expectations, confirm category filter
-        narrows correctly, clean up after).
+  - [x] 3.12b Backend: live smoke test against the real Supabase project (one throwaway buyer
+        user plus four throwaway players/services - Alice/Bob/Carol with `completed` bookings
+        this-week/this-month(15d)/all-time(60d) and varying coin totals, Dave with a large
+        `pending` booking to confirm non-`completed` bookings are excluded regardless of period).
+        All 20 checks passed on the first run: week/month/all_time bucketing, coin-descending
+        rank order, `trend` always `'flat'`, and case-insensitive `category` filtering (matching
+        `.lower()` in `estars.py`) all matched hand-computed expectations. No bugs found. All
+        rows and the throwaway auth user cleaned up after, verified empty.
   - [ ] 3.12c Frontend: new `stores/estars.ts` (`fetchLeaderboard(period, category)` against
         `/estars/leaderboard`), same mock-fallback resilience convention as every other Phase 3
         store (`mockEstarsLeaderboard` adapted at the store boundary on failure).

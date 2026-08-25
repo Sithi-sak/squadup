@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from collections import defaultdict
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -44,7 +45,23 @@ class AdminDisputeStatusIn(CamelModel):
     status: str
 
 
+class AdminReportDayOut(CamelModel):
+    day: str
+    count: int
+
+
+class AdminOverviewOut(CamelModel):
+    total_users: int
+    total_pals: int
+    orders_today: int
+    coins_in_escrow: int
+    reports_this_week: list[AdminReportDayOut]
+
+
 # Helpers -----------------------------------------------------------------------------------
+
+_ESCROW_STATUSES = ("pending", "accepted")
+_WEEKDAY_LABELS = ("M", "T", "W", "T", "F", "S", "S")
 
 _FLAG_SELECT = "*, players(display_name, avatar_url), users(display_name)"
 
@@ -155,3 +172,63 @@ def update_dispute_status(dispute_id: str, payload: AdminDisputeStatusIn) -> dic
         .execute()
     )
     return _dispute_out(result.data)
+
+
+# Overview -------------------------------------------------------------------------------
+# Same no-auth posture as the sections above.
+
+
+@router.get("/overview", response_model=AdminOverviewOut)
+def get_overview() -> dict:
+    client = get_supabase_client()
+
+    total_users = client.table("users").select("id", count="exact", head=True).execute().count or 0
+    total_pals = client.table("players").select("id", count="exact", head=True).execute().count or 0
+
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    orders_today = (
+        client.table("bookings")
+        .select("id", count="exact", head=True)
+        .gte("created_at", today_start.isoformat())
+        .execute()
+        .count
+        or 0
+    )
+
+    escrow_rows = (
+        client.table("bookings")
+        .select("total_coins")
+        .in_("status", _ESCROW_STATUSES)
+        .execute()
+        .data
+        or []
+    )
+    coins_in_escrow = sum(row["total_coins"] for row in escrow_rows)
+
+    week_start = today_start.date() - timedelta(days=6)
+    flag_rows = (
+        client.table("admin_flags")
+        .select("created_at")
+        .gte("created_at", week_start.isoformat())
+        .execute()
+        .data
+        or []
+    )
+    counts_by_day: dict[date, int] = defaultdict(int)
+    for row in flag_rows:
+        counts_by_day[datetime.fromisoformat(row["created_at"]).date()] += 1
+    reports_this_week = [
+        {
+            "day": _WEEKDAY_LABELS[(week_start + timedelta(days=offset)).weekday()],
+            "count": counts_by_day[week_start + timedelta(days=offset)],
+        }
+        for offset in range(7)
+    ]
+
+    return {
+        "total_users": total_users,
+        "total_pals": total_pals,
+        "orders_today": orders_today,
+        "coins_in_escrow": coins_in_escrow,
+        "reports_this_week": reports_this_week,
+    }

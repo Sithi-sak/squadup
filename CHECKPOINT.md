@@ -1235,12 +1235,16 @@ unchecked box until the whole thing is done.
         with no `wallet_transactions` write anywhere in the codebase (real payment/refund
         integration is Phase 4). Dispute creation itself already exists (`POST
         /bookings/{id}/dispute`, 2.3-era) — this task only adds the admin read/status-update side.
-  - [ ] 3.14c Backend: `GET /admin/overview` — `totalUsers`/`totalPals` (counts on `users`/
-        `players`), `ordersToday` (`bookings` created today), `coinsInEscrow` (sum of in-flight
-        booking totals, define precisely once booking status values are back in front of me),
-        `reportsThisWeek` (count of `admin_flags` grouped by day, last 7 days, `M`/`T`/`W`/`T`/`F`/
-        `S`/`S` labels matching `mockAdminOverviewStats`). Register `admin.router` stays as-is in
-        `routers/__init__.py` (already wired).
+  - [x] 3.14c Backend: `GET /admin/overview` — `totalUsers`/`totalPals` (`count="exact", head=True`
+        on `users`/`players`), `ordersToday` (`bookings` count where `created_at >=` today's UTC
+        midnight), `coinsInEscrow` (in-flight defined as `status in ('pending', 'accepted')` —
+        the two states where a booking is neither paid out (`completed`) nor never charged
+        (`declined`) — `total_coins` fetched and summed in Python, same "aggregate in Python"
+        convention as 3.3a's match scoring), `reportsThisWeek` (`admin_flags` fetched since 6 days
+        ago, bucketed by `date.weekday()` into `M`/`T`/`W`/`T`/`F`/`S`/`S`, matching
+        `mockAdminOverviewStats`'s shape exactly incl. duplicate `T`/`S` labels). Register
+        `admin.router` stays as-is in `routers/__init__.py` (already wired). `vue-tsc --build`
+        n/a (backend-only); `ruff check` clean.
   - [ ] 3.14d Backend: live smoke test against the real Supabase project (throwaway flagged-player
         and dispute rows through real HTTP: list + status-update both endpoints, list overview,
         confirm numbers move), same shape as 3.13d. Throwaway script, not committed.

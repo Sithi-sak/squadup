@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.10 (Notifications endpoint) done; next up is 3.11 (Subscriptions endpoint)
+- **Next task:** 3.11a (Subscriptions backend router) done; next up is 3.11b (live smoke test)
 - **Last updated:** 2026-08-25
 
 ---
@@ -992,6 +992,44 @@ unchecked box until the whole thing is done.
         `StepRates.vue`/`RefundModal.vue` unused vars). Manual browser walkthrough skipped per
         standing instruction not to run the `run` skill in this project.
 - [ ] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)
+  - [x] 3.11a Backend: `routers/subscriptions.py` (currently an empty skeleton from 2.1) —
+        `GET /subscriptions/mine` (buyer's own `subscriptions` rows joined to `players` for
+        `palName`/`rating`/`serviceLabel`, matching `mocks/subscriptions.ts`'s `Subscription`
+        shape exactly), `POST /subscriptions` (the `SubscriptionModal` confirm action — body
+        `playerId`/`serviceId?`/`billingCycle`; computes `price_coins` server-side off the
+        service's price, or a flat default matching the modal's `monthlyPriceCoins = 990`
+        fallback if no service/price is passed, with quarterly at the modal's already-established
+        3x - 10% math; inserts `status='active'`, `renews_on` = today + 30/90 days), `POST
+        /subscriptions/{id}/cancel` (owner-only 404 guard, sets `status='cancelled'`, leaves
+        `renews_on` as-is since the frontend already reads it as "access until" once cancelled),
+        `POST /subscriptions/{id}/resubscribe` (owner-only, sets `status='active'` and recomputes
+        `renews_on` = today + cycle days, moving `SubscriptionsView.vue`'s current client-side
+        `resubscribe()` logic server-side).
+  - [ ] 3.11b Backend: live smoke test against the real Supabase project (a throwaway buyer + Pal
+        through real HTTP with real bearer tokens against a local uvicorn: subscribe monthly ->
+        appears in `GET /subscriptions/mine` with correct `renewsOn`/`priceCoins`, subscribe
+        quarterly to a second Pal -> correct 3x-10% price, cancel the first -> status flips,
+        `renewsOn` unchanged, resubscribe -> status flips back with a new `renewsOn`, a
+        non-owner's cancel/resubscribe on someone else's subscription id 404s, no bearer token
+        401s). All rows/users cleaned up after, verified empty.
+  - [ ] 3.11c Frontend: new `stores/subscriptions.ts` (`list` state, `fetchSubscriptions`/
+        `subscribe`/`cancelSubscription`/`resubscribe` actions against `/subscriptions/...`), same
+        mock-fallback resilience convention as `stores/wallet.ts`/`notifications.ts`/etc.
+        (3.9d/3.10e) — `mocks/subscriptions.ts`'s fixtures adapted at the store boundary on
+        fetch failure only, mutations real-only.
+  - [ ] 3.11d Frontend: `SubscriptionsView.vue` wired to the store instead of its local
+        `ref(mockSubscriptions...)` copy — fetch on mount with a loading guard (same
+        `WalletView.vue`/`NotificationsView.vue` convention from 3.9e/3.10f), `confirmCancel`/
+        `resubscribe` call the real mutations with toast-on-failure instead of mutating the local
+        array directly.
+  - [ ] 3.11e Frontend: `ProfileHeader.vue` + `SubscriptionModal.vue` wired — `confirmSubscribe`
+        calls `subscriptionsStore.subscribe(...)` instead of only emitting a local `subscribed =
+        true` that resets on reload; the button's subscribed/not-subscribed state reads whether
+        `subscriptionsStore.list` already has an active row for this `playerId` (fetched on
+        profile mount) rather than a component-local ref.
+  - [ ] 3.11f Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (expect only
+        the same two pre-existing unrelated eslint errors noted since 3.1k). Manual browser
+        walkthrough skipped per standing instruction not to run the `run` skill in this project.
 - [ ] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)
 - [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)

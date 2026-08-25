@@ -1222,11 +1222,15 @@ unchecked box until the whole thing is done.
         (`admin@squadup.gg`, session-only) is explicitly the only guard until real admin auth
         ships (per the 1.15 checkpoint note), so these routes stay open like the rest of the
         unauthenticated surface, not behind `get_current_user_id`.
-  - [ ] 3.14b Backend: `GET /admin/disputes` (join `order_disputes` → `bookings` → buyer `users` +
-        Pal `players`/`users` + `services` for `orderNumber`/`buyerName`/`palName`/`serviceLabel`,
-        shape matches `AdminDispute`) and `PATCH /admin/disputes/{id}/status` (one of
-        `dispute_status`'s four values). "Refund buyer" only flips status to `refunded` (+ sets
-        `resolved_at`) — no wallet crediting, matching the existing precedent that
+  - [x] 3.14b Backend: `GET /admin/disputes` (join `order_disputes` → `bookings` → Pal `players`
+        + buyer `users` for `orderNumber`/`buyerName`/`palName`/`serviceLabel`, shape matches
+        `AdminDispute`) and `PATCH /admin/disputes/{id}/status` (one of `dispute_status`'s four
+        values, pass-through-to-Postgres like `flagged-players/{id}/status`). `serviceLabel` is
+        built from `bookings.service_type_label` + `quantity` (e.g. "Ranked Duo · 3 sessions") —
+        `price_unit` (`/Game`, `/2 hr`, `/order`, ...) has no consistent pluralizable unit across
+        service types, so "session(s)" is used generically rather than guessing one. Both
+        `resolved`/`refunded` set `order_disputes.resolved_at`; "Refund buyer" only flips status
+        (+ that timestamp) — no wallet crediting, matching the existing precedent that
         `order_cancellations`/`order_disputes`'s `refund_coins` is already just a recorded amount
         with no `wallet_transactions` write anywhere in the codebase (real payment/refund
         integration is Phase 4). Dispute creation itself already exists (`POST

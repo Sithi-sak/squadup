@@ -1275,10 +1275,18 @@ unchecked box until the whole thing is done.
         API-response type or converter needed (confirmed against `routers/admin.py`'s
         `AdminFlaggedPlayerOut`/`AdminDisputeOut`/`AdminOverviewOut`). `vue-tsc --build` and `eslint`
         both clean (same two pre-existing unrelated eslint errors noted since 3.1k).
-  - [ ] 3.14f Frontend: `AdminFlaggedPlayersPanel.vue` wired to the store — `onMounted` fetch,
+  - [x] 3.14f Frontend: `AdminFlaggedPlayersPanel.vue` wired to the store — `onMounted` fetch,
         loading/empty states (same pattern as 3.13f/g), Dismiss/Reviewing/Take action buttons call
         the store's status-update action with a busy state + toast on failure instead of mutating
-        the local `flags` ref directly.
+        the local `flags` ref directly. `rows` now filters/sorts `adminStore.flaggedPlayers`
+        directly rather than a locally-seeded copy; a single `statusUpdating` busy flag (not
+        per-row, since only one row can be open in the review modal at a time) disables all three
+        action buttons and shows `UButton`'s `loading` spinner during the `PATCH`, with a toast on
+        failure. Loading/error states above the table follow the loading-text /
+        `UEmpty`-with-Retry convention from `PlayerServicesView.vue` (3.1i) rather than 3.13f/g's
+        plain-text-only version, since this panel already had a `UEmpty` for the zero-results case
+        to be consistent with. `vue-tsc --build` and `eslint` both clean (same two pre-existing
+        unrelated eslint errors noted since 3.1k).
   - [ ] 3.14g Frontend: `AdminDisputesPanel.vue` wired the same way — Investigate/Resolve/Refund
         buyer call the store's status-update action.
   - [ ] 3.14h Frontend: `AdminOverviewPanel.vue` wired to the store's `overview`/`flaggedPlayers`/

@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhMagnifyingGlass } from '@phosphor-icons/vue'
-import { mockAdminFlaggedPlayers, type AdminFlaggedPlayer, type FlaggedPlayerStatus } from '@/mocks/admin'
+import { useAdminStore } from '@/stores/admin'
+import type { AdminFlaggedPlayer, FlaggedPlayerStatus } from '@/mocks/admin'
 
-const flags = ref<AdminFlaggedPlayer[]>(mockAdminFlaggedPlayers.map((f) => ({ ...f })))
+const adminStore = useAdminStore()
+const toast = useToast()
+
+onMounted(() => {
+  adminStore.fetchFlaggedPlayers()
+})
+
 const viewing = ref<AdminFlaggedPlayer | null>(null)
 const search = ref('')
+const statusUpdating = ref(false)
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -30,17 +39,28 @@ function formatDate(iso: string) {
 
 const rows = computed(() => {
   const query = search.value.trim().toLowerCase()
-  return flags.value
+  return adminStore.flaggedPlayers
     .filter((flag) => activeFilter.value === 'all' || flag.status === activeFilter.value)
     .filter((flag) => !query || flag.displayName.toLowerCase().includes(query) || flag.reason.toLowerCase().includes(query))
     .sort((a, b) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime())
 })
 
-function setStatus(status: FlaggedPlayerStatus) {
-  if (!viewing.value) return
-  const target = flags.value.find((f) => f.id === viewing.value!.id)
-  if (target) target.status = status
-  viewing.value = { ...viewing.value, status }
+async function setStatus(status: FlaggedPlayerStatus) {
+  if (!viewing.value || statusUpdating.value) return
+  const id = viewing.value.id
+  statusUpdating.value = true
+  try {
+    const updated = await adminStore.updateFlaggedPlayerStatus(id, status)
+    viewing.value = updated
+  } catch (err) {
+    toast.add({
+      title: "Couldn't update status",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    statusUpdating.value = false
+  }
 }
 </script>
 
@@ -78,8 +98,23 @@ function setStatus(status: FlaggedPlayerStatus) {
       </UInput>
     </div>
 
+    <div v-if="adminStore.flaggedPlayersLoading && adminStore.flaggedPlayers.length === 0" class="py-16 text-center text-sm text-slate-400">
+      Loading flagged players...
+    </div>
+
     <UEmpty
-      v-if="rows.length === 0"
+      v-else-if="adminStore.flaggedPlayersError"
+      title="Couldn't load flagged players"
+      :description="adminStore.flaggedPlayersError"
+      class="py-16 text-white"
+    >
+      <template #actions>
+        <UButton color="primary" class="rounded-full" @click="adminStore.fetchFlaggedPlayers()">Retry</UButton>
+      </template>
+    </UEmpty>
+
+    <UEmpty
+      v-else-if="rows.length === 0"
       title="No flagged players found"
       description="Try a different filter or search term."
       class="py-16 text-white"
@@ -157,13 +192,39 @@ function setStatus(status: FlaggedPlayerStatus) {
           <p class="rounded-xl bg-gray-800/70 p-4 text-slate-300">{{ viewing.details }}</p>
 
           <div class="grid grid-cols-3 gap-3 border-t border-white/10 pt-4">
-            <UButton color="neutral" variant="soft" size="sm" block class="rounded-full" @click="setStatus('dismissed')">
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="sm"
+              block
+              class="rounded-full"
+              :loading="statusUpdating"
+              :disabled="statusUpdating"
+              @click="setStatus('dismissed')"
+            >
               Dismiss
             </UButton>
-            <UButton color="primary" variant="soft" size="sm" block class="rounded-full" @click="setStatus('reviewing')">
+            <UButton
+              color="primary"
+              variant="soft"
+              size="sm"
+              block
+              class="rounded-full"
+              :loading="statusUpdating"
+              :disabled="statusUpdating"
+              @click="setStatus('reviewing')"
+            >
               Reviewing
             </UButton>
-            <UButton color="error" size="sm" block class="rounded-full" @click="setStatus('actioned')">
+            <UButton
+              color="error"
+              size="sm"
+              block
+              class="rounded-full"
+              :loading="statusUpdating"
+              :disabled="statusUpdating"
+              @click="setStatus('actioned')"
+            >
               Take action
             </UButton>
           </div>

@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhAppleLogo, PhDotsThree } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import visaIcon from '@/assets/visa.svg'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
-import { mockPaymentCards } from '@/mocks/settings'
+import { useSettingsStore } from '@/stores/settings'
 import SettingsSelectRow from './SettingsSelectRow.vue'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 
 const profile = mockPlayerProfiles.self!
+const settingsStore = useSettingsStore()
+const toast = useToast()
+
+onMounted(() => {
+  settingsStore.fetchPaymentCards()
+})
 
 const payoutSchedule = ref('Weekly')
 const currencyDisplay = ref('USD ($)')
@@ -18,7 +25,7 @@ const autoTopUp = ref(false)
 const scheduleOptions = ['Daily', 'Weekly', 'Bi-weekly', 'Monthly']
 const currencyOptions = ['USD ($)', 'KHR (៛)', 'THB (฿)']
 
-const cards = ref(mockPaymentCards.map((card) => ({ ...card })))
+const busyCardId = ref<string | null>(null)
 
 const cardMenuItems = (cardId: string) => [
   [
@@ -27,12 +34,34 @@ const cardMenuItems = (cardId: string) => [
   ],
 ]
 
-function setDefault(cardId: string) {
-  cards.value = cards.value.map((card) => ({ ...card, isDefault: card.id === cardId }))
+async function setDefault(cardId: string) {
+  busyCardId.value = cardId
+  try {
+    await settingsStore.setDefaultPaymentCard(cardId)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't set default card",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    busyCardId.value = null
+  }
 }
 
-function removeCard(cardId: string) {
-  cards.value = cards.value.filter((card) => card.id !== cardId)
+async function removeCard(cardId: string) {
+  busyCardId.value = cardId
+  try {
+    await settingsStore.removePaymentCard(cardId)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't remove card",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    busyCardId.value = null
+  }
 }
 </script>
 
@@ -71,8 +100,12 @@ function removeCard(cardId: string) {
       <h2 class="text-lg font-semibold text-white">Payment methods</h2>
 
       <div class="mt-3 flex flex-col gap-3">
+        <p v-if="settingsStore.paymentCardsLoading" class="py-2 text-sm text-slate-400">Loading payment methods...</p>
+        <p v-else-if="settingsStore.paymentCards.length === 0" class="py-2 text-sm text-slate-400">
+          No payment methods yet.
+        </p>
         <div
-          v-for="card in cards"
+          v-for="card in settingsStore.paymentCards"
           :key="card.id"
           class="flex items-center justify-between gap-3 rounded-xl bg-gray-700/50 px-4 py-3"
         >
@@ -90,7 +123,16 @@ function removeCard(cardId: string) {
             Default
           </UBadge>
           <UDropdownMenu v-else :items="cardMenuItems(card.id)">
-            <UButton color="neutral" variant="ghost" square size="sm" :ui="{ base: 'rounded-full' }" aria-label="Card options">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              square
+              size="sm"
+              :ui="{ base: 'rounded-full' }"
+              aria-label="Card options"
+              :loading="busyCardId === card.id"
+              :disabled="busyCardId === card.id"
+            >
               <PhDotsThree :size="18" />
             </UButton>
           </UDropdownMenu>

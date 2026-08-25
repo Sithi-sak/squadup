@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.12 (Estars leaderboard) done; next up is 3.13 (Settings backend)
+- **Next task:** 3.13e/3.13f (Settings payments frontend) done; next up is 3.13g (Security tab + delete account)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1168,11 +1168,28 @@ unchecked box until the whole thing is done.
         player/service/payment_cards/active_sessions rows and the `auth.users` row itself were
         all gone, not just `public.users`. Smoke script was a throwaway (real HTTP against a
         local uvicorn, admin client for seeding/teardown), not committed.
-  - [ ] 3.13e Frontend: new `stores/settings.ts` wired to `/settings/...`, same mock-fallback
-        resilience convention as every other Phase 3 store (falls back to `mocks/settings.ts` on
-        failure).
-  - [ ] 3.13f Frontend: `SettingsPaymentsTab.vue` wired to the store for list/set-default/remove;
-        "+ Add card" and "+ Add payout method" stay disabled stubs (no change, see 3.13a).
+  - [x] 3.13e Frontend: new `stores/settings.ts` wired to `/settings/...` — `paymentCards`
+        (list/set-default/remove) and `sessions` (list/sign-out-one/sign-out-others/`touchSession`
+        upsert for 3.13g), each with its own loading/error state and mock fallback on failure,
+        same convention as every other Phase 3 store. `PaymentCard` mirrors `PaymentCardOut`
+        exactly, so `mockPaymentCards` spread-copies straight into it with no converter. `SessionOut`
+        doesn't get the same treatment: it's raw-timestamp (`lastActiveAt`) and nullable
+        (`device`/`location`), while `mocks/settings.ts`'s pre-existing `ActiveSession` already
+        has friendly display fields (`lastActive`/`current`) that `SettingsSecurityTab.vue` (not
+        yet wired, that's 3.13g) reads directly — kept that shape and added `sessionFromApi` to
+        adapt at the store boundary (`isCurrent` → `'active now'` / `formatTimeAgo(lastActiveAt)`),
+        same call `stores/wallet.ts`'s `walletActivityFromMock` made rather than reshaping the
+        mock file itself.
+  - [x] 3.13f Frontend: `SettingsPaymentsTab.vue` wired to the store for list/set-default/remove
+        — `onMounted` calls `fetchPaymentCards()`, a loading line and "No payment methods yet"
+        empty state cover the card list, and the "..." menu's Set default/Remove actions are now
+        async with a per-card `busyCardId` (disables + spinners the trigger button, same
+        `UButton` `loading` pattern as `PlayerServicesView.vue`) and a toast on failure. "+ Add
+        card" and "+ Add payout method" stay disabled stubs (no change, see 3.13a). Payout
+        method/schedule/currency/auto-top-up sections are untouched — they're the Squad Coin
+        wallet, not `payment_cards`, out of this task's scope. `vue-tsc --build` clean; `eslint`
+        clean (same two pre-existing unrelated errors noted since 3.1k —
+        `StepRates.vue`/`RefundModal.vue` unused vars).
   - [ ] 3.13g Frontend: `SettingsSecurityTab.vue` wired to the store — sessions list/sign-out/
         sign-out-all, `DeleteAccountModal` confirm calls the real delete-account endpoint, signs
         the user out, and routes to `/`. Two-factor authentication stays a disabled/inert toggle

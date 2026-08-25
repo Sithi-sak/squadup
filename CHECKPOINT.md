@@ -1245,13 +1245,36 @@ unchecked box until the whole thing is done.
         `mockAdminOverviewStats`'s shape exactly incl. duplicate `T`/`S` labels). Register
         `admin.router` stays as-is in `routers/__init__.py` (already wired). `vue-tsc --build`
         n/a (backend-only); `ruff check` clean.
-  - [ ] 3.14d Backend: live smoke test against the real Supabase project (throwaway flagged-player
+  - [x] 3.14d Backend: live smoke test against the real Supabase project (throwaway flagged-player
         and dispute rows through real HTTP: list + status-update both endpoints, list overview,
-        confirm numbers move), same shape as 3.13d. Throwaway script, not committed.
-  - [ ] 3.14e Frontend: extend `stores/admin.ts` with `flaggedPlayers`/`disputes`/`overview` state
+        confirm numbers move), same shape as 3.13d. Throwaway script, not committed. Full chain
+        (two throwaway auth users, a Pal `player`/`service`, a `completed` booking + a `pending`
+        one, an `admin_flags` row, an `order_disputes` row) created via the service-role client,
+        then exercised through real HTTP against a local uvicorn: `GET /admin/flagged-players`
+        shows the joined `displayName`/`reportedBy`, `PATCH .../status` moves it to `reviewing`
+        and 404s on an unknown id; `GET /admin/disputes` shows the joined `orderNumber`/
+        `serviceLabel` ("Ranked Duo · 3 sessions")/`totalCoins`, `PATCH .../status` moves
+        `investigating` → `refunded` (DB-level `resolved_at` stamped on the terminal status,
+        confirmed directly since `AdminDisputeOut` intentionally has no `resolvedAt` field,
+        matching `mocks/admin.ts`'s `AdminDispute` shape) and 404s on an unknown id; `GET
+        /admin/overview` reflects `totalUsers`/`totalPals`/`ordersToday` and an independently
+        DB-summed `coinsInEscrow` that correctly excludes the `completed` booking and includes
+        the `pending` one, `reportsThisWeek` confirmed as a 7-day trailing window (not a
+        calendar week) with today's count including the new flag. 31/31 checks passed, no bugs
+        found - `admin.py`'s joins/status-transition logic were correct on the first live run.
+        All rows/users cleaned up after, verified empty.
+  - [x] 3.14e Frontend: extend `stores/admin.ts` with `flaggedPlayers`/`disputes`/`overview` state
         fetched from `/admin/...`, mock fallback on failure (same convention as every other Phase 3
         store) — the existing `isAuthenticated`/`login`/`logout` mock-credential gate is untouched,
-        this task only adds data fetching once past that gate.
+        this task only adds data fetching once past that gate. Also added
+        `updateFlaggedPlayerStatus`/`updateDisputeStatus` (`PATCH .../status`, patches the row back
+        into the list in place) alongside the fetches, since 3.14f/g's panels need a store action to
+        call rather than mutating their local mock-seeded refs directly. Response types are the
+        existing `AdminFlaggedPlayer`/`AdminDispute`/`AdminOverviewStats` from `mocks/admin.ts`
+        unchanged — `CamelModel`'s camelCase output lines up field-for-field with each, no separate
+        API-response type or converter needed (confirmed against `routers/admin.py`'s
+        `AdminFlaggedPlayerOut`/`AdminDisputeOut`/`AdminOverviewOut`). `vue-tsc --build` and `eslint`
+        both clean (same two pre-existing unrelated eslint errors noted since 3.1k).
   - [ ] 3.14f Frontend: `AdminFlaggedPlayersPanel.vue` wired to the store — `onMounted` fetch,
         loading/empty states (same pattern as 3.13f/g), Dismiss/Reviewing/Take action buttons call
         the store's status-update action with a busy state + toast on failure instead of mutating

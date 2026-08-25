@@ -1,12 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhMagnifyingGlass } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { mockAdminDisputes, type AdminDispute, type DisputeStatus } from '@/mocks/admin'
+import { useAdminStore } from '@/stores/admin'
+import type { AdminDispute, DisputeStatus } from '@/mocks/admin'
 
-const disputes = ref<AdminDispute[]>(mockAdminDisputes.map((d) => ({ ...d })))
+const adminStore = useAdminStore()
+const toast = useToast()
+
+onMounted(() => {
+  adminStore.fetchDisputes()
+})
+
 const viewing = ref<AdminDispute | null>(null)
 const search = ref('')
+const statusUpdating = ref(false)
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -31,7 +40,7 @@ function formatDate(iso: string) {
 
 const rows = computed(() => {
   const query = search.value.trim().toLowerCase()
-  return disputes.value
+  return adminStore.disputes
     .filter((dispute) => activeFilter.value === 'all' || dispute.status === activeFilter.value)
     .filter(
       (dispute) =>
@@ -43,11 +52,22 @@ const rows = computed(() => {
     .sort((a, b) => new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime())
 })
 
-function setStatus(status: DisputeStatus) {
-  if (!viewing.value) return
-  const target = disputes.value.find((d) => d.id === viewing.value!.id)
-  if (target) target.status = status
-  viewing.value = { ...viewing.value, status }
+async function setStatus(status: DisputeStatus) {
+  if (!viewing.value || statusUpdating.value) return
+  const id = viewing.value.id
+  statusUpdating.value = true
+  try {
+    const updated = await adminStore.updateDisputeStatus(id, status)
+    viewing.value = updated
+  } catch (err) {
+    toast.add({
+      title: "Couldn't update status",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    statusUpdating.value = false
+  }
 }
 </script>
 
@@ -85,8 +105,23 @@ function setStatus(status: DisputeStatus) {
       </UInput>
     </div>
 
+    <div v-if="adminStore.disputesLoading && adminStore.disputes.length === 0" class="py-16 text-center text-sm text-slate-400">
+      Loading disputes...
+    </div>
+
     <UEmpty
-      v-if="rows.length === 0"
+      v-else-if="adminStore.disputesError"
+      title="Couldn't load disputes"
+      :description="adminStore.disputesError"
+      class="py-16 text-white"
+    >
+      <template #actions>
+        <UButton color="primary" class="rounded-full" @click="adminStore.fetchDisputes()">Retry</UButton>
+      </template>
+    </UEmpty>
+
+    <UEmpty
+      v-else-if="rows.length === 0"
       title="No disputes found"
       description="Try a different filter or search term."
       class="py-16 text-white"
@@ -168,13 +203,39 @@ function setStatus(status: DisputeStatus) {
           </div>
 
           <div class="grid grid-cols-3 gap-3 border-t border-white/10 pt-4">
-            <UButton color="neutral" variant="soft" size="sm" block class="rounded-full" @click="setStatus('investigating')">
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="sm"
+              block
+              class="rounded-full"
+              :loading="statusUpdating"
+              :disabled="statusUpdating"
+              @click="setStatus('investigating')"
+            >
               Investigate
             </UButton>
-            <UButton color="primary" variant="soft" size="sm" block class="rounded-full" @click="setStatus('resolved')">
+            <UButton
+              color="primary"
+              variant="soft"
+              size="sm"
+              block
+              class="rounded-full"
+              :loading="statusUpdating"
+              :disabled="statusUpdating"
+              @click="setStatus('resolved')"
+            >
               Resolve
             </UButton>
-            <UButton color="error" size="sm" block class="rounded-full" @click="setStatus('refunded')">
+            <UButton
+              color="error"
+              size="sm"
+              block
+              class="rounded-full"
+              :loading="statusUpdating"
+              :disabled="statusUpdating"
+              @click="setStatus('refunded')"
+            >
               Refund buyer
             </UButton>
           </div>

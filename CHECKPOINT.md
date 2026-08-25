@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.13 (Settings backend) done; next up is 3.14 (Admin endpoints)
+- **Next task:** 3.14 (Admin endpoints) done; next up is 3.15 (Docker + Docker Compose)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1210,7 +1210,7 @@ unchecked box until the whole thing is done.
         pre-existing unrelated eslint errors noted since 3.1k — `StepRates.vue`/`RefundModal.vue`
         unused vars). Manual browser walkthrough skipped per standing instruction not to run the
         `run` skill in this project.
-- [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
+- [x] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
   - [x] 3.14a Backend: new `routers/admin.py` (currently an empty stub) — `GET /admin/flagged-players`
         (join `admin_flags` → `players` for `displayName`/`avatarUrl`, and → `users` via
         `reported_by` for a display name, shape matches `AdminFlaggedPlayer`) and
@@ -1287,11 +1287,18 @@ unchecked box until the whole thing is done.
         plain-text-only version, since this panel already had a `UEmpty` for the zero-results case
         to be consistent with. `vue-tsc --build` and `eslint` both clean (same two pre-existing
         unrelated eslint errors noted since 3.1k).
-  - [ ] 3.14g Frontend: `AdminDisputesPanel.vue` wired the same way — Investigate/Resolve/Refund
-        buyer call the store's status-update action.
-  - [ ] 3.14h Frontend: `AdminOverviewPanel.vue` wired to the store's `overview`/`flaggedPlayers`/
-        `disputes` state instead of the `mocks/admin.ts` imports.
-  - [ ] 3.14i Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean; manual browser
+  - [x] 3.14g Frontend: `AdminDisputesPanel.vue` wired the same way — Investigate/Resolve/Refund
+        buyer call the store's status-update action, with loading/empty states and a single
+        `statusUpdating` busy flag on the review modal's three buttons, matching 3.14f's
+        `AdminFlaggedPlayersPanel.vue` pattern exactly. `vue-tsc --build` and `eslint` both clean.
+  - [x] 3.14h Frontend: `AdminOverviewPanel.vue` wired to the store's `overview`/`flaggedPlayers`/
+        `disputes` state instead of the `mocks/admin.ts` imports. `onMounted` fetches all three;
+        the stat cards/reports-this-week chart gate on `overview` with the same loading-text /
+        `UEmpty`-with-Retry convention as 3.14f/g, while the two "recent" lists (already capped
+        to 3 items) read `flaggedPlayers`/`disputes` directly and just show a plain empty line
+        when a list comes back empty, rather than duplicating three separate loading/error gates
+        on one summary page.
+  - [x] 3.14i Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean; manual browser
         walkthrough skipped per standing instruction not to run the `run` skill in this project.
 - [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
 - [ ] 3.16 Clean out mock/demo data and fallback logic (do last, once every 3.x feature above is

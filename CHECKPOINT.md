@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.11a (Subscriptions backend router) done; next up is 3.11b (live smoke test)
+- **Next task:** 3.11c (frontend `stores/subscriptions.ts`) done; next up is 3.11d (wire `SubscriptionsView.vue` to the store)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1005,18 +1005,31 @@ unchecked box until the whole thing is done.
         `POST /subscriptions/{id}/resubscribe` (owner-only, sets `status='active'` and recomputes
         `renews_on` = today + cycle days, moving `SubscriptionsView.vue`'s current client-side
         `resubscribe()` logic server-side).
-  - [ ] 3.11b Backend: live smoke test against the real Supabase project (a throwaway buyer + Pal
-        through real HTTP with real bearer tokens against a local uvicorn: subscribe monthly ->
-        appears in `GET /subscriptions/mine` with correct `renewsOn`/`priceCoins`, subscribe
-        quarterly to a second Pal -> correct 3x-10% price, cancel the first -> status flips,
-        `renewsOn` unchanged, resubscribe -> status flips back with a new `renewsOn`, a
-        non-owner's cancel/resubscribe on someone else's subscription id 404s, no bearer token
-        401s). All rows/users cleaned up after, verified empty.
-  - [ ] 3.11c Frontend: new `stores/subscriptions.ts` (`list` state, `fetchSubscriptions`/
+  - [x] 3.11b Backend: live smoke test against the real Supabase project (two throwaway buyer
+        auth users + two throwaway `players` rows inserted directly via the service-role client,
+        same pattern as 3.3b, since a Pal here needs no linked user per the 2.3 `user_id` nullable
+        note - one Pal also got a `services`/`service_pricing_options` row to exercise the
+        service-based price path) through real HTTP with real bearer tokens against a local
+        uvicorn: subscribe monthly with a service -> price taken from `service_pricing_options`
+        (not the 990 default) and appears correctly in `GET /subscriptions/mine`, subscribe
+        quarterly to a second Pal with no service -> default-price 3x-10% math (990 -> 2673),
+        cancel the first -> status flips to `cancelled`, `renewsOn` unchanged, resubscribe ->
+        status flips back to `active` with a freshly recomputed `renewsOn`, a non-owner's
+        cancel/resubscribe on someone else's subscription id both 404, three no-bearer-token
+        calls (`GET /mine`, `POST /subscriptions`, cancel) all 401. 27/27 checks passed with no
+        bugs found - `_subscription_out`'s price/renewsOn math and the owner-guard 404s were
+        correct on the first live run. All rows/users cleaned up after, verified empty.
+  - [x] 3.11c Frontend: new `stores/subscriptions.ts` (`list` state, `fetchSubscriptions`/
         `subscribe`/`cancelSubscription`/`resubscribe` actions against `/subscriptions/...`), same
         mock-fallback resilience convention as `stores/wallet.ts`/`notifications.ts`/etc.
         (3.9d/3.10e) — `mocks/subscriptions.ts`'s fixtures adapted at the store boundary on
-        fetch failure only, mutations real-only.
+        fetch failure only, mutations real-only. `Subscription` mirrors the backend's
+        `SubscriptionOut` (lowercase `billingCycle`, `playerId`/`playerDisplayName`/`serviceId`
+        instead of the mock's `palName` and no ids), so `subscriptionFromMock` adapts the old
+        shape rather than reshaping `mocks/subscriptions.ts` itself — same convention as
+        `walletActivityFromMock`. Mock-derived rows get `playerId: ''`/`serviceId: null` since
+        there's nothing real behind them to cancel/resubscribe anyway. `vue-tsc --build` and
+        `eslint` both clean.
   - [ ] 3.11d Frontend: `SubscriptionsView.vue` wired to the store instead of its local
         `ref(mockSubscriptions...)` copy — fetch on mount with a loading guard (same
         `WalletView.vue`/`NotificationsView.vue` convention from 3.9e/3.10f), `confirmCancel`/

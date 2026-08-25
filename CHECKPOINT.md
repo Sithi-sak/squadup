@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.12c (Estars leaderboard frontend store) done; next up is 3.12d (wire the view)
+- **Next task:** 3.12 (Estars leaderboard) done; next up is 3.13 (Settings backend)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1058,7 +1058,7 @@ unchecked box until the whole thing is done.
         pre-existing unrelated eslint errors noted since 3.1k, `StepRates.vue`/`RefundModal.vue`
         unused vars). Manual browser walkthrough skipped per standing instruction not to run the
         `run` skill in this project.
-- [ ] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)
+- [x] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)
   - [x] 3.12a Backend: new `routers/estars.py` (no skeleton exists from 2.1, unlike every other
         router) — `GET /estars/leaderboard`, ranking players by coins earned from `completed`
         bookings within a `period` param (`week`/`month`/`all_time`, rolling 7/30-day windows off
@@ -1089,11 +1089,19 @@ unchecked box until the whole thing is done.
         `mockEstarsLeaderboard`'s entries already satisfy the store's `EstarEntry` type as-is -
         its `category`/`rating` are just narrower (always non-null) than the backend's nullable
         fields. `vue-tsc --build` and `eslint` both clean.
-  - [ ] 3.12d Frontend: `EstarsLeaderboardView.vue` wired to the store instead of
+  - [x] 3.12d Frontend: `EstarsLeaderboardView.vue` wired to the store instead of
         `mockEstarsLeaderboard` — period buttons and the category `USelect` trigger a refetch,
-        loading guard before the top-three/rest layout renders.
-  - [ ] 3.12e Verification: `vue-tsc --build`, `eslint`, and `ruff check` clean. Manual browser
-        walkthrough skipped per standing instruction not to run the `run` skill in this project.
+        loading guard before the top-three/rest layout renders. `periodParams` maps the UI's
+        `'This week'/'This month'/'All time'` labels to the store's `week`/`month`/`all_time`
+        values; `estarsCategories[0]` ("All categories") sends no `category` param, matching
+        `stores/estars.ts`'s `fetchLeaderboard`. Rating/category are nullable on the real
+        `EstarEntry` (unlike the mock type), so both render spots fall back to `'--'`/`'—'`,
+        same convention as `SubscriptionsView.vue`'s rating fallback. `vue-tsc --build` and
+        `eslint` both clean (same two pre-existing unrelated errors noted since 3.1k).
+  - [x] 3.12e Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (same two
+        pre-existing unrelated eslint errors noted since 3.1k, `StepRates.vue`/`RefundModal.vue`
+        unused vars). Manual browser walkthrough skipped per standing instruction not to run the
+        `run` skill in this project.
 - [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
 - [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   PhCaretUp,
   PhCaretDown,
@@ -10,17 +10,34 @@ import {
   PhUserCircle,
 } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { estarsCategories, mockEstarsLeaderboard } from '@/mocks/estars'
+import { estarsCategories } from '@/mocks/estars'
+import { useEstarsStore, type EstarPeriod } from '@/stores/estars'
+
+const estarsStore = useEstarsStore()
 
 const periods = ['This week', 'This month', 'All time'] as const
+const periodParams: Record<(typeof periods)[number], EstarPeriod> = {
+  'This week': 'week',
+  'This month': 'month',
+  'All time': 'all_time',
+}
 const activePeriod = ref<(typeof periods)[number]>('This week')
 
 const activeCategory = ref(estarsCategories[0])
 
+function refetch() {
+  const category = activeCategory.value === estarsCategories[0] ? null : activeCategory.value
+  estarsStore.fetchLeaderboard(periodParams[activePeriod.value], category)
+}
+
+onMounted(refetch)
+watch(activePeriod, refetch)
+watch(activeCategory, refetch)
+
 const topThree = computed(() =>
-  mockEstarsLeaderboard.filter((entry) => entry.rank <= 3).sort((a, b) => a.rank - b.rank),
+  estarsStore.leaderboard.filter((entry) => entry.rank <= 3).sort((a, b) => a.rank - b.rank),
 )
-const rest = computed(() => mockEstarsLeaderboard.filter((entry) => entry.rank > 3))
+const rest = computed(() => estarsStore.leaderboard.filter((entry) => entry.rank > 3))
 
 const tierMeta = {
   1: {
@@ -94,94 +111,103 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
         </UButton>
       </div>
 
-      <div class="mt-8 grid grid-cols-1 items-center gap-4 md:grid-cols-3">
-        <div
-          v-for="entry in topThree"
-          :key="entry.id"
-          :class="[tierMeta[entry.rank as 1 | 2 | 3].order, tierMeta[entry.rank as 1 | 2 | 3].card]"
-          class="flex flex-col items-center gap-3 rounded-3xl text-center"
-        >
+      <div
+        v-if="estarsStore.loading"
+        class="flex min-h-[40vh] items-center justify-center text-sm text-slate-400"
+      >
+        Loading leaderboard...
+      </div>
+
+      <template v-else>
+        <div class="mt-8 grid grid-cols-1 items-center gap-4 md:grid-cols-3">
           <div
-            :class="tierMeta[entry.rank as 1 | 2 | 3].medal"
-            class="flex h-11 w-11 items-center justify-center rounded-full"
+            v-for="entry in topThree"
+            :key="entry.id"
+            :class="[tierMeta[entry.rank as 1 | 2 | 3].order, tierMeta[entry.rank as 1 | 2 | 3].card]"
+            class="flex flex-col items-center gap-3 rounded-3xl text-center"
           >
-            <PhMedal :size="22" weight="fill" />
-          </div>
-          <p
-            :class="tierMeta[entry.rank as 1 | 2 | 3].accent"
-            class="text-xs font-semibold tracking-wide uppercase"
-          >
-            {{ tierMeta[entry.rank as 1 | 2 | 3].label }}
-          </p>
-
-          <UAvatar
-            :src="entry.avatarUrl ?? undefined"
-            :size="tierMeta[entry.rank as 1 | 2 | 3].avatarSize"
-            class="bg-white/10 text-slate-300"
-          >
-            <PhUserCircle :size="36" />
-          </UAvatar>
-
-          <div>
-            <p :class="tierMeta[entry.rank as 1 | 2 | 3].nameClass" class="font-bold text-white">
-              {{ entry.displayName }}
+            <div
+              :class="tierMeta[entry.rank as 1 | 2 | 3].medal"
+              class="flex h-11 w-11 items-center justify-center rounded-full"
+            >
+              <PhMedal :size="22" weight="fill" />
+            </div>
+            <p
+              :class="tierMeta[entry.rank as 1 | 2 | 3].accent"
+              class="text-xs font-semibold tracking-wide uppercase"
+            >
+              {{ tierMeta[entry.rank as 1 | 2 | 3].label }}
             </p>
-            <UBadge color="neutral" variant="soft" size="sm" class="mt-1.5 rounded-full text-xs">
-              {{ entry.category }}
-            </UBadge>
+
+            <UAvatar
+              :src="entry.avatarUrl ?? undefined"
+              :size="tierMeta[entry.rank as 1 | 2 | 3].avatarSize"
+              class="bg-white/10 text-slate-300"
+            >
+              <PhUserCircle :size="36" />
+            </UAvatar>
+
+            <div>
+              <p :class="tierMeta[entry.rank as 1 | 2 | 3].nameClass" class="font-bold text-white">
+                {{ entry.displayName }}
+              </p>
+              <UBadge color="neutral" variant="soft" size="sm" class="mt-1.5 rounded-full text-xs">
+                {{ entry.category ?? '—' }}
+              </UBadge>
+            </div>
+
+            <p class="inline-flex items-center gap-1 text-sm text-slate-300">
+              <PhStar :size="14" weight="fill" class="text-amber-400" />
+              {{ entry.rating ? entry.rating.toFixed(entry.rating % 1 === 0 ? 1 : 2) : '--' }}
+            </p>
+
+            <p
+              :class="tierMeta[entry.rank as 1 | 2 | 3].coinsClass"
+              class="inline-flex items-center gap-1.5 font-bold text-white"
+            >
+              <img :src="coinIcon" alt="" class="h-5 w-5" />
+              {{ entry.coins.toLocaleString() }}
+            </p>
           </div>
+        </div>
 
-          <p class="inline-flex items-center gap-1 text-sm text-slate-300">
-            <PhStar :size="14" weight="fill" class="text-amber-400" />
-            {{ entry.rating.toFixed(entry.rating % 1 === 0 ? 1 : 2) }}
-          </p>
-
-          <p
-            :class="tierMeta[entry.rank as 1 | 2 | 3].coinsClass"
-            class="inline-flex items-center gap-1.5 font-bold text-white"
+        <div class="mt-8 divide-y divide-white/10 border-t border-white/10">
+          <div
+            v-for="entry in rest"
+            :key="entry.id"
+            class="flex items-center gap-4 py-4"
           >
-            <img :src="coinIcon" alt="" class="h-5 w-5" />
-            {{ entry.coins.toLocaleString() }}
-          </p>
-        </div>
-      </div>
+            <span class="w-8 shrink-0 font-semibold text-slate-400">#{{ entry.rank }}</span>
 
-      <div class="mt-8 divide-y divide-white/10 border-t border-white/10">
-        <div
-          v-for="entry in rest"
-          :key="entry.id"
-          class="flex items-center gap-4 py-4"
-        >
-          <span class="w-8 shrink-0 font-semibold text-slate-400">#{{ entry.rank }}</span>
+            <UAvatar :src="entry.avatarUrl ?? undefined" size="md" class="shrink-0 bg-white/10 text-slate-300">
+              <PhUserCircle :size="20" />
+            </UAvatar>
 
-          <UAvatar :src="entry.avatarUrl ?? undefined" size="md" class="shrink-0 bg-white/10 text-slate-300">
-            <PhUserCircle :size="20" />
-          </UAvatar>
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-semibold text-white">{{ entry.displayName }}</p>
+              <p class="truncate text-sm text-slate-400">{{ entry.category ?? '—' }}</p>
+            </div>
 
-          <div class="min-w-0 flex-1">
-            <p class="truncate font-semibold text-white">{{ entry.displayName }}</p>
-            <p class="truncate text-sm text-slate-400">{{ entry.category }}</p>
+            <span class="hidden shrink-0 items-center gap-1 text-sm text-slate-300 sm:inline-flex">
+              <PhStar :size="14" weight="fill" class="text-amber-400" />
+              {{ entry.rating ? entry.rating.toFixed(entry.rating % 1 === 0 ? 1 : 2) : '--' }}
+            </span>
+
+            <span class="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-white">
+              <img :src="coinIcon" alt="" class="h-4 w-4" />
+              {{ entry.coins.toLocaleString() }}
+            </span>
+
+            <component
+              :is="trendIcon[entry.trend]"
+              :size="16"
+              weight="bold"
+              :class="trendClass[entry.trend]"
+              class="shrink-0"
+            />
           </div>
-
-          <span class="hidden shrink-0 items-center gap-1 text-sm text-slate-300 sm:inline-flex">
-            <PhStar :size="14" weight="fill" class="text-amber-400" />
-            {{ entry.rating.toFixed(entry.rating % 1 === 0 ? 1 : 2) }}
-          </span>
-
-          <span class="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-white">
-            <img :src="coinIcon" alt="" class="h-4 w-4" />
-            {{ entry.coins.toLocaleString() }}
-          </span>
-
-          <component
-            :is="trendIcon[entry.trend]"
-            :size="16"
-            weight="bold"
-            :class="trendClass[entry.trend]"
-            class="shrink-0"
-          />
         </div>
-      </div>
+      </template>
     </div>
   </div>
 </template>

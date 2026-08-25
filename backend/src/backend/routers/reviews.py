@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.auth import get_current_user_id
+from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
 
@@ -107,6 +108,14 @@ def create_review(payload: ReviewCreateIn, user_id: str = Depends(get_current_us
     ).execute()
 
     _recompute_after_review(client, booking.data["service_id"], booking.data["player_id"])
+
+    player = client.table("players").select("user_id").eq("id", booking.data["player_id"]).maybe_single().execute()
+    pal_user_id = (player.data or {}).get("user_id") if player else None
+    if pal_user_id:
+        service = client.table("services").select("name").eq("id", booking.data["service_id"]).maybe_single().execute()
+        service_name = (service.data or {}).get("name") if service else None
+        service_name = service_name or "your service"
+        notify(pal_user_id, "review", f"{author} left you a {payload.rating}-star review on {service_name}.")
 
     row = client.table("reviews").select("*").eq("id", review_id).single().execute().data
     return {**row, "author": author}

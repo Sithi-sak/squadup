@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   PhList,
@@ -27,6 +27,17 @@ const mobileMenuOpen = ref(false)
 const searchQuery = ref('')
 
 const isAuthenticated = computed(() => route.meta.authenticated === true)
+
+/** Bell badge needs to be populated across every authenticated page, not just `/notifications`,
+ * so it's fetched here rather than per-view - re-fires whenever a session is (re)established
+ * (initial mount once `authStore.init()` resolves, or a fresh login). */
+watch(
+  () => authStore.user,
+  (user) => {
+    if (user) notificationsStore.fetchNotifications()
+  },
+  { immediate: true },
+)
 
 const navLinks = [
   { label: 'Discover', to: '/home' },

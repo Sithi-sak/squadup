@@ -1,15 +1,33 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { useNotificationsStore } from '@/stores/notifications'
 import { notificationIcon, formatNotificationTime, isNotificationToday } from '@/utils/notifications'
 
 const store = useNotificationsStore()
+const toast = useToast()
 
 const tab = ref<'all' | 'unread'>('all')
 
 const filtered = computed(() => (tab.value === 'unread' ? store.unread : store.notifications))
 const today = computed(() => filtered.value.filter((n) => isNotificationToday(n.createdAt)))
 const earlier = computed(() => filtered.value.filter((n) => !isNotificationToday(n.createdAt)))
+
+onMounted(() => {
+  store.fetchNotifications()
+})
+
+async function markAllRead() {
+  try {
+    await store.markAllRead()
+  } catch (err) {
+    toast.add({
+      title: 'Could not mark all as read',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
 </script>
 
 <template>
@@ -20,7 +38,7 @@ const earlier = computed(() => filtered.value.filter((n) => !isNotificationToday
         <button
           type="button"
           class="cursor-pointer text-sm font-medium text-brand-400 hover:text-brand-300"
-          @click="store.markAllRead()"
+          @click="markAllRead"
         >
           Mark all read
         </button>
@@ -47,8 +65,10 @@ const earlier = computed(() => filtered.value.filter((n) => !isNotificationToday
         </UButton>
       </div>
 
+      <p v-if="store.loading" class="mt-10 text-center text-sm text-slate-400">Loading notifications...</p>
+
       <UEmpty
-        v-if="filtered.length === 0"
+        v-else-if="filtered.length === 0"
         title="No notifications"
         description="You're all caught up. New activity will show up here."
         class="py-16 text-white"

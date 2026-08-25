@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import Field
 
 from ..core.auth import get_current_user_id
+from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
 
@@ -85,7 +86,7 @@ class BookingOut(CamelModel):
 # Helpers -----------------------------------------------------------------------------------
 
 _SELECT = (
-    "*, players(display_name, avatar_url), services(name), users(display_name), "
+    "*, players(display_name, avatar_url, user_id), services(name), users(display_name), "
     "booking_addons(id, label, price_coins), reviews(id)"
 )
 
@@ -105,6 +106,19 @@ def _booking_out(row: dict) -> dict:
         "addons": row.get("booking_addons") or [],
         "has_review": bool(row.get("reviews")),
     }
+
+
+def _booking_names(row: dict) -> tuple[str, str, str | None, str]:
+    """(pal_name, buyer_name, pal_user_id, service_name) for building notification copy. Seed
+    Pals have no `players.user_id` (2.3 note), so `pal_user_id` is `None` when there's nobody
+    real to notify."""
+    player = row.get("players") or {}
+    service = row.get("services") or {}
+    buyer = row.get("users") or {}
+    pal_name = player.get("display_name") or "Your Pal"
+    buyer_name = buyer.get("display_name") or "A buyer"
+    service_name = service.get("name") or row["service_type_label"]
+    return pal_name, buyer_name, player.get("user_id"), service_name
 
 
 def _fetch_booking(client, booking_id: str) -> dict:
@@ -211,7 +225,11 @@ def create_booking(payload: BookingCreateIn, user_id: str = Depends(get_current_
             }
         ).execute()
 
-    return _booking_out(_fetch_booking(client, booking_id))
+    created = _fetch_booking(client, booking_id)
+    _, buyer_name, pal_user_id, service_name = _booking_names(created)
+    if pal_user_id:
+        notify(pal_user_id, "booking", f"{buyer_name} requested to book {service_name}.")
+    return _booking_out(created)
 
 
 @router.get("/mine", response_model=list[BookingOut])
@@ -264,7 +282,10 @@ def accept_booking(booking_id: str, user_id: str = Depends(get_current_user_id))
     client = get_supabase_client()
     _require_pal_booking(client, booking_id, user_id, expected_status="pending")
     client.table("bookings").update({"status": "accepted"}).eq("id", booking_id).execute()
-    return _booking_out(_fetch_booking(client, booking_id))
+    updated = _fetch_booking(client, booking_id)
+    pal_name, _, _, service_name = _booking_names(updated)
+    notify(updated["user_id"], "booking", f"{pal_name} accepted your booking for {service_name}.")
+    return _booking_out(updated)
 
 
 @router.post("/{booking_id}/decline", response_model=BookingOut)
@@ -272,7 +293,10 @@ def decline_booking(booking_id: str, user_id: str = Depends(get_current_user_id)
     client = get_supabase_client()
     _require_pal_booking(client, booking_id, user_id, expected_status="pending")
     client.table("bookings").update({"status": "declined"}).eq("id", booking_id).execute()
-    return _booking_out(_fetch_booking(client, booking_id))
+    updated = _fetch_booking(client, booking_id)
+    pal_name, _, _, service_name = _booking_names(updated)
+    notify(updated["user_id"], "booking", f"{pal_name} declined your booking for {service_name}.")
+    return _booking_out(updated)
 
 
 @router.post("/{booking_id}/complete", response_model=BookingOut)
@@ -280,7 +304,10 @@ def complete_booking(booking_id: str, user_id: str = Depends(get_current_user_id
     client = get_supabase_client()
     _require_pal_booking(client, booking_id, user_id, expected_status="accepted")
     client.table("bookings").update({"status": "completed"}).eq("id", booking_id).execute()
-    return _booking_out(_fetch_booking(client, booking_id))
+    updated = _fetch_booking(client, booking_id)
+    pal_name, _, _, service_name = _booking_names(updated)
+    notify(updated["user_id"], "booking", f"Your session for {service_name} with {pal_name} is complete.")
+    return _booking_out(updated)
 
 
 @router.post("/{booking_id}/cancel", response_model=BookingOut)
@@ -304,7 +331,16 @@ def cancel_booking(booking_id: str, payload: CancelIn, user_id: str = Depends(ge
         }
     ).execute()
     client.table("bookings").update({"status": "declined"}).eq("id", booking_id).execute()
-    return _booking_out(_fetch_booking(client, booking_id))
+    updated = _fetch_booking(client, booking_id)
+    pal_name, buyer_name, pal_user_id, service_name = _booking_names(updated)
+    if user_id == updated["user_id"]:
+        # the buyer cancelled - notify the Pal
+        if pal_user_id:
+            notify(pal_user_id, "booking", f"{buyer_name} cancelled the booking for {service_name}.")
+    else:
+        # the Pal cancelled - notify the buyer
+        notify(updated["user_id"], "booking", f"{pal_name} cancelled the booking for {service_name}.")
+    return _booking_out(updated)
 
 
 @router.post("/{booking_id}/dispute", status_code=status.HTTP_201_CREATED)

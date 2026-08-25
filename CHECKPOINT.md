@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.9 (Wallet & payouts) done; next up is 3.10 (Notifications endpoint)
+- **Next task:** 3.10 (Notifications endpoint) done; next up is 3.11 (Subscriptions endpoint)
 - **Last updated:** 2026-08-25
 
 ---
@@ -933,7 +933,64 @@ unchecked box until the whole thing is done.
         errors noted since 3.1k - `StepRates.vue`/`RefundModal.vue` unused vars), and `ruff check`
         all clean. Manual browser walkthrough skipped per standing instruction not to run the `run`
         skill in this project.
-- [ ] 3.10 Notifications endpoint (create on booking/message/review/payout events, mark read) + connect to header dropdown and Notifications page
+- [x] 3.10 Notifications endpoint (create on booking/message/review/payout events, mark read) + connect to header dropdown and Notifications page
+  - [x] 3.10a Backend: new `core/notify.py` (`notify(user_id, type, message)`, a plain
+        `notifications` insert) shared by `bookings.py`/`messages.py`/`reviews.py`/`wallet.py`
+        rather than duplicating the insert shape in each, same "shared helper, one-directional
+        import" approach as 3.8h's cross-router `players.py` → `feed.py` call. `follow`/`service`
+        events (both already in the `notification_type` enum from 2.3) are out of scope per the
+        checklist line naming only booking/message/review/payout; `gift`/`streak` have no real
+        event source at all and stay mock-only in the frontend union.
+  - [x] 3.10b Backend: `routers/notifications.py` rewritten from its 2.1 empty skeleton -
+        `GET /notifications` (mine, newest first, capped at 50 same as `wallet.py`'s activity
+        feed), `POST /notifications/read-all`, `POST /notifications/{id}/read` (404s on a
+        notification that isn't the caller's, same ownership-check shape as every other
+        `_get_owned_*` helper elsewhere).
+  - [x] 3.10c Backend: event wiring. `bookings.py` - `players(display_name, avatar_url, user_id)`
+        added to the shared `_SELECT` embed (a new `_booking_names()` helper reads pal
+        name/buyer name/pal user_id/service name off it) so `create_booking` notifies the Pal,
+        and `accept`/`decline`/`complete` notify the buyer; `cancel` notifies whichever party
+        didn't initiate it. Seed-Pal bookings with no `players.user_id` (2.3 note) simply have
+        nobody to notify, guarded by an `if pal_user_id` check. `messages.py` - `send_message`
+        notifies the thread's other participant with a quoted, truncated (60-char) preview.
+        `reviews.py` - `create_review` looks up the reviewed service's Pal `user_id` and notifies
+        them. `wallet.py` - `create_withdrawal` notifies the Pal themself once the withdrawal
+        lands (status stays `in_progress`, so the copy says "requested"/"processing" rather than
+        claiming it's already paid out, unlike the mock fixture's "completed" wording).
+  - [x] 3.10d Backend: live smoke test against the real Supabase project (a throwaway buyer + Pal
+        through real HTTP with real bearer tokens against a local uvicorn, exercising every wired
+        event in sequence: create booking → Pal notified, accept → buyer notified, complete →
+        buyer notified, review → Pal notified, decline (2nd booking) → buyer notified, cancel by
+        buyer (3rd booking) → Pal notified, send message → other participant notified, top-up +
+        withdrawal → Pal notified with the real fee-adjusted coin amount, mark one read, mark all
+        read, no-bearer-token 401, non-owner mark-read 404. 25/25 checks passed with no bugs
+        found. Cleanup needed to delete each booking/service/player/thread row before the
+        `auth.users` delete - confirms the 3.1e note that `auth.users` deletion doesn't cascade
+        to `players`/`services`/`bookings` in this schema; not a new issue, just the first smoke
+        test in this task to hit every one of those tables at once. All rows/users cleaned up
+        after, verified empty.
+  - [x] 3.10e Frontend: `stores/notifications.ts` rewritten around real
+        `fetchNotifications`/`markAllRead`/`markRead` calls against `/notifications...`, mock
+        fallback on `fetchNotifications` failure only (same resilience convention as
+        `stores/players.ts`/etc.); the two mutations are real-only, matching
+        `feedStore.toggleLike`'s convention. `AppNotification`'s shape (`id`/`type`/`message`/
+        `createdAt`/`read`) needed no changes, it already matched `NotificationOut` exactly.
+  - [x] 3.10f Frontend: `AppHeader.vue` now fetches notifications whenever a session is
+        (re)established (`watch(() => authStore.user, ..., { immediate: true })`), since the bell
+        badge/panel need real data across every authenticated page, not just `/notifications` -
+        this is the one place in the app a global chrome component owns a fetch a specific view
+        doesn't trigger itself. `NotificationsView.vue` additionally fetches on its own mount (a
+        direct/deep link to `/notifications` shouldn't depend on header mount order), gained a
+        loading guard so the empty state doesn't flash before the fetch resolves (same
+        `WalletView.vue` convention from 3.9e), and its "Mark all read" link now awaits the real
+        mutation with a toast on failure. `NotificationPanel.vue`'s "Mark all read" and per-row
+        click-to-read both call the real mutations too; a failed per-row mark-read stays silent
+        (no toast) since a stray unread dot on a dropdown row isn't worth interrupting the user
+        for, "Mark all read" failing does surface a toast since it's a deliberate action.
+  - [x] 3.10g Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (the `eslint`
+        run surfaces only the same two pre-existing unrelated errors noted since 3.1k -
+        `StepRates.vue`/`RefundModal.vue` unused vars). Manual browser walkthrough skipped per
+        standing instruction not to run the `run` skill in this project.
 - [ ] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)
 - [ ] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)
 - [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals

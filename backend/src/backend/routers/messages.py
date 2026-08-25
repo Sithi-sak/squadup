@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.auth import get_current_user_id
+from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
 
@@ -195,11 +196,19 @@ def send_message(thread_id: str, payload: SendMessageIn, user_id: str = Depends(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Message body cannot be empty")
 
     client = get_supabase_client()
-    _get_thread(client, thread_id, user_id)
+    thread = _get_thread(client, thread_id, user_id)
 
     created = (
         client.table("messages")
         .insert({"thread_id": thread_id, "sender_id": user_id, "body": body})
         .execute()
     )
+
+    is_a = thread["user_a_id"] == user_id
+    sender = (thread.get("user_a") if is_a else thread.get("user_b")) or {}
+    sender_name = sender.get("display_name") or "Someone"
+    other_user_id = thread["user_b_id"] if is_a else thread["user_a_id"]
+    preview = body if len(body) <= 60 else f"{body[:57]}..."
+    notify(other_user_id, "message", f'{sender_name} sent you a message: "{preview}"')
+
     return created.data[0]

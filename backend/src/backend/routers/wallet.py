@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.auth import get_current_user_id
+from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
 
@@ -271,5 +272,6 @@ def create_withdrawal(payload: WithdrawalCreateIn, user_id: str = Depends(get_cu
         coins=-payload.coins,
         txn_status="pending",
     )
+    notify(user_id, "payout", f"Withdrawal of {payload.coins} SC requested. It's now processing.")
 
     return client.table("withdrawals").select("*").eq("id", withdrawal_id).single().execute().data

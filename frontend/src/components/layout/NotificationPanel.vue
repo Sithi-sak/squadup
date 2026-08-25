@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { useNotificationsStore } from '@/stores/notifications'
 import { notificationIcon, formatNotificationTime } from '@/utils/notifications'
 
@@ -8,6 +9,7 @@ const props = defineProps<{ close?: () => void }>()
 
 const router = useRouter()
 const store = useNotificationsStore()
+const toast = useToast()
 
 const tab = ref<'all' | 'unread'>('all')
 
@@ -20,6 +22,26 @@ function goToAll() {
   props.close?.()
   router.push('/notifications')
 }
+
+async function markAllRead() {
+  try {
+    await store.markAllRead()
+  } catch (err) {
+    toast.add({
+      title: 'Could not mark all as read',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
+async function markRead(id: string) {
+  try {
+    await store.markRead(id)
+  } catch {
+    // silent - a stray unread dot on a panel row isn't worth a toast
+  }
+}
 </script>
 
 <template>
@@ -29,7 +51,7 @@ function goToAll() {
       <button
         type="button"
         class="cursor-pointer text-sm font-medium text-brand-400 hover:text-brand-300"
-        @click="store.markAllRead()"
+        @click="markAllRead"
       >
         Mark all read
       </button>
@@ -71,7 +93,7 @@ function goToAll() {
         :key="notification.id"
         type="button"
         class="flex w-full cursor-pointer items-start gap-3 border-b border-white/5 px-4 py-3 text-left last:border-b-0 hover:bg-white/5"
-        @click="store.markRead(notification.id)"
+        @click="markRead(notification.id)"
       >
         <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600">
           <component :is="notificationIcon[notification.type]" :size="18" weight="bold" class="text-white" />

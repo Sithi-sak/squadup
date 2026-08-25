@@ -1211,6 +1211,49 @@ unchecked box until the whole thing is done.
         unused vars). Manual browser walkthrough skipped per standing instruction not to run the
         `run` skill in this project.
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
+  - [x] 3.14a Backend: new `routers/admin.py` (currently an empty stub) — `GET /admin/flagged-players`
+        (join `admin_flags` → `players` for `displayName`/`avatarUrl`, and → `users` via
+        `reported_by` for a display name, shape matches `AdminFlaggedPlayer`) and
+        `PATCH /admin/flagged-players/{id}/status` (body: `status`, expected to be one of
+        `flagged_player_status`'s four values, matching `AdminFlaggedPlayersPanel.vue`'s Dismiss/
+        Reviewing/Take action buttons — not validated against the enum in Python, same
+        pass-through-to-Postgres convention as `CancelIn.refund_option`/`DisputeIn.outcome` in
+        `routers/bookings.py`). No auth dependency — `stores/admin.ts`'s mock-credential gate
+        (`admin@squadup.gg`, session-only) is explicitly the only guard until real admin auth
+        ships (per the 1.15 checkpoint note), so these routes stay open like the rest of the
+        unauthenticated surface, not behind `get_current_user_id`.
+  - [ ] 3.14b Backend: `GET /admin/disputes` (join `order_disputes` → `bookings` → buyer `users` +
+        Pal `players`/`users` + `services` for `orderNumber`/`buyerName`/`palName`/`serviceLabel`,
+        shape matches `AdminDispute`) and `PATCH /admin/disputes/{id}/status` (one of
+        `dispute_status`'s four values). "Refund buyer" only flips status to `refunded` (+ sets
+        `resolved_at`) — no wallet crediting, matching the existing precedent that
+        `order_cancellations`/`order_disputes`'s `refund_coins` is already just a recorded amount
+        with no `wallet_transactions` write anywhere in the codebase (real payment/refund
+        integration is Phase 4). Dispute creation itself already exists (`POST
+        /bookings/{id}/dispute`, 2.3-era) — this task only adds the admin read/status-update side.
+  - [ ] 3.14c Backend: `GET /admin/overview` — `totalUsers`/`totalPals` (counts on `users`/
+        `players`), `ordersToday` (`bookings` created today), `coinsInEscrow` (sum of in-flight
+        booking totals, define precisely once booking status values are back in front of me),
+        `reportsThisWeek` (count of `admin_flags` grouped by day, last 7 days, `M`/`T`/`W`/`T`/`F`/
+        `S`/`S` labels matching `mockAdminOverviewStats`). Register `admin.router` stays as-is in
+        `routers/__init__.py` (already wired).
+  - [ ] 3.14d Backend: live smoke test against the real Supabase project (throwaway flagged-player
+        and dispute rows through real HTTP: list + status-update both endpoints, list overview,
+        confirm numbers move), same shape as 3.13d. Throwaway script, not committed.
+  - [ ] 3.14e Frontend: extend `stores/admin.ts` with `flaggedPlayers`/`disputes`/`overview` state
+        fetched from `/admin/...`, mock fallback on failure (same convention as every other Phase 3
+        store) — the existing `isAuthenticated`/`login`/`logout` mock-credential gate is untouched,
+        this task only adds data fetching once past that gate.
+  - [ ] 3.14f Frontend: `AdminFlaggedPlayersPanel.vue` wired to the store — `onMounted` fetch,
+        loading/empty states (same pattern as 3.13f/g), Dismiss/Reviewing/Take action buttons call
+        the store's status-update action with a busy state + toast on failure instead of mutating
+        the local `flags` ref directly.
+  - [ ] 3.14g Frontend: `AdminDisputesPanel.vue` wired the same way — Investigate/Resolve/Refund
+        buyer call the store's status-update action.
+  - [ ] 3.14h Frontend: `AdminOverviewPanel.vue` wired to the store's `overview`/`flaggedPlayers`/
+        `disputes` state instead of the `mocks/admin.ts` imports.
+  - [ ] 3.14i Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean; manual browser
+        walkthrough skipped per standing instruction not to run the `run` skill in this project.
 - [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
 - [ ] 3.16 Clean out mock/demo data and fallback logic (do last, once every 3.x feature above is
       backend-wired)

@@ -1,19 +1,28 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { PhCopy, PhDotsThree, PhPlus, PhUserCircle } from '@phosphor-icons/vue'
 import type { PlayerProfile, PlayerSummary } from '@/stores/players'
+import { useSubscriptionsStore } from '@/stores/subscriptions'
 import SubscriptionModal from './SubscriptionModal.vue'
 import ReportProfileModal from '@/components/modals/ReportProfileModal.vue'
 import BlockProfileModal from '@/components/modals/BlockProfileModal.vue'
 
-defineProps<{ player: PlayerSummary; profile: PlayerProfile }>()
+const props = defineProps<{ player: PlayerSummary; profile: PlayerProfile }>()
 
 function copyLink() {
   navigator.clipboard?.writeText(window.location.href)
 }
 
+const subscriptionsStore = useSubscriptionsStore()
+onMounted(() => {
+  subscriptionsStore.fetchSubscriptions()
+})
+
+const subscribed = computed(() =>
+  subscriptionsStore.list.some((s) => s.status === 'active' && s.playerId === props.player.id),
+)
+
 const subscriptionModalOpen = ref(false)
-const subscribed = ref(false)
 
 const reportModalOpen = ref(false)
 const blockModalOpen = ref(false)
@@ -117,11 +126,12 @@ function confirmBlock() {
 
     <SubscriptionModal
       v-model:open="subscriptionModalOpen"
+      :player-id="player.id"
+      :service-id="profile.highlightedServiceId"
       :pal-name="player.displayName"
       :tagline="player.tagline ?? profile.tier"
       :rating="player.rating"
       :subscriber-count="profile.followersCount"
-      @subscribe="subscribed = true"
     />
 
     <ReportProfileModal v-model:open="reportModalOpen" :handle="profile.handle" @submit="submitReport" />

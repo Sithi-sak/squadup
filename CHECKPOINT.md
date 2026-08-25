@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.11d (wire `SubscriptionsView.vue` to the store) done; next up is 3.11e (wire `ProfileHeader.vue` + `SubscriptionModal.vue`)
+- **Next task:** 3.11 (Subscriptions endpoint + frontend wiring) done; next up is 3.12 (Estars leaderboard)
 - **Last updated:** 2026-08-25
 
 ---
@@ -991,7 +991,7 @@ unchecked box until the whole thing is done.
         run surfaces only the same two pre-existing unrelated errors noted since 3.1k -
         `StepRates.vue`/`RefundModal.vue` unused vars). Manual browser walkthrough skipped per
         standing instruction not to run the `run` skill in this project.
-- [ ] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)
+- [x] 3.11 Subscriptions endpoint: recurring buyer→Pal billing state, cancel/resubscribe + connect to Subscriptions page (cut if short)
   - [x] 3.11a Backend: `routers/subscriptions.py` (currently an empty skeleton from 2.1) —
         `GET /subscriptions/mine` (buyer's own `subscriptions` rows joined to `players` for
         `palName`/`rating`/`serviceLabel`, matching `mocks/subscriptions.ts`'s `Subscription`
@@ -1044,14 +1044,20 @@ unchecked box until the whole thing is done.
         state on its button, mirroring the per-row loading convention in `PlayerOrdersView.vue`/
         `MyBookingsView.vue`. `vue-tsc --build` and `eslint` both clean (same two pre-existing
         unrelated errors noted since 3.1k).
-  - [ ] 3.11e Frontend: `ProfileHeader.vue` + `SubscriptionModal.vue` wired — `confirmSubscribe`
-        calls `subscriptionsStore.subscribe(...)` instead of only emitting a local `subscribed =
-        true` that resets on reload; the button's subscribed/not-subscribed state reads whether
-        `subscriptionsStore.list` already has an active row for this `playerId` (fetched on
-        profile mount) rather than a component-local ref.
-  - [ ] 3.11f Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (expect only
-        the same two pre-existing unrelated eslint errors noted since 3.1k). Manual browser
-        walkthrough skipped per standing instruction not to run the `run` skill in this project.
+  - [x] 3.11e Frontend: `ProfileHeader.vue` + `SubscriptionModal.vue` wired — `confirmSubscribe`
+        now calls `subscriptionsStore.subscribe(playerId, serviceId, plan)` directly (moved into
+        the modal itself, which took on new `playerId`/`serviceId` props from `ProfileHeader`,
+        plus a `submitting` guard on the Subscribe button and a toast on failure) instead of just
+        emitting a local `subscribed = true` that reset on reload. `ProfileHeader.vue` fetches
+        `subscriptionsStore.fetchSubscriptions()` `onMounted` and the button's subscribed state is
+        now a computed checking `subscriptionsStore.list` for an active row matching
+        `player.id`, replacing the old component-local ref entirely (the `@subscribe` emit was
+        dropped since the store list update alone drives the button reactively). `serviceId` is
+        passed as `profile.highlightedServiceId`.
+  - [x] 3.11f Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (same two
+        pre-existing unrelated eslint errors noted since 3.1k, `StepRates.vue`/`RefundModal.vue`
+        unused vars). Manual browser walkthrough skipped per standing instruction not to run the
+        `run` skill in this project.
 - [ ] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)
 - [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)

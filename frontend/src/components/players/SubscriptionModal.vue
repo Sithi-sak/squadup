@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhCheck, PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
+import { useSubscriptionsStore } from '@/stores/subscriptions'
 
 const props = withDefaults(
   defineProps<{
+    playerId: string
+    serviceId?: string | null
     palName: string
     tagline: string
     rating: number | null
@@ -17,7 +21,9 @@ const props = withDefaults(
 
 const open = defineModel<boolean>('open', { required: true })
 
-const emit = defineEmits<{ subscribe: [plan: 'monthly' | 'quarterly'] }>()
+const subscriptionsStore = useSubscriptionsStore()
+const toast = useToast()
+const submitting = ref(false)
 
 const perks = [
   '20% off every service, always',
@@ -46,9 +52,20 @@ function formatSubscriberCount(count: number) {
   return `${count}`
 }
 
-function confirmSubscribe() {
-  emit('subscribe', plan.value)
-  open.value = false
+async function confirmSubscribe() {
+  submitting.value = true
+  try {
+    await subscriptionsStore.subscribe(props.playerId, props.serviceId ?? undefined, plan.value)
+    open.value = false
+  } catch (err) {
+    toast.add({
+      title: "Couldn't subscribe",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -149,7 +166,14 @@ function confirmSubscribe() {
                 {{ dueTodayCoins.toLocaleString() }}
               </p>
             </div>
-            <UButton color="primary" size="lg" class="rounded-full px-8" @click="confirmSubscribe">
+            <UButton
+              color="primary"
+              size="lg"
+              class="rounded-full px-8"
+              :loading="submitting"
+              :disabled="submitting"
+              @click="confirmSubscribe"
+            >
               Subscribe
             </UButton>
           </div>

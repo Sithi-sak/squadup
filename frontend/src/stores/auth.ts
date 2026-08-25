@@ -1,7 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { User } from '@supabase/supabase-js'
+import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { useSettingsStore } from '@/stores/settings'
 
 export interface AuthUser {
   id: string
@@ -66,6 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
       } = await supabase.auth.getSession()
       user.value = session ? await loadAuthUser(session.user) : null
       loading.value = false
+      if (user.value) useSettingsStore().touchSession()
 
       supabase.auth.onAuthStateChange(async (_event, session) => {
         user.value = session ? await loadAuthUser(session.user) : null
@@ -88,6 +91,15 @@ export const useAuthStore = defineStore('auth', () => {
     reset()
   }
 
+  /** Settings' "Delete account" flow: `DELETE /users/me` cascades the whole account graph
+   * server-side (3.13c), then clears the local Supabase session same as `signOut()` since the
+   * account (and its refresh token) no longer exists. */
+  async function deleteAccount() {
+    await api.delete('/users/me')
+    await supabase.auth.signOut()
+    reset()
+  }
+
   return {
     user,
     loading,
@@ -97,5 +109,6 @@ export const useAuthStore = defineStore('auth', () => {
     init,
     signInWithGoogle,
     signOut,
+    deleteAccount,
   }
 })

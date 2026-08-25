@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhDesktop, PhDeviceMobile } from '@phosphor-icons/vue'
-import { mockAccountDetails, mockActiveSessions } from '@/mocks/settings'
+import { mockAccountDetails } from '@/mocks/settings'
+import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 import SettingsSelectRow from './SettingsSelectRow.vue'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 import SettingsActionRow from './SettingsActionRow.vue'
@@ -10,10 +13,18 @@ import TwoFactorAuthModal from '@/components/modals/TwoFactorAuthModal.vue'
 import DeleteAccountModal from '@/components/modals/DeleteAccountModal.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
+const toast = useToast()
+
+onMounted(() => {
+  settingsStore.fetchSessions()
+})
 
 const twoFactorEnabled = ref(false)
 const twoFactorModalOpen = ref(false)
 const deleteAccountModalOpen = ref(false)
+const deletingAccount = ref(false)
 const loginAlerts = ref('Email')
 const loginAlertOptions = ['Email', 'Push', 'Off']
 
@@ -23,14 +34,37 @@ const maskedPhone = computed(() => {
   return `${parts[0]} ••• ${parts[parts.length - 1]}`
 })
 
-const sessions = ref(mockActiveSessions.map((session) => ({ ...session })))
+const signingOutId = ref<string | null>(null)
+const signingOutOthers = ref(false)
 
-function signOutSession(sessionId: string) {
-  sessions.value = sessions.value.filter((session) => session.id !== sessionId)
+async function signOutSession(sessionId: string) {
+  signingOutId.value = sessionId
+  try {
+    await settingsStore.signOutSession(sessionId)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't sign out session",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    signingOutId.value = null
+  }
 }
 
-function signOutAllOthers() {
-  sessions.value = sessions.value.filter((session) => session.current)
+async function signOutAllOthers() {
+  signingOutOthers.value = true
+  try {
+    await settingsStore.signOutOtherSessions()
+  } catch (err) {
+    toast.add({
+      title: "Couldn't sign out other devices",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    signingOutOthers.value = false
+  }
 }
 
 function handleTwoFactorToggle(value: boolean) {
@@ -46,9 +80,22 @@ function confirmTwoFactor() {
   twoFactorModalOpen.value = false
 }
 
-function confirmDeleteAccount() {
-  deleteAccountModalOpen.value = false
-  router.push('/')
+async function confirmDeleteAccount() {
+  if (deletingAccount.value) return
+  deletingAccount.value = true
+  try {
+    await authStore.deleteAccount()
+    deleteAccountModalOpen.value = false
+    router.push('/')
+  } catch (err) {
+    toast.add({
+      title: "Couldn't delete account",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    deletingAccount.value = false
+  }
 }
 </script>
 
@@ -70,8 +117,14 @@ function confirmDeleteAccount() {
 
     <div class="rounded-xl bg-gray-800/70 p-5">
       <h2 class="text-lg font-semibold text-white">Active sessions</h2>
-      <div class="flex flex-col divide-y divide-white/10">
-        <div v-for="session in sessions" :key="session.id" class="flex items-center justify-between gap-4 py-4">
+      <p v-if="settingsStore.sessionsLoading" class="py-2 text-sm text-slate-400">Loading sessions...</p>
+      <p v-else-if="settingsStore.sessions.length === 0" class="py-2 text-sm text-slate-400">No active sessions.</p>
+      <div v-else class="flex flex-col divide-y divide-white/10">
+        <div
+          v-for="session in settingsStore.sessions"
+          :key="session.id"
+          class="flex items-center justify-between gap-4 py-4"
+        >
           <div class="flex items-center gap-3">
             <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-slate-300">
               <PhDeviceMobile v-if="session.device.includes('iPhone')" :size="18" />
@@ -91,6 +144,8 @@ function confirmDeleteAccount() {
             variant="soft"
             size="sm"
             class="rounded-full"
+            :loading="signingOutId === session.id"
+            :disabled="signingOutId === session.id"
             @click="signOutSession(session.id)"
           >
             Sign out
@@ -99,12 +154,13 @@ function confirmDeleteAccount() {
       </div>
 
       <button
-        v-if="sessions.length > 1"
+        v-if="settingsStore.sessions.length > 1"
         type="button"
-        class="mt-2 w-full cursor-pointer text-center text-sm font-medium text-red-400 hover:text-red-300"
+        class="mt-2 w-full cursor-pointer text-center text-sm font-medium text-red-400 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="signingOutOthers"
         @click="signOutAllOthers"
       >
-        Sign out of all other devices
+        {{ signingOutOthers ? 'Signing out...' : 'Sign out of all other devices' }}
       </button>
     </div>
 

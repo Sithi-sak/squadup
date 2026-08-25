@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.13e/3.13f (Settings payments frontend) done; next up is 3.13g (Security tab + delete account)
+- **Next task:** 3.13 (Settings backend) done; next up is 3.14 (Admin endpoints)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1102,7 +1102,7 @@ unchecked box until the whole thing is done.
         pre-existing unrelated eslint errors noted since 3.1k, `StepRates.vue`/`RefundModal.vue`
         unused vars). Manual browser walkthrough skipped per standing instruction not to run the
         `run` skill in this project.
-- [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, account deletion
+- [x] 3.13 Settings backend: payment cards CRUD, active sessions/device list, account deletion
       (2FA enrollment stays a disabled stub, no backing OTP provider) + connect to Settings tabs
       and the Delete Account modal
   - [x] 3.13a Backend: new `routers/settings.py` — `GET /settings/payment-cards`,
@@ -1190,16 +1190,26 @@ unchecked box until the whole thing is done.
         wallet, not `payment_cards`, out of this task's scope. `vue-tsc --build` clean; `eslint`
         clean (same two pre-existing unrelated errors noted since 3.1k —
         `StepRates.vue`/`RefundModal.vue` unused vars).
-  - [ ] 3.13g Frontend: `SettingsSecurityTab.vue` wired to the store — sessions list/sign-out/
-        sign-out-all, `DeleteAccountModal` confirm calls the real delete-account endpoint, signs
-        the user out, and routes to `/`. Two-factor authentication stays a disabled/inert toggle
-        (`TwoFactorAuthModal` untouched, no backend call) since there's no OTP provider to back
-        it, same boundary as the payment-card "+ Add" stubs. `SettingsAccountTab.vue`'s
-        "Deactivate account" also stays a disabled stub, it's a separate action from deletion and
-        out of this task's scope line.
-  - [ ] 3.13h Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean. Manual
-        browser walkthrough skipped per standing instruction not to run the `run` skill in this
-        project.
+  - [x] 3.13g Frontend: `SettingsSecurityTab.vue` wired to the store — `onMounted` calls
+        `fetchSessions()` with loading/"No active sessions" empty states (same convention as
+        3.13f), "Sign out" gets a per-session `signingOutId` busy state and "Sign out of all
+        other devices" its own busy flag, both with a toast on failure. `DeleteAccountModal`
+        confirm calls a new `authStore.deleteAccount()` (`stores/auth.ts` — `DELETE /users/me`
+        then `supabase.auth.signOut()` + `reset()`, since the account's refresh token is dead
+        once the row is gone), guarded by a `deletingAccount` ref against double-fire (same
+        pattern `PlayerServicesView.vue`'s `handleDelete` used, `ConfirmModal` has no built-in
+        loading prop), then routes to `/`; a failure toasts instead and leaves the modal open.
+        Also resolved `stores/settings.ts`'s `touchSession` upsert, left dangling since 3.13e:
+        `stores/auth.ts`'s `init()` now calls it once after the initial session/user load so the
+        Security tab's session list reflects real logins instead of staying empty forever.
+        Two-factor authentication stays a disabled/inert toggle (`TwoFactorAuthModal` untouched,
+        no backend call) since there's no OTP provider to back it, same boundary as the
+        payment-card "+ Add" stubs. `SettingsAccountTab.vue`'s "Deactivate account" also stays a
+        disabled stub, it's a separate action from deletion and out of this task's scope line.
+  - [x] 3.13h Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean (same two
+        pre-existing unrelated eslint errors noted since 3.1k — `StepRates.vue`/`RefundModal.vue`
+        unused vars). Manual browser walkthrough skipped per standing instruction not to run the
+        `run` skill in this project.
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
 - [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
 - [ ] 3.16 Clean out mock/demo data and fallback logic (do last, once every 3.x feature above is

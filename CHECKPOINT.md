@@ -1137,12 +1137,27 @@ unchecked box until the whole thing is done.
         from the local array"), so wiring real per-device JWT revocation here would be scope
         beyond what either this checklist line or the existing frontend behavior asks for. `ruff
         check` clean; routes confirmed registered via `app.openapi()['paths']`.
-  - [ ] 3.13c Backend: account deletion — `DELETE /users/me`, calling
-        `supabase.auth.admin.delete_user()` after explicitly cleaning up `players`/`services`
-        (and their dependents) first. This is the cascade gap flagged in 3.1e: deleting an
-        `auth.users` row only cascades to `public.users` via the 2.3 FK, not `players`/
-        `services`, so either add `on delete cascade` there in this migration or delete those
-        rows in Python before the auth call — pick one, don't leave it unresolved.
+  - [x] 3.13c Backend: account deletion — `DELETE /users/me`
+        (`routers/users.py`), calling `supabase.auth.admin.delete_user()` with no Python-side
+        pre-cleanup. Resolved the 3.1e cascade gap via migration instead of Python: a new
+        `supabase/migrations/20260825141921_account_deletion_cascade.sql` re-points every FK on
+        the path from `auth.users` down (`players.user_id`, plus every `NO ACTION` edge that
+        would've otherwise blocked the delete — `bookings`/`subscriptions`/`withdrawals`'s
+        `player_id`, `bookings`/`subscriptions`/`message_threads`/`reviews`/`comments`/
+        `order_cancellations`/`order_disputes`'s user-referencing columns) to `on delete
+        cascade`, so one `delete_user()` call walks the whole graph — `auth.users` → `public.users`
+        → `players` → `services` → everything already cascading from those two (pricing options,
+        promotions, album/wish, posts, payout methods, admin flags, reviews, saved items) — in a
+        single DB transaction. `admin_flags.reported_by` got `on delete set null` instead (it's
+        nullable and a flag against a *different* player should outlive the reporter's account).
+        Accepted tradeoff, documented in the migration: this also erases bookings/reviews/
+        messages/subscriptions/disputes the deleted account was party to, including the
+        counterparty's copy — no soft-delete/anonymization layer exists in this schema, and a
+        hard delete is what "Delete Account" already promises in the Settings copy. Pushed to the
+        linked project with `bunx supabase db push`, migration applied clean on the first try
+        (confirms every guessed default constraint name — Postgres's `{table}_{column}_fkey`
+        convention — was right). `ruff check` clean; `DELETE /users/me` confirmed registered via
+        `app.openapi()['paths']`.
   - [ ] 3.13d Backend: live smoke test against the real Supabase project (throwaway user through
         real HTTP with a real bearer token: seed + list + set-default + remove a payment card,
         seed + list a session + sign-out-one + sign-out-others, then delete the account and

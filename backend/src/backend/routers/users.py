@@ -38,3 +38,10 @@ def update_me(payload: UserUpdateIn, user_id: str = Depends(get_current_user_id)
     if updates:
         get_supabase_client().table("users").update(updates).eq("id", user_id).execute()
     return _fetch_user(user_id)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(user_id: str = Depends(get_current_user_id)) -> None:
+    # `auth.users` -> `public.users` -> `players` -> everything else cascades in one transaction
+    # per the 3.13c migration, so no explicit pre-cleanup is needed here.
+    get_supabase_client().auth.admin.delete_user(user_id)

@@ -1102,7 +1102,66 @@ unchecked box until the whole thing is done.
         pre-existing unrelated eslint errors noted since 3.1k, `StepRates.vue`/`RefundModal.vue`
         unused vars). Manual browser walkthrough skipped per standing instruction not to run the
         `run` skill in this project.
-- [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals
+- [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, account deletion
+      (2FA enrollment stays a disabled stub, no backing OTP provider) + connect to Settings tabs
+      and the Delete Account modal
+  - [x] 3.13a Backend: new `routers/settings.py` — `GET /settings/payment-cards`,
+        `PATCH /settings/payment-cards/{id}/default`, `DELETE /settings/payment-cards/{id}`.
+        No `POST` reachable from the UI: `SettingsPaymentsTab.vue`'s "+ Add card" is a disabled
+        stub with no card-capture form (real tokenization is Phase 4 payment integration, same
+        boundary as `SettingsPaymentsTab.vue`'s "+ Add payout method"), so seed a couple of rows
+        per throwaway user during the 3.13d smoke test instead of exposing create. Setting a
+        default clears every other card's `is_default` for the caller first (two sequential
+        updates - no DB constraint enforces "at most one default", the guard lives entirely in
+        the handler), then flips the target row. Owner-guarded via a new `_get_owned_card`
+        (`payment_cards.user_id = caller`, 404 on any mismatch), same shape as `players.py`'s
+        `_get_owned_service`. `ruff check` clean; routes confirmed registered via
+        `app.openapi()['paths']`.
+  - [x] 3.13b Backend: active sessions — `GET /settings/sessions`, `DELETE
+        /settings/sessions/{id}`, `POST /settings/sessions/sign-out-others`, owner-guarded the
+        same way as payment cards (`_get_owned_session`). Resolved the write-path decision this
+        line raised: added a fourth route, `POST /settings/sessions` (upsert), meant to be called
+        from the frontend on auth init in 3.13g - "smoke-test-seeded only" would leave the list
+        permanently empty for every real account forever, unlike payment cards where that's an
+        acceptable Phase-4-boundary trade-off since a real add-card flow is coming later. Upserts
+        by `(user_id, device)`, where `device` is parsed from the `User-Agent` header into a
+        `"{Browser} · {OS}"` string (`_parse_device`, matching `mocks/settings.ts`'s
+        `"Chrome · macOS"` format) since there's no per-machine client-generated id to key on;
+        each touch also flips `is_current` on that row and clears it on every other session for
+        the user. `location` stays null - no IP-geolocation service wired, same "column
+        provisioned ahead of the feature that fills it" call the 2.4 storage-buckets note made for
+        `rank_verification_url`. `sign-out-others` deletes every non-current row rather than
+        calling Supabase's admin `sign_out(jwt, scope="others")` API - `active_sessions` is its
+        own bookkeeping table decoupled from real GoTrue sessions (2.3 never linked the two), and
+        1.14 already established this list as presentation-only ("'Sign out' removes a session
+        from the local array"), so wiring real per-device JWT revocation here would be scope
+        beyond what either this checklist line or the existing frontend behavior asks for. `ruff
+        check` clean; routes confirmed registered via `app.openapi()['paths']`.
+  - [ ] 3.13c Backend: account deletion — `DELETE /users/me`, calling
+        `supabase.auth.admin.delete_user()` after explicitly cleaning up `players`/`services`
+        (and their dependents) first. This is the cascade gap flagged in 3.1e: deleting an
+        `auth.users` row only cascades to `public.users` via the 2.3 FK, not `players`/
+        `services`, so either add `on delete cascade` there in this migration or delete those
+        rows in Python before the auth call — pick one, don't leave it unresolved.
+  - [ ] 3.13d Backend: live smoke test against the real Supabase project (throwaway user through
+        real HTTP with a real bearer token: seed + list + set-default + remove a payment card,
+        seed + list a session + sign-out-one + sign-out-others, then delete the account and
+        confirm the user/player/service rows are actually gone).
+  - [ ] 3.13e Frontend: new `stores/settings.ts` wired to `/settings/...`, same mock-fallback
+        resilience convention as every other Phase 3 store (falls back to `mocks/settings.ts` on
+        failure).
+  - [ ] 3.13f Frontend: `SettingsPaymentsTab.vue` wired to the store for list/set-default/remove;
+        "+ Add card" and "+ Add payout method" stay disabled stubs (no change, see 3.13a).
+  - [ ] 3.13g Frontend: `SettingsSecurityTab.vue` wired to the store — sessions list/sign-out/
+        sign-out-all, `DeleteAccountModal` confirm calls the real delete-account endpoint, signs
+        the user out, and routes to `/`. Two-factor authentication stays a disabled/inert toggle
+        (`TwoFactorAuthModal` untouched, no backend call) since there's no OTP provider to back
+        it, same boundary as the payment-card "+ Add" stubs. `SettingsAccountTab.vue`'s
+        "Deactivate account" also stays a disabled stub, it's a separate action from deletion and
+        out of this task's scope line.
+  - [ ] 3.13h Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean. Manual
+        browser walkthrough skipped per standing instruction not to run the `run` skill in this
+        project.
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
 - [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
 - [ ] 3.16 Clean out mock/demo data and fallback logic (do last, once every 3.x feature above is

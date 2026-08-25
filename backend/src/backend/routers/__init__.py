@@ -8,6 +8,7 @@ from . import (
     notifications,
     players,
     reviews,
+    settings,
     subscriptions,
     users,
     wallet,
@@ -26,4 +27,5 @@ routers = [
     subscriptions.router,
     estars.router,
     admin.router,
+    settings.router,
 ]

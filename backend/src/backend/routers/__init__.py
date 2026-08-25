@@ -2,6 +2,7 @@ from . import (
     admin,
     auth,
     bookings,
+    estars,
     feed,
     messages,
     notifications,
@@ -23,5 +24,6 @@ routers = [
     wallet.router,
     notifications.router,
     subscriptions.router,
+    estars.router,
     admin.router,
 ]

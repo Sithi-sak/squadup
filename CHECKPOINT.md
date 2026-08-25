@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.11 (Subscriptions endpoint + frontend wiring) done; next up is 3.12 (Estars leaderboard)
+- **Next task:** 3.12a (Estars leaderboard backend) done; next up is 3.12b (live smoke test)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1059,6 +1059,33 @@ unchecked box until the whole thing is done.
         unused vars). Manual browser walkthrough skipped per standing instruction not to run the
         `run` skill in this project.
 - [ ] 3.12 Estars leaderboard: ranking query over players by category/period + connect to Estars page (cut if short)
+  - [x] 3.12a Backend: new `routers/estars.py` (no skeleton exists from 2.1, unlike every other
+        router) — `GET /estars/leaderboard`, ranking players by coins earned from `completed`
+        bookings within a `period` param (`week`/`month`/`all_time`, rolling 7/30-day windows off
+        `created_at`, `all_time`/anything else = no cutoff), with an optional `category` filter,
+        aggregated in Python over one `bookings` fetch plus one batched `services` fetch (same
+        aggregate-in-Python + batched-highlighted-service pattern as `_match_score`/
+        `_compute_earnings`/`list_players`, 3.3a/3.7a/3.2a). No new table (per the 2.3 note this
+        is derivable from `bookings`). `category` is each player's highlighted service's `name`
+        (`category_by_service_id`, batched like `list_players`'s `services_by_id`); a player with
+        no highlighted service or zero coins in the window is simply excluded from the ranking
+        rather than shown with a null/zero row. `trend` has no historical rank snapshot to diff
+        against, so it's always `'flat'` — same "no data to derive it from" call as 3.7d's dropped
+        response-time stat, not dropped from the schema since the frontend type already expects it.
+        Registered in `routers/__init__.py` + `routers` list; confirmed via `app.openapi()['paths']`
+        that `/estars/leaderboard` registers correctly. `ruff check` clean.
+  - [ ] 3.12b Backend: live smoke test against the real Supabase project (throwaway players with
+        varied completed-booking coin totals across this week/this month/older, confirm ranking
+        order and period bucketing match hand-computed expectations, confirm category filter
+        narrows correctly, clean up after).
+  - [ ] 3.12c Frontend: new `stores/estars.ts` (`fetchLeaderboard(period, category)` against
+        `/estars/leaderboard`), same mock-fallback resilience convention as every other Phase 3
+        store (`mockEstarsLeaderboard` adapted at the store boundary on failure).
+  - [ ] 3.12d Frontend: `EstarsLeaderboardView.vue` wired to the store instead of
+        `mockEstarsLeaderboard` — period buttons and the category `USelect` trigger a refetch,
+        loading guard before the top-three/rest layout renders.
+  - [ ] 3.12e Verification: `vue-tsc --build`, `eslint`, and `ruff check` clean. Manual browser
+        walkthrough skipped per standing instruction not to run the `run` skill in this project.
 - [ ] 3.13 Settings backend: payment cards CRUD, active sessions/device list, 2FA enrollment, account deletion + connect to Settings tabs and the Two-Factor/Delete Account modals
 - [ ] 3.14 Admin endpoints: player verification/flagging, dispute handling (using the `AdminFlaggedPlayer`/`AdminDispute` shapes in `mocks/admin.ts`) (cut if short)
 - [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)

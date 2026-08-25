@@ -251,7 +251,7 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 ## Status
 
 - **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.11c (frontend `stores/subscriptions.ts`) done; next up is 3.11d (wire `SubscriptionsView.vue` to the store)
+- **Next task:** 3.11d (wire `SubscriptionsView.vue` to the store) done; next up is 3.11e (wire `ProfileHeader.vue` + `SubscriptionModal.vue`)
 - **Last updated:** 2026-08-25
 
 ---
@@ -1030,11 +1030,20 @@ unchecked box until the whole thing is done.
         `walletActivityFromMock`. Mock-derived rows get `playerId: ''`/`serviceId: null` since
         there's nothing real behind them to cancel/resubscribe anyway. `vue-tsc --build` and
         `eslint` both clean.
-  - [ ] 3.11d Frontend: `SubscriptionsView.vue` wired to the store instead of its local
+  - [x] 3.11d Frontend: `SubscriptionsView.vue` wired to the store instead of its local
         `ref(mockSubscriptions...)` copy — fetch on mount with a loading guard (same
         `WalletView.vue`/`NotificationsView.vue` convention from 3.9e/3.10f), `confirmCancel`/
         `resubscribe` call the real mutations with toast-on-failure instead of mutating the local
-        array directly.
+        array directly. Also picked up the store's renamed/retyped fields the view hadn't caught
+        up to yet: `sub.palName` → `sub.playerDisplayName`, `sub.rating` (string in the mock) is
+        now `number | null` (formatted `rating.toFixed(1)` / `'--'`, same convention as
+        `PlayerCard.vue`/`ProfileServicesTab.vue`/etc.), and `billingCycle` is lowercase
+        (`'monthly' | 'quarterly'`) instead of the mock's capitalized strings — a new
+        `billingCycleLabel()` helper capitalizes it for display (badge, Manage popover, and the
+        `CancelSubscriptionModal` prop). Resubscribe gets a per-row `resubscribingId` loading
+        state on its button, mirroring the per-row loading convention in `PlayerOrdersView.vue`/
+        `MyBookingsView.vue`. `vue-tsc --build` and `eslint` both clean (same two pre-existing
+        unrelated errors noted since 3.1k).
   - [ ] 3.11e Frontend: `ProfileHeader.vue` + `SubscriptionModal.vue` wired — `confirmSubscribe`
         calls `subscriptionsStore.subscribe(...)` instead of only emitting a local `subscribed =
         true` that resets on reload; the button's subscribed/not-subscribed state reads whether

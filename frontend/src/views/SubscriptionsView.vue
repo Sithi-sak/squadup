@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import CancelSubscriptionModal from '@/components/modals/CancelSubscriptionModal.vue'
-import { mockSubscriptions, type Subscription } from '@/mocks/subscriptions'
+import { useSubscriptionsStore, type Subscription } from '@/stores/subscriptions'
 
 /** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
 const COINS_PER_USD = 99
 
 const router = useRouter()
+const subscriptionsStore = useSubscriptionsStore()
+const toast = useToast()
 
-const subscriptions = ref<Subscription[]>(mockSubscriptions.map((sub) => ({ ...sub })))
+onMounted(() => {
+  subscriptionsStore.fetchSubscriptions()
+})
+
+const subscriptions = computed(() => subscriptionsStore.list)
 
 const tabs = [
   { key: 'active', label: 'Active' },
@@ -36,8 +43,8 @@ function formatShortDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function cycleLengthDays(cycle: Subscription['billingCycle']) {
-  return cycle === 'Quarterly' ? 90 : 30
+function billingCycleLabel(cycle: Subscription['billingCycle']) {
+  return cycle === 'quarterly' ? 'Quarterly' : 'Monthly'
 }
 
 const cancelModalOpen = ref(false)
@@ -49,17 +56,35 @@ function openCancelModal(subId: string) {
   cancelModalOpen.value = true
 }
 
-function confirmCancel() {
+async function confirmCancel() {
   const sub = cancelTarget.value
   if (!sub) return
-  sub.status = 'cancelled'
+  try {
+    await subscriptionsStore.cancelSubscription(sub.id)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't cancel subscription",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
 }
 
-function resubscribe(sub: Subscription) {
-  const renewsOn = new Date()
-  renewsOn.setDate(renewsOn.getDate() + cycleLengthDays(sub.billingCycle))
-  sub.status = 'active'
-  sub.renewsOn = renewsOn.toISOString().slice(0, 10)
+const resubscribingId = ref<string | null>(null)
+
+async function resubscribe(sub: Subscription) {
+  resubscribingId.value = sub.id
+  try {
+    await subscriptionsStore.resubscribe(sub.id)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't resubscribe",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    resubscribingId.value = null
+  }
 }
 </script>
 
@@ -108,8 +133,15 @@ function resubscribe(sub: Subscription) {
         </div>
       </div>
 
+      <div
+        v-if="subscriptionsStore.loading"
+        class="flex min-h-[40vh] items-center justify-center text-sm text-slate-400"
+      >
+        Loading subscriptions...
+      </div>
+
       <UEmpty
-        v-if="!visibleSubs.length"
+        v-else-if="!visibleSubs.length"
         :title="activeTab === 'active' ? 'No active subscriptions' : 'No cancelled subscriptions'"
         :description="
           activeTab === 'active'
@@ -135,10 +167,10 @@ function resubscribe(sub: Subscription) {
             </UAvatar>
             <div>
               <p class="flex items-center gap-1.5 font-semibold text-white">
-                {{ sub.palName }}
+                {{ sub.playerDisplayName }}
                 <span class="inline-flex items-center gap-1 text-sm font-medium text-amber-400">
                   <PhStar :size="14" weight="fill" />
-                  {{ sub.rating }}
+                  {{ sub.rating ? sub.rating.toFixed(1) : '--' }}
                 </span>
               </p>
               <p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-400">
@@ -148,7 +180,7 @@ function resubscribe(sub: Subscription) {
                   size="sm"
                   class="rounded-full"
                 >
-                  {{ sub.status === 'active' ? sub.billingCycle : 'Cancelled' }}
+                  {{ sub.status === 'active' ? billingCycleLabel(sub.billingCycle) : 'Cancelled' }}
                 </UBadge>
                 <span>{{ sub.serviceLabel }}</span>
                 <span v-if="sub.status === 'active'">· Renews {{ formatShortDate(sub.renewsOn) }}</span>
@@ -169,8 +201,10 @@ function resubscribe(sub: Subscription) {
                   <UButton color="neutral" variant="soft" size="sm" class="rounded-full">Manage</UButton>
                   <template #content>
                     <div class="w-64 p-4">
-                      <p class="text-sm font-semibold text-white">{{ sub.palName }}</p>
-                      <p class="mt-1 text-xs text-slate-400">{{ sub.billingCycle }} · {{ sub.serviceLabel }}</p>
+                      <p class="text-sm font-semibold text-white">{{ sub.playerDisplayName }}</p>
+                      <p class="mt-1 text-xs text-slate-400">
+                        {{ billingCycleLabel(sub.billingCycle) }} · {{ sub.serviceLabel }}
+                      </p>
                       <div class="mt-3 flex items-center justify-between rounded-xl bg-gray-900/60 p-3">
                         <span class="text-xs text-slate-400">Renews</span>
                         <span class="text-xs font-medium text-white">{{ formatShortDate(sub.renewsOn) }}</span>
@@ -198,7 +232,14 @@ function resubscribe(sub: Subscription) {
                   Cancel
                 </UButton>
               </template>
-              <UButton v-else color="primary" size="sm" class="rounded-full" @click="resubscribe(sub)">
+              <UButton
+                v-else
+                color="primary"
+                size="sm"
+                class="rounded-full"
+                :loading="resubscribingId === sub.id"
+                @click="resubscribe(sub)"
+              >
                 Resubscribe
               </UButton>
             </div>
@@ -208,8 +249,8 @@ function resubscribe(sub: Subscription) {
 
       <CancelSubscriptionModal
         v-model:open="cancelModalOpen"
-        :pal-name="cancelTarget?.palName ?? ''"
-        :billing-cycle="cancelTarget?.billingCycle ?? ''"
+        :pal-name="cancelTarget?.playerDisplayName ?? ''"
+        :billing-cycle="cancelTarget ? billingCycleLabel(cancelTarget.billingCycle) : ''"
         :price-coins="cancelTarget?.priceCoins ?? 0"
         :access-until="cancelTarget ? formatShortDate(cancelTarget.renewsOn) : ''"
         @confirm="confirmCancel"

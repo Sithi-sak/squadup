@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { PhCalendarBlank, PhCaretLeft, PhCreditCard } from '@phosphor-icons/vue'
+import { PhCalendarBlank, PhCaretLeft } from '@phosphor-icons/vue'
 import { CalendarDateTime, getLocalTimeZone, now, toCalendarDate, type CalendarDate } from '@internationalized/date'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
@@ -19,7 +19,10 @@ const player = computed(() => mockPlayers.find((p) => p.id === draft.value?.play
 const profile = computed(() => (player.value ? getPlayerProfile(player.value) : null))
 const detail = computed(() => (draft.value ? profile.value?.serviceDetails[draft.value.serviceId] : null))
 
-const paymentMethod = ref<PaymentMethod>('coins')
+// Checkout is Squad Coin only (4.1j) - real money enters exclusively through Wallet Top-up, so
+// there's nothing left to toggle here, but the field stays on the payload since the backend's
+// `bookings.payment_method` column and historical bookings (`mocks/bookings.ts`) still allow 'card'.
+const paymentMethod: PaymentMethod = 'coins'
 const startChoice = ref<'now' | 'schedule'>('now')
 const scheduledAt = ref<CalendarDateTime>()
 const submitting = ref(false)
@@ -42,7 +45,7 @@ async function placeOrder() {
   submitting.value = true
   try {
     const booking = await bookingsStore.placeOrder({
-      paymentMethod: paymentMethod.value,
+      paymentMethod,
       scheduledFor:
         startChoice.value === 'schedule' && scheduledAt.value
           ? scheduledAt.value.toDate(getLocalTimeZone()).toISOString()
@@ -70,7 +73,7 @@ async function placeOrder() {
     </UEmpty>
   </div>
 
-  <div v-else class="mx-auto max-w-(--content-max-width) px-4 pt-8 pb-14 md:px-6">
+  <div v-else class="mx-auto max-w-4/5 px-4 pt-8 pb-14 md:px-6">
     <button
       type="button"
       class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white"
@@ -115,12 +118,7 @@ async function placeOrder() {
         <div class="rounded-xl bg-gray-800/70 p-5">
           <h2 class="text-lg font-bold text-white">Payment method</h2>
           <div class="mt-3 flex flex-col gap-3">
-            <button
-              type="button"
-              class="flex items-center justify-between gap-3 rounded-full px-4 py-3 text-left ring-1 ring-inset transition-colors"
-              :class="paymentMethod === 'coins' ? 'ring-brand-500 bg-brand-900/20' : 'ring-gray-700 hover:ring-gray-600'"
-              @click="paymentMethod = 'coins'"
-            >
+            <div class="ring-brand-500 bg-brand-900/20 flex items-center justify-between gap-3 rounded-full px-4 py-3 ring-1 ring-inset">
               <span class="flex items-center gap-3">
                 <img :src="coinIcon" alt="" class="h-6 w-6" />
                 <span>
@@ -128,38 +126,18 @@ async function placeOrder() {
                   <span class="block text-xs text-slate-400">{{ mockCurrentUser.coinBalance.toLocaleString() }} SC available</span>
                 </span>
               </span>
-              <span
-                class="flex size-5 shrink-0 items-center justify-center rounded-full ring-1 ring-inset"
-                :class="paymentMethod === 'coins' ? 'bg-brand-500 ring-brand-500' : 'ring-slate-500'"
-              >
-                <span v-if="paymentMethod === 'coins'" class="size-2 rounded-full bg-white" />
+              <span class="bg-brand-500 ring-brand-500 flex size-5 shrink-0 items-center justify-center rounded-full ring-1 ring-inset">
+                <span class="size-2 rounded-full bg-white" />
               </span>
-            </button>
+            </div>
 
-            <p v-if="paymentMethod === 'coins'" class="text-xs font-medium text-brand-400">
+            <p class="text-xs font-medium text-brand-400">
               After this order: {{ remainingBalance.toLocaleString() }} SC left
             </p>
 
-            <button
-              type="button"
-              class="flex items-center justify-between gap-3 rounded-full px-4 py-3 text-left ring-1 ring-inset transition-colors"
-              :class="paymentMethod === 'card' ? 'ring-brand-500 bg-brand-900/20' : 'ring-gray-700 hover:ring-gray-600'"
-              @click="paymentMethod = 'card'"
-            >
-              <span class="flex items-center gap-3">
-                <PhCreditCard :size="24" class="text-slate-300" />
-                <span>
-                  <span class="block font-medium text-white">Credit / debit card</span>
-                  <span class="block text-xs text-slate-400">Visa, Mastercard, Amex</span>
-                </span>
-              </span>
-              <span
-                class="flex size-5 shrink-0 items-center justify-center rounded-full ring-1 ring-inset"
-                :class="paymentMethod === 'card' ? 'bg-brand-500 ring-brand-500' : 'ring-slate-500'"
-              >
-                <span v-if="paymentMethod === 'card'" class="size-2 rounded-full bg-white" />
-              </span>
-            </button>
+            <p class="text-xs text-slate-400">
+              Out of Squad Coin? <router-link to="/wallet" class="text-brand-400 hover:underline">Top up your wallet</router-link>.
+            </p>
           </div>
         </div>
 

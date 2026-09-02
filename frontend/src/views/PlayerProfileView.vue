@@ -45,7 +45,7 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
 </script>
 
 <template>
-  <div class="mx-auto max-w-(--content-max-width) px-4 pt-8 pb-14 md:px-6">
+  <div class="mx-auto max-w-4/5 px-4 pt-8 pb-14 md:px-6">
     <div v-if="loading" class="py-16 text-center text-sm text-slate-400">Loading profile...</div>
 
     <template v-else>

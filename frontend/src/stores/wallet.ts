@@ -173,14 +173,26 @@ export const useWalletStore = defineStore('wallet', () => {
     }
   }
 
-  /** Wallet's "Confirm Top-Up" - mock payment (real processor is Phase 4). No mock fallback,
-   * a real mutation only, same convention as `feedStore.createPost`. */
-  async function topUp(packageId: string, paymentLabel?: string) {
+  /** Step 1 of Wallet Top-up - creates a Stripe PaymentIntent for the chosen package
+   * (`routers/wallet.py`'s `POST /topup/payment-intent`, 4.1c). `WalletView.vue` confirms the
+   * returned `clientSecret` client-side with Stripe Elements (a card form on the page, same
+   * pattern PawMart's Checkout uses), then calls `confirmTopup` with the resulting
+   * `paymentIntentId`. */
+  async function createTopupPaymentIntent(packageId: string) {
+    return api.post<{ clientSecret: string; paymentIntentId: string }>('/wallet/topup/payment-intent', {
+      packageId,
+    })
+  }
+
+  /** Step 2 - the actual credit. The backend re-verifies the PaymentIntent against Stripe before
+   * trusting it (4.1d), so this is a real mutation, not a "trust the client" call. No mock
+   * fallback, same convention as `feedStore.createPost`. */
+  async function confirmTopup(packageId: string, paymentIntentId: string) {
     const result = await api.post<{
       balanceCoins: number
       pendingClearanceCoins: number
       activity: WalletActivity[]
-    }>('/wallet/topup', { packageId, paymentLabel })
+    }>('/wallet/topup', { packageId, paymentIntentId })
     balance.value = result.balanceCoins
     pendingClearanceCoins.value = result.pendingClearanceCoins
     activity.value = result.activity
@@ -242,7 +254,8 @@ export const useWalletStore = defineStore('wallet', () => {
     withdrawalsError,
     fetchWallet,
     fetchTopupPackages,
-    topUp,
+    createTopupPaymentIntent,
+    confirmTopup,
     fetchPayoutMethods,
     fetchWithdrawals,
     requestWithdrawal,

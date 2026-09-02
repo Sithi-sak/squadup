@@ -1,8 +1,10 @@
 from uuid import uuid4
 
+import stripe
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.auth import get_current_user_id
+from ..core.config import get_settings
 from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
@@ -41,9 +43,18 @@ class WalletOut(CamelModel):
     activity: list[WalletActivityOut]
 
 
+class TopupPaymentIntentIn(CamelModel):
+    package_id: str
+
+
+class TopupPaymentIntentOut(CamelModel):
+    client_secret: str
+    payment_intent_id: str
+
+
 class TopupIn(CamelModel):
     package_id: str
-    payment_label: str | None = None
+    payment_intent_id: str
 
 
 class PayoutMethodOut(CamelModel):
@@ -102,6 +113,7 @@ def _record_transaction(
     detail: str | None,
     coins: int,
     txn_status: str = "completed",
+    stripe_payment_intent_id: str | None = None,
 ) -> None:
     client.table("wallet_transactions").insert(
         {
@@ -112,6 +124,7 @@ def _record_transaction(
             "label": label,
             "detail": detail,
             "coins": coins,
+            "stripe_payment_intent_id": stripe_payment_intent_id,
         }
     ).execute()
 
@@ -157,29 +170,76 @@ def list_topup_packages() -> list[dict]:
     return get_supabase_client().table("topup_packages").select("*").order("price_usd").execute().data or []
 
 
-@router.post("/topup", response_model=WalletOut, status_code=status.HTTP_201_CREATED)
-def top_up(payload: TopupIn, user_id: str = Depends(get_current_user_id)) -> dict:
-    """Mock payment (no real processor wired, that's Phase 4) - credits `coin_balance` and
-    writes a `wallet_transactions` row for the activity feed."""
+@router.post("/topup/payment-intent", response_model=TopupPaymentIntentOut, status_code=status.HTTP_201_CREATED)
+def create_topup_payment_intent(payload: TopupPaymentIntentIn, user_id: str = Depends(get_current_user_id)) -> dict:
+    """4.1c: creates a Stripe PaymentIntent for the chosen package's dollar amount - the frontend
+    confirms it client-side with Stripe Elements (a card form embedded on `/wallet`, same pattern
+    as PawMart's `POST /payment-intent`), then calls `POST /topup` with the resulting
+    `payment_intent_id`. Nothing is credited here; that endpoint verifies the charge actually
+    succeeded before crediting anything."""
     client = get_supabase_client()
     package = client.table("topup_packages").select("*").eq("id", payload.package_id).maybe_single().execute()
     if not package or not package.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Top-up package not found")
+
+    stripe.api_key = get_settings().stripe_secret_key
+    intent = stripe.PaymentIntent.create(
+        amount=round(package.data["price_usd"] * 100),
+        currency="usd",
+        payment_method_types=["card"],
+        metadata={"user_id": user_id, "package_id": payload.package_id},
+    )
+    return {"client_secret": intent.client_secret, "payment_intent_id": intent.id}
+
+
+@router.post("/topup", response_model=WalletOut, status_code=status.HTTP_201_CREATED)
+def top_up(payload: TopupIn, user_id: str = Depends(get_current_user_id)) -> dict:
+    """4.1d: the only place a top-up actually gets credited. Re-verifies the PaymentIntent
+    server-side against the Stripe API (status/amount/who it belongs to) rather than trusting the
+    client's word that payment succeeded - a client hitting this endpoint proves nothing on its
+    own, that was the old mock `POST /topup`'s exact flaw."""
+    client = get_supabase_client()
+    package = client.table("topup_packages").select("*").eq("id", payload.package_id).maybe_single().execute()
+    if not package or not package.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Top-up package not found")
+
+    stripe.api_key = get_settings().stripe_secret_key
+    try:
+        intent = stripe.PaymentIntent.retrieve(payload.payment_intent_id)
+    except stripe.error.StripeError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid payment intent") from exc
+
+    # StripeObject has no .get() - only __getitem__/__contains__, same gotcha PawMart hit.
+    intent_user_id = intent.metadata["user_id"] if "user_id" in intent.metadata else None  # noqa: SIM401
+    if intent_user_id != user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your payment")
+    if intent.status != "succeeded":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment has not succeeded")
+    if intent.amount != round(package.data["price_usd"] * 100):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment amount does not match package price")
 
     user = client.table("users").select("coin_balance").eq("id", user_id).maybe_single().execute()
     if not user or not user.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
     coins = package.data["coins"] + package.data["bonus_coins"]
+    try:
+        # Unique constraint on `stripe_payment_intent_id` (4.1b) rejects a second top-up for the
+        # same PaymentIntent - the idempotency guard against a double-submitted confirm.
+        _record_transaction(
+            client,
+            user_id,
+            kind="topup",
+            label="Top-up",
+            detail="Stripe",
+            coins=coins,
+            stripe_payment_intent_id=payload.payment_intent_id,
+        )
+    except Exception as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This payment has already been used") from exc
+
     client.table("users").update({"coin_balance": user.data["coin_balance"] + coins}).eq("id", user_id).execute()
-    _record_transaction(
-        client,
-        user_id,
-        kind="topup",
-        label="Top-up",
-        detail=payload.payment_label,
-        coins=coins,
-    )
+
     return _get_wallet(user_id)
 
 

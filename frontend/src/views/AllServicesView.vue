@@ -6,7 +6,8 @@ import chillingTileImage from '@/assets/chilling.jpg'
 import hobbiesImage from '@/assets/hobbies.jpg'
 import echatImage from '@/assets/echat.jpg'
 import watchTogetherImage from '@/assets/watch_together.jpg'
-import valorantCover from '@/assets/game_cover/valorant.png'
+import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
+import { games, type Game } from '@/data/games'
 
 type CategoryTab = 'games' | 'chilling'
 
@@ -15,12 +16,23 @@ const categoryTiles: { label: string; tab: CategoryTab; image: string }[] = [
   { label: 'Chilling', tab: 'chilling', image: chillingTileImage },
 ]
 
-const serviceCards = [
+const serviceCards: { label: string; to: string | { path: string; query: Record<string, string> }; image?: string; gameSlug?: string }[] = [
   { label: 'Hobbies Talk', to: '/players', image: hobbiesImage },
   { label: 'E-Chat', to: '/players', image: echatImage },
   { label: 'Watch Together', to: '/players', image: watchTogetherImage },
-  { label: 'Valorant', to: { path: '/players', query: { game: 'Valorant' } }, image: valorantCover },
+  { label: 'Valorant', to: { path: '/players', query: { game: 'Valorant' } }, gameSlug: 'valorant' },
 ]
+
+const coverFilenames = useCoverManifest()
+
+function coverSrc(slug: string): string | undefined {
+  const filename = coverFilenames.value.get(slug)
+  return filename ? gameCoverUrl(slug, filename) : undefined
+}
+
+function serviceCardImage(card: (typeof serviceCards)[number]): string | undefined {
+  return card.image ?? (card.gameSlug ? coverSrc(card.gameSlug) : undefined)
+}
 
 const drawerOpen = ref(false)
 const activeTab = ref<CategoryTab>('games')
@@ -37,30 +49,17 @@ function openDrawer(tab: CategoryTab) {
   drawerOpen.value = true
 }
 
-// Placeholder game catalog pending real cover art, mirrors the games already
-// used elsewhere in the app (mocks/players.ts, assets/game_cover).
-const games = [
-  'Apex Legends',
-  'CS2',
-  'Fortnite',
-  'Genshin Impact',
-  'League of Legends',
-  'Mobile Legends: Bang Bang',
-  'Overwatch 2',
-  'Valorant',
-]
-
 const gameGroups = computed(() => {
   const query = search.value.trim().toLowerCase()
   const filtered = games
-    .filter((name) => name.toLowerCase().includes(query))
-    .sort((a, b) => a.localeCompare(b))
+    .filter((game) => game.name.toLowerCase().includes(query))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
-  const groups = new Map<string, string[]>()
-  for (const name of filtered) {
-    const letter = name[0]!.toUpperCase()
+  const groups = new Map<string, Game[]>()
+  for (const game of filtered) {
+    const letter = game.name[0]!.toUpperCase()
     if (!groups.has(letter)) groups.set(letter, [])
-    groups.get(letter)!.push(name)
+    groups.get(letter)!.push(game)
   }
   return Array.from(groups.entries()).map(([letter, items]) => ({ letter, items }))
 })
@@ -127,8 +126,12 @@ const filteredChillingSections = computed(() => {
             :to="card.to"
             class="relative flex aspect-10/16 flex-col justify-end overflow-hidden rounded-xl bg-gray-800/70"
           >
-            <template v-if="card.image">
-              <img :src="card.image" :alt="card.label" class="absolute inset-0 h-full w-full object-cover" />
+            <template v-if="serviceCardImage(card)">
+              <img
+                :src="serviceCardImage(card)"
+                :alt="card.label"
+                class="absolute inset-0 h-full w-full object-cover"
+              />
               <div
                 class="absolute inset-0 bg-linear-to-t from-squadup-dark via-squadup-dark/15 to-transparent"
               />
@@ -198,12 +201,22 @@ const filteredChillingSections = computed(() => {
               <div class="grid grid-cols-3 gap-3 sm:grid-cols-4">
                 <router-link
                   v-for="game in group.items"
-                  :key="game"
-                  :to="{ path: '/players', query: { game } }"
-                  class="relative flex aspect-3/4 items-end overflow-hidden rounded-xl bg-white/5 p-3 ring-1 ring-white/10 transition-colors hover:bg-white/10"
+                  :key="game.id"
+                  :to="{ path: '/players', query: { game: game.name } }"
+                  class="relative flex aspect-2/3 items-end overflow-hidden rounded-xl p-3 transition-all hover:scale-105"
                   @click="drawerOpen = false"
                 >
-                  <span class="relative text-sm font-medium text-white">{{ game }}</span>
+                  <template v-if="coverSrc(game.id)">
+                    <img
+                      :src="coverSrc(game.id)"
+                      :alt="game.name"
+                      class="absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div
+                      class="absolute inset-0 bg-linear-to-t from-squadup-dark via-squadup-dark/15 to-transparent"
+                    />
+                  </template>
+                  <span class="relative text-sm font-medium text-white">{{ game.name }}</span>
                 </router-link>
               </div>
             </div>

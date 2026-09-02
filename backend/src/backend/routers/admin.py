@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
+from ..core.wallet import adjust_coin_balance
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -55,6 +56,7 @@ class AdminOverviewOut(CamelModel):
     total_pals: int
     orders_today: int
     coins_in_escrow: int
+    total_commission_coins: int
     reports_this_week: list[AdminReportDayOut]
 
 
@@ -155,7 +157,11 @@ def list_disputes() -> list[dict]:
 def update_dispute_status(dispute_id: str, payload: AdminDisputeStatusIn) -> dict:
     client = get_supabase_client()
     existing = (
-        client.table("order_disputes").select("id").eq("id", dispute_id).maybe_single().execute()
+        client.table("order_disputes")
+        .select("id, status, refund_coins, booking_id, bookings(user_id)")
+        .eq("id", dispute_id)
+        .maybe_single()
+        .execute()
     )
     if not existing or not existing.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dispute not found")
@@ -163,6 +169,25 @@ def update_dispute_status(dispute_id: str, payload: AdminDisputeStatusIn) -> dic
     update: dict = {"status": payload.status}
     if payload.status in ("resolved", "refunded"):
         update["resolved_at"] = datetime.now(UTC).isoformat()
+
+    # Only credit on the open->refunded transition, not on a redundant re-click of "Refund" once
+    # a dispute is already refunded - `refund_coins` is only ever set for a `full_refund` request
+    # (`routers/bookings.py`'s `dispute_booking`), so a `partial_refund`/`reporting` dispute has
+    # nothing to credit here until the admin UI grows a way to enter a partial amount.
+    if payload.status == "refunded" and existing.data["status"] != "refunded":
+        refund_coins = existing.data.get("refund_coins") or 0
+        buyer_id = (existing.data.get("bookings") or {}).get("user_id")
+        if refund_coins > 0 and buyer_id:
+            adjust_coin_balance(
+                client,
+                buyer_id,
+                refund_coins,
+                kind="refund",
+                label="Refund",
+                detail="Dispute resolved",
+                booking_id=existing.data["booking_id"],
+            )
+
     client.table("order_disputes").update(update).eq("id", dispute_id).execute()
     result = (
         client.table("order_disputes")
@@ -205,6 +230,11 @@ def get_overview() -> dict:
     )
     coins_in_escrow = sum(row["total_coins"] for row in escrow_rows)
 
+    commission_rows = (
+        client.table("bookings").select("commission_coins").eq("status", "completed").execute().data or []
+    )
+    total_commission_coins = sum(row["commission_coins"] for row in commission_rows)
+
     week_start = today_start.date() - timedelta(days=6)
     flag_rows = (
         client.table("admin_flags")
@@ -230,5 +260,6 @@ def get_overview() -> dict:
         "total_pals": total_pals,
         "orders_today": orders_today,
         "coins_in_escrow": coins_in_escrow,
+        "total_commission_coins": total_commission_coins,
         "reports_this_week": reports_this_week,
     }

@@ -15,15 +15,15 @@ import homeSpotlightImage from '@/assets/home-rec.jpg'
 import gamesTileImage from '@/assets/game.jpg'
 import chillingTileImage from '@/assets/chilling.jpg'
 import allServiceTileImage from '@/assets/all_service.jpg'
-import valorantCover from '@/assets/game_cover/valorant.png'
-import cs2Cover from '@/assets/game_cover/cs2.png'
-import apexLegendsCover from '@/assets/game_cover/apex_legend.png'
-import overwatch2Cover from '@/assets/game_cover/overwatch2.png'
-import fortniteCover from '@/assets/game_cover/fortnite.png'
-import leagueOfLegendsCover from '@/assets/game_cover/league_of_legend.png'
-import genshinImpactCover from '@/assets/game_cover/genshin_impact.png'
+import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
 
 const router = useRouter()
+const coverFilenames = useCoverManifest()
+
+function coverSrc(slug: string): string | undefined {
+  const filename = coverFilenames.value.get(slug)
+  return filename ? gameCoverUrl(slug, filename) : undefined
+}
 
 const spotlight = [...mockPlayers].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0]!
 
@@ -34,13 +34,13 @@ const tiles = [
 ]
 
 const games = [
-  { name: 'Valorant', pals: 145, cover: valorantCover },
-  { name: 'CS2', pals: 214, cover: cs2Cover },
-  { name: 'Apex Legends', pals: 3533, cover: apexLegendsCover },
-  { name: 'Overwatch 2', pals: 3533, cover: overwatch2Cover },
-  { name: 'Fortnite', pals: 6230, cover: fortniteCover },
-  { name: 'League of Legends', pals: 812, cover: leagueOfLegendsCover },
-  { name: 'Genshin Impact', pals: 1112, cover: genshinImpactCover },
+  { name: 'Valorant', pals: 145, slug: 'valorant' },
+  { name: 'CS2', pals: 214, slug: 'counter-strike-2' },
+  { name: 'Apex Legends', pals: 3533, slug: 'apex-legends' },
+  { name: 'Overwatch 2', pals: 3533, slug: 'overwatch-2' },
+  { name: 'Fortnite', pals: 6230, slug: 'fortnite' },
+  { name: 'League of Legends', pals: 812, slug: 'league-of-legends' },
+  { name: 'Genshin Impact', pals: 1112, slug: 'genshin-impact' },
 ]
 
 const eStars = computed(() =>
@@ -80,7 +80,7 @@ function goToProfile(id: string) {
   <div class="flex flex-col">
     <!-- eStar of the Week spotlight -->
     <section class="px-4 pt-8 md:px-6">
-      <div class="mx-auto max-w-(--content-max-width)">
+      <div class="mx-auto max-w-4/5">
         <div
           class="grid overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900/50 to-squadup-bg ring-1 ring-inset ring-white/10 md:grid-cols-2"
         >
@@ -119,7 +119,7 @@ function goToProfile(id: string) {
 
     <!-- Category tiles -->
     <section class="px-4 pt-6 md:px-6">
-      <div class="mx-auto grid max-w-(--content-max-width) grid-cols-1 gap-4 sm:grid-cols-3">
+      <div class="mx-auto grid max-w-4/5 grid-cols-1 gap-4 sm:grid-cols-3">
         <router-link
           v-for="tile in tiles"
           :key="tile.label"
@@ -136,7 +136,7 @@ function goToProfile(id: string) {
 
     <!-- Games rail -->
     <section class="px-4 py-10 md:px-6 md:py-14">
-      <div class="mx-auto max-w-(--content-max-width)">
+      <div class="mx-auto max-w-4/5">
         <div class="mb-5 flex items-center justify-between">
           <h2 class="text-xl font-semibold text-white">Browse by game</h2>
           <div class="hidden items-center gap-2 md:flex">
@@ -162,17 +162,18 @@ function goToProfile(id: string) {
         </div>
         <div
           ref="gamesRail"
-          class="scrollbar-none grid auto-cols-[200px] grid-flow-col gap-4 overflow-x-auto"
+          class="scrollbar-none grid auto-cols-50 grid-flow-col gap-4 overflow-x-auto"
           @scroll="updateGamesScrollState"
         >
           <router-link
             v-for="game in games"
             :key="game.name"
             :to="{ path: '/players', query: { game: game.name } }"
-            class="relative flex aspect-[10/16] flex-col justify-end overflow-hidden rounded-xl"
+            class="relative flex aspect-10/16 flex-col justify-end overflow-hidden rounded-xl"
           >
             <img
-              :src="game.cover"
+              v-if="coverSrc(game.slug)"
+              :src="coverSrc(game.slug)"
               :alt="game.name"
               class="absolute inset-0 h-full w-full object-cover"
             />
@@ -190,7 +191,7 @@ function goToProfile(id: string) {
 
     <!-- eStars -->
     <section class="px-4 pb-10 md:px-6">
-      <div class="mx-auto max-w-(--content-max-width)">
+      <div class="mx-auto max-w-4/5">
         <div class="mb-5 flex items-center justify-between">
           <h2 class="text-xl font-semibold text-white">eStars · Top Pals</h2>
           <router-link to="/players" class="text-sm font-medium text-brand-400 hover:text-brand-300">
@@ -219,7 +220,7 @@ function goToProfile(id: string) {
 
     <!-- More Pals -->
     <section class="px-4 pb-14 md:px-6">
-      <div class="mx-auto max-w-(--content-max-width)">
+      <div class="mx-auto max-w-4/5">
         <div class="mb-5 flex items-center justify-between">
           <h2 class="text-xl font-semibold text-white">More Pals</h2>
           <router-link to="/players" class="text-sm font-medium text-brand-400 hover:text-brand-300">
@@ -253,10 +254,10 @@ function goToProfile(id: string) {
               </div>
             </div>
             <div class="flex flex-wrap gap-1.5">
-              <UBadge v-if="player.rank" color="neutral" variant="soft" size="sm" class="rounded-full">
+              <UBadge v-if="player.rank" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">
                 {{ player.rank }}
               </UBadge>
-              <UBadge v-if="player.role" color="neutral" variant="soft" size="sm" class="rounded-full">
+              <UBadge v-if="player.role" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">
                 {{ player.role }}
               </UBadge>
             </div>

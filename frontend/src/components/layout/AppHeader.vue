@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import {
   PhList,
   PhMagnifyingGlass,
@@ -20,13 +20,12 @@ import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 const notificationsStore = useNotificationsStore()
 const authStore = useAuthStore()
 
-const route = useRoute()
 const router = useRouter()
 
 const mobileMenuOpen = ref(false)
 const searchQuery = ref('')
 
-const isAuthenticated = computed(() => route.meta.authenticated === true)
+const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 /** Bell badge needs to be populated across every authenticated page, not just `/notifications`,
  * so it's fetched here rather than per-view - re-fires whenever a session is (re)established

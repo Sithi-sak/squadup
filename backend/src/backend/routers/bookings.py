@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import Field
 
 from ..core.auth import get_current_user_id
+from ..core.config import get_settings
 from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
+from ..core.wallet import adjust_coin_balance, get_coin_balance
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
@@ -81,6 +83,8 @@ class BookingOut(CamelModel):
     scheduled_for: str | None
     created_at: str
     has_review: bool
+    commission_pct: float
+    commission_coins: int
 
 
 # Helpers -----------------------------------------------------------------------------------
@@ -189,6 +193,11 @@ def create_booking(payload: BookingCreateIn, user_id: str = Depends(get_current_
     if not service or not service.data or service.data["player_id"] != payload.player_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
 
+    # Checked up front, before the booking row exists, so an underfunded buyer never ends up
+    # with an orphaned `pending` booking that was never actually paid for.
+    if get_coin_balance(client, user_id) < payload.total_coins:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Insufficient Squad Coin balance")
+
     booking_id = str(uuid4())
     order_number = _generate_order_number(client)
 
@@ -224,6 +233,16 @@ def create_booking(payload: BookingCreateIn, user_id: str = Depends(get_current_
                 "price_coins": addon.price_coins,
             }
         ).execute()
+
+    adjust_coin_balance(
+        client,
+        user_id,
+        -payload.total_coins,
+        kind="order",
+        label="Order",
+        detail=payload.service_type_label,
+        booking_id=booking_id,
+    )
 
     created = _fetch_booking(client, booking_id)
     _, buyer_name, pal_user_id, service_name = _booking_names(created)
@@ -291,8 +310,19 @@ def accept_booking(booking_id: str, user_id: str = Depends(get_current_user_id))
 @router.post("/{booking_id}/decline", response_model=BookingOut)
 def decline_booking(booking_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
     client = get_supabase_client()
-    _require_pal_booking(client, booking_id, user_id, expected_status="pending")
+    booking = _require_pal_booking(client, booking_id, user_id, expected_status="pending")
     client.table("bookings").update({"status": "declined"}).eq("id", booking_id).execute()
+    # The buyer's coins were spent at create_booking time (Squad Coin deducted up front, not on
+    # acceptance); a declined booking was never fulfilled, so refund it in full.
+    adjust_coin_balance(
+        client,
+        booking["user_id"],
+        booking["total_coins"],
+        kind="refund",
+        label="Refund",
+        detail="Order declined",
+        booking_id=booking_id,
+    )
     updated = _fetch_booking(client, booking_id)
     pal_name, _, _, service_name = _booking_names(updated)
     notify(updated["user_id"], "booking", f"{pal_name} declined your booking for {service_name}.")
@@ -302,8 +332,28 @@ def decline_booking(booking_id: str, user_id: str = Depends(get_current_user_id)
 @router.post("/{booking_id}/complete", response_model=BookingOut)
 def complete_booking(booking_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
     client = get_supabase_client()
-    _require_pal_booking(client, booking_id, user_id, expected_status="accepted")
-    client.table("bookings").update({"status": "completed"}).eq("id", booking_id).execute()
+    booking = _require_pal_booking(client, booking_id, user_id, expected_status="accepted")
+    commission_pct = get_settings().platform_commission_pct
+    commission_coins = round(booking["total_coins"] * commission_pct / 100)
+    client.table("bookings").update(
+        {
+            "status": "completed",
+            "commission_pct": commission_pct,
+            "commission_coins": commission_coins,
+        }
+    ).eq("id", booking_id).execute()
+    # `_require_pal_booking` already proved `user_id` is the Pal fulfilling this booking, so
+    # there's no need to look up `players.user_id` separately (and no seed-Pal-with-no-account
+    # case here - only a real, authenticated Pal can call this at all).
+    adjust_coin_balance(
+        client,
+        user_id,
+        booking["total_coins"],
+        kind="order",
+        label="Order",
+        detail=booking.get("service_type_label"),
+        booking_id=booking_id,
+    )
     updated = _fetch_booking(client, booking_id)
     pal_name, _, _, service_name = _booking_names(updated)
     notify(updated["user_id"], "booking", f"Your session for {service_name} with {pal_name} is complete.")
@@ -331,6 +381,20 @@ def cancel_booking(booking_id: str, payload: CancelIn, user_id: str = Depends(ge
         }
     ).execute()
     client.table("bookings").update({"status": "declined"}).eq("id", booking_id).execute()
+
+    if payload.refund_coins > 0:
+        # Refund always lands on the buyer (`booking["user_id"]`), regardless of which party
+        # triggered the cancellation - they're the one whose coins were spent at create time.
+        adjust_coin_balance(
+            client,
+            booking["user_id"],
+            payload.refund_coins,
+            kind="refund",
+            label="Refund",
+            detail="Order cancelled",
+            booking_id=booking_id,
+        )
+
     updated = _fetch_booking(client, booking_id)
     pal_name, buyer_name, pal_user_id, service_name = _booking_names(updated)
     if user_id == updated["user_id"]:

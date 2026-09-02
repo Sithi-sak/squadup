@@ -135,7 +135,7 @@ function formatCount(count: number) {
     </div>
 
     <div v-else class="px-4 pt-8 md:px-6">
-      <div class="mx-auto max-w-(--content-max-width)">
+      <div class="mx-auto max-w-4/5">
         <div class="flex items-center gap-3">
           <UInput
             v-model="searchInput"
@@ -169,7 +169,7 @@ function formatCount(count: number) {
       </div>
     </div>
 
-    <div class="mx-auto max-w-(--content-max-width) px-4 pt-6 md:px-6">
+    <div class="mx-auto max-w-4/5 px-4 pt-6 md:px-6">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
         <div class="flex flex-wrap items-center gap-2">
           <template v-for="chip in chips" :key="chip.key">

@@ -36,6 +36,7 @@ export interface AdminOverviewStats {
   totalPals: number
   ordersToday: number
   coinsInEscrow: number
+  totalCommissionCoins: number
   reportsThisWeek: { day: string; count: number }[]
 }
 
@@ -44,6 +45,7 @@ export const mockAdminOverviewStats: AdminOverviewStats = {
   totalPals: 1180,
   ordersToday: 246,
   coinsInEscrow: 58400,
+  totalCommissionCoins: 41600,
   reportsThisWeek: [
     { day: 'M', count: 2 },
     { day: 'T', count: 4 },

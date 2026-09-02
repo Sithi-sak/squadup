@@ -44,7 +44,7 @@ async function markAllRead() {
         </button>
       </div>
 
-      <div class="mt-5 flex flex-wrap items-center gap-2">
+      <div class="my-5 flex flex-wrap items-center gap-2">
         <UButton
           :color="tab === 'all' ? 'primary' : 'neutral'"
           :variant="tab === 'all' ? 'solid' : 'soft'"

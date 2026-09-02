@@ -65,17 +65,17 @@ const visiblePosts = computed(() => {
         :key="post.id"
         class="relative aspect-square overflow-hidden rounded-lg bg-white/5 ring-1 ring-inset ring-white/10"
       >
-        <UBadge color="neutral" variant="solid" size="sm" class="absolute top-2 left-2 rounded-full bg-black/50">
+        <UBadge color="neutral" variant="solid" size="sm" class="absolute top-2 left-2 rounded-full bg-black/50 text-xs">
           {{ post.category }}
         </UBadge>
         <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-black/70 to-transparent p-2.5">
           <div class="flex min-w-0 items-center gap-1.5">
-            <UAvatar size="xs" class="shrink-0 bg-white/10 text-slate-300">
-              <PhUserCircle :size="14" />
+            <UAvatar size="sm" class="shrink-0 bg-white/10 text-slate-300">
+              <PhUserCircle :size="20" />
             </UAvatar>
-            <span class="truncate text-xs font-medium text-white">{{ post.author }}</span>
+            <span class="truncate text-sm font-medium text-white">{{ post.author }}</span>
           </div>
-          <span class="flex shrink-0 items-center gap-1 text-xs text-white">
+          <span class="flex shrink-0 items-center gap-1 text-sm text-white">
             <PhHeart :size="14" weight="fill" class="text-red-400" />
             {{ post.likes }}
           </span>

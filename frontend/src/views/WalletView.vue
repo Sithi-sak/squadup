@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
+import type { Stripe, StripeCardElement, StripeElements } from '@stripe/stripe-js'
 import { PhArrowUp, PhArrowDown, PhHourglass, PhArrowCounterClockwise, PhProhibit } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { mockPaymentCards } from '@/mocks/settings'
+import { stripePromise } from '@/lib/stripe'
 import { useWalletStore, type WalletActivity } from '@/stores/wallet'
 
 /** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
@@ -12,11 +14,14 @@ const COINS_PER_USD = 99
 
 const walletStore = useWalletStore()
 const toast = useToast()
+const route = useRoute()
 
 onMounted(() => {
   walletStore.fetchWallet()
   walletStore.fetchTopupPackages()
+  mountCardElement()
 })
+onBeforeUnmount(() => cardElement?.unmount())
 
 const balance = computed(() => walletStore.balance)
 const usdBalance = computed(() => (balance.value / COINS_PER_USD).toFixed(2))
@@ -25,9 +30,6 @@ const selectedPackageId = ref<string | null>(null)
 const basePackageId = computed(
   () => walletStore.topupPackages.find((p) => p.isBaseRate)?.id ?? walletStore.topupPackages[0]?.id ?? null,
 )
-
-const cardLabels = mockPaymentCards.map((card) => card.label)
-const selectedCardLabel = ref(mockPaymentCards.find((card) => card.isDefault)?.label ?? cardLabels[0])
 
 function activityIcon(activity: WalletActivity) {
   if (activity.status === 'blocked') return PhProhibit
@@ -49,13 +51,60 @@ function formatDateTime(iso: string) {
   return `${day} · ${time}`
 }
 
+// Stripe Elements card form (same mount pattern as PawMart's CheckoutView) - a card number/
+// expiry/CVC field embedded directly on this page, since Wallet Top-up confirms the charge
+// client-side rather than redirecting to a Stripe-hosted page.
+const cardElementRef = ref<HTMLDivElement | null>(null)
+const cardError = ref<string | null>(null)
+const cardComplete = ref(false)
+let stripe: Stripe | null = null
+let elements: StripeElements | null = null
+let cardElement: StripeCardElement | null = null
+
+async function mountCardElement() {
+  stripe ??= await stripePromise
+  if (!stripe || !cardElementRef.value) return
+
+  elements ??= stripe.elements()
+  cardElement = elements.create('card', {
+    hidePostalCode: true,
+    style: {
+      base: { color: '#dcdcdc', '::placeholder': { color: '#707070' } },
+    },
+  })
+  cardElement.on('change', (event) => {
+    cardError.value = event.error?.message ?? null
+    cardComplete.value = event.complete
+  })
+  cardElement.mount(cardElementRef.value)
+}
+
 const toppingUp = ref(false)
 
 async function topUp(packageId: string | null) {
   if (!packageId || toppingUp.value) return
+  if (!stripe || !cardElement) {
+    toast.add({ title: 'Payment form is not ready yet', description: 'Please try again.', color: 'error' })
+    return
+  }
+  if (!cardComplete.value) {
+    toast.add({ title: 'Enter your card details', description: 'Fill in the card form to continue.', color: 'error' })
+    return
+  }
+
   toppingUp.value = true
   try {
-    await walletStore.topUp(packageId, selectedCardLabel.value)
+    const { clientSecret, paymentIntentId } = await walletStore.createTopupPaymentIntent(packageId)
+    const { paymentIntent, error } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: { card: cardElement },
+    })
+    if (error || paymentIntent?.status !== 'succeeded') {
+      toast.add({ title: 'Card was declined', description: error?.message ?? 'Please try again.', color: 'error' })
+      return
+    }
+
+    await walletStore.confirmTopup(packageId, paymentIntentId)
+    cardElement.clear()
     toast.add({ title: 'Top-up successful', description: 'Squad Coin added to your wallet.', color: 'success' })
   } catch (err) {
     toast.add({
@@ -71,6 +120,13 @@ async function topUp(packageId: string | null) {
 function confirmTopUp() {
   topUp(selectedPackageId.value ?? basePackageId.value)
 }
+
+// `?topup=cancelled` isn't a real routable state here (there's no redirect anymore, the card
+// form is inline), kept only so an old bookmarked/shared link with the old query param doesn't
+// dead-end silently.
+if (route.query.topup === 'cancelled') {
+  toast.add({ title: 'Top-up cancelled', description: 'No charge was made.', color: 'neutral' })
+}
 </script>
 
 <template>
@@ -79,31 +135,28 @@ function confirmTopUp() {
       Loading wallet...
     </div>
 
-    <div v-else-if="balance === 0" class="flex min-h-[60vh] items-center justify-center">
-      <EmptyState
-        tone="gold"
-        badge="0 SC"
-        title="Your wallet is empty"
-        description="Top up Squad Coin to book Pals, tip, and send gifts. $10 = 990 SC."
-      >
-        <template #icon>
-          <img :src="coinIcon" alt="" class="h-9 w-9" />
-        </template>
-        <template #actions>
-          <UButton color="primary" class="rounded-full px-6" :loading="toppingUp" @click="topUp(basePackageId)">
-            Top up now
-          </UButton>
-          <UButton color="neutral" variant="soft" class="rounded-full px-6" to="/settings">
-            How it works
-          </UButton>
-        </template>
-      </EmptyState>
-    </div>
-
     <div v-else class="mx-auto flex max-w-4/5 flex-col gap-6">
       <h1 class="text-2xl font-bold text-white sm:text-3xl">Squadcoin Wallet</h1>
 
-      <div class="flex flex-wrap items-center justify-between gap-6 rounded-xl bg-gray-800/70 p-6 sm:p-8">
+      <div v-if="balance === 0" class="flex justify-center rounded-xl bg-gray-800/70 p-6 sm:p-8">
+        <EmptyState
+          tone="gold"
+          badge="0 SC"
+          title="Your wallet is empty"
+          description="Top up Squad Coin to book Pals, tip, and send gifts. $10 = 990 SC."
+        >
+          <template #icon>
+            <img :src="coinIcon" alt="" class="h-9 w-9" />
+          </template>
+          <template #actions>
+            <UButton color="neutral" variant="soft" class="rounded-full px-6" to="/settings">
+              How it works
+            </UButton>
+          </template>
+        </EmptyState>
+      </div>
+
+      <div v-else class="flex flex-wrap items-center justify-between gap-6 rounded-xl bg-gray-800/70 p-6 sm:p-8">
         <div>
           <p class="text-sm text-slate-400">Your balance</p>
           <p class="mt-2 inline-flex items-center gap-2 text-4xl font-bold text-white">
@@ -113,7 +166,6 @@ function confirmTopUp() {
           <p class="mt-1 text-sm text-slate-400">≈ ${{ usdBalance }} USD</p>
         </div>
         <div class="flex items-center gap-2">
-          <UButton color="primary" class="rounded-full px-6">Top Up</UButton>
           <UButton to="/wallet/withdraw" color="neutral" variant="soft" class="rounded-full px-6">
             Withdraw
           </UButton>
@@ -150,27 +202,22 @@ function confirmTopUp() {
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-gray-800/70 p-5">
-        <div class="flex items-center gap-3">
-          <span class="text-sm text-slate-400">Pay with</span>
-          <USelect
-            v-model="selectedCardLabel"
-            :items="cardLabels"
-            variant="soft"
-            size="md"
-            class="w-auto"
-            :ui="{ base: 'rounded-full bg-white/5 px-3.5 py-1.5 text-sm ring-white/10 hover:bg-white/10' }"
-          />
+      <div class="rounded-xl bg-gray-800/70 p-5">
+        <p class="text-sm font-medium text-white">Card details</p>
+        <div ref="cardElementRef" class="mt-2 rounded-lg bg-white/5 px-3.5 py-3 ring-1 ring-inset ring-white/10" />
+        <p v-if="cardError" class="mt-2 text-xs text-red-400">{{ cardError }}</p>
+
+        <div class="mt-4 flex flex-wrap items-center justify-end gap-4">
+          <UButton
+            color="primary"
+            class="rounded-full px-6"
+            :loading="toppingUp"
+            :disabled="!selectedPackageId && !basePackageId"
+            @click="confirmTopUp"
+          >
+            Confirm Top-Up
+          </UButton>
         </div>
-        <UButton
-          color="primary"
-          class="rounded-full px-6"
-          :loading="toppingUp"
-          :disabled="!selectedPackageId && !basePackageId"
-          @click="confirmTopUp"
-        >
-          Confirm Top-Up
-        </UButton>
       </div>
 
       <div class="rounded-xl bg-gray-800/70 p-5">

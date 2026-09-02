@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { PhFlag, PhGameController, PhScales, PhUsersThree } from '@phosphor-icons/vue'
+import { PhCoins, PhFlag, PhGameController, PhScales, PhUsersThree } from '@phosphor-icons/vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useAdminStore } from '@/stores/admin'
@@ -45,7 +45,7 @@ const openDisputeCount = computed(
     </UEmpty>
 
     <template v-else-if="adminStore.overview">
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
             <PhUsersThree :size="16" />
@@ -73,6 +73,16 @@ const openDisputeCount = computed(
             Open disputes
           </p>
           <p class="mt-2 text-2xl font-bold text-white">{{ openDisputeCount }}</p>
+        </div>
+        <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
+          <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
+            <PhCoins :size="16" />
+            Commission earned
+          </p>
+          <p class="mt-2 inline-flex items-center gap-1.5 text-2xl font-bold text-white">
+            <img :src="coinIcon" alt="" class="h-5 w-5" />
+            {{ adminStore.overview.totalCommissionCoins.toLocaleString() }}
+          </p>
         </div>
       </div>
 

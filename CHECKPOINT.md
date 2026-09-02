@@ -27,8 +27,11 @@ Brand logo lives at `frontend/src/assets/brand.svg`, coin icon at
 
 **Order of operations:** Frontend UI first (static/mock data, no backend calls) →
 Backend (FastAPI + Supabase) to wire everything for real → Payment integration
-(ABA/KHQR/Stripe) is the last task in the project, after every other feature works
-end-to-end.
+(Stripe/Bakong KHQR). **Amended 2026-08-25:** per user direction, Phase 4 (Payment) is
+now done *before* 3.16/3.17 rather than strictly last — Stripe first, Bakong KHQR last
+(scope/complexity TBD when reached). ABA PayWay was dropped from scope entirely, it was
+never built beyond this line and a throwaway mock label. 3.16 (clean out mocks) and 3.17
+(seed script) resume once Phase 4 is done.
 
 **Copy style:** never use em dashes in UI copy (headings, body text, labels,
 buttons). Use a comma, period, or rewrite the sentence instead.
@@ -250,9 +253,13 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
 
 ## Status
 
-- **Current phase:** Phase 3 — Backend Features, in progress
-- **Next task:** 3.14 (Admin endpoints) done; next up is 3.15 (Docker + Docker Compose)
-- **Last updated:** 2026-08-25
+- **Current phase:** Phase 4 — Payment, moved up ahead of 3.16/3.17 per user direction
+  (2026-08-25). 3.15 (Docker + Docker Compose) is done; 3.16 (clean out mock/demo data) and
+  3.17 (seed script) are deferred until Phase 4 finishes.
+- **Next task:** 4.1 is fully done (4.1a-k, including 4.1f's live smoke test). 4.2 (Squad Coin
+  ledger wiring) and 4.3 (manual platform commission tracking) are done. Next up is 4.4 (Bakong
+  KHQR integration, scope TBD) then 4.5 (final-report escrow note), after which 3.16/3.17 resume.
+- **Last updated:** 2026-08-26
 
 ---
 
@@ -1300,7 +1307,26 @@ unchecked box until the whole thing is done.
         on one summary page.
   - [x] 3.14i Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean; manual browser
         walkthrough skipped per standing instruction not to run the `run` skill in this project.
-- [ ] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
+- [x] 3.15 Docker + Docker Compose for frontend + backend (match Niyay/PawMart setup)
+  - [x] 3.15a `backend/Dockerfile` (`python:3.11-slim` + `uv`, two-stage `uv sync` - deps then
+        project - for layer caching) + `backend/.dockerignore`, copied from PawMart's since
+        squadup's backend already matches its `src/`-layout + `uv`/`pyproject.toml` shape exactly
+        (`backend.main:app` entrypoint, no path changes needed).
+  - [x] 3.15b `frontend/Dockerfile` (`oven/bun:1`, install-then-copy for layer caching) +
+        `frontend/.dockerignore`, also copied from PawMart's (same bun/Vite setup).
+  - [x] 3.15c Root `docker-compose.yml` - two services (`backend` on 8000, `frontend` on 5173),
+        each bind-mounting its source dir for live reload (`uv run uvicorn --reload` /
+        `bun run dev --host 0.0.0.0`) with a named volume over `.venv`/`node_modules` so the
+        container's own install isn't shadowed by the host bind mount, `env_file` pointing at
+        each app's existing `.env` (Supabase creds, `VITE_API_URL`, etc. - no new env vars
+        needed, `VITE_API_URL=http://localhost:8000` already works since the frontend calls it
+        from the browser, not container-to-container). Niyay has no Docker setup to match
+        (frontend/backend only, no `docker-compose.yml` or Dockerfiles present), so PawMart was
+        the sole reference.
+  - [x] 3.15d Verification: `docker compose build` (both images built clean), `docker compose up
+        -d` (both containers started, no errors in logs), confirmed `GET /health` on the backend
+        (200 `{"status":"ok"}`) and `GET /` on the frontend (200, Vite dev server serving) both
+        respond, then `docker compose down` to tear back down.
 - [ ] 3.16 Clean out mock/demo data and fallback logic (do last, once every 3.x feature above is
       backend-wired)
   - [ ] 3.16a Audit every store's mock-fallback path (`stores/players.ts`, `bookings.ts`,
@@ -1335,14 +1361,183 @@ unchecked box until the whole thing is done.
         relations, confirm Browse Players/Player Profile/Dashboard render populated real data end
         to end with no mock fallback needed
 
-## Phase 4 — Payment: ABA / KHQR / Stripe (final task)
+## Phase 4 — Payment: Stripe / Bakong KHQR (moved up ahead of 3.16/3.17, see Status)
 
-- [ ] 4.1 KHQR (Bakong) integration on Checkout — generate QR, MVP manual payment verification
-- [ ] 4.2 ABA PayWay integration as alternate local payment method on Checkout
-- [ ] 4.3 Stripe integration for international/card payments
-- [ ] 4.4 Payment status → booking confirmation wiring (booking flips to confirmed once payment is verified)
-- [ ] 4.5 Manual platform commission tracking (%, recorded per booking — no escrow yet)
-- [ ] 4.6 Note in final report: proper escrow (user → platform → player) is a post-launch enhancement, not built for submission
+**Scope call (2026-08-25):** real money enters the platform exclusively through **Wallet
+Top-up** (buy Squad Coin with a card/QR); Checkout's booking payment stays **Squad Coin
+balance only**. The previously-offered "Credit / debit card" option at Checkout is dropped
+rather than wired to a second, direct per-booking charge — one money-in path, fits the
+coin-economy design already established (mocks/wallet.ts's $1 = 99 SC rate, etc.). This
+also means the old "payment status → booking confirmation" line (a booking flips to
+confirmed once a checkout-time payment clears) doesn't apply the way it was originally
+scoped; what actually needs wiring instead is real coin *ledger* movement on the booking
+lifecycle itself (4.2 below), since Checkout never touches a payment processor at all.
+
+**Integration pattern (revised same day):** first pass used Stripe-hosted Checkout (redirect)
++ a webhook to credit the wallet async. Switched to match the sibling PawMart project's
+pattern instead: a `PaymentIntent` confirmed **client-side** with Stripe Elements (a card
+form embedded on `/wallet`), then the backend **re-verifies it synchronously** against the
+Stripe API (`stripe.PaymentIntent.retrieve`, checking `status`/`amount`/`metadata.user_id`)
+in the same request that credits the wallet. No webhook, no `STRIPE_WEBHOOK_SECRET`, no
+Stripe CLI needed for local dev — trades a bit of robustness against a dropped connection
+between "card charged" and "wallet credited" for a much simpler setup, acceptable for this
+project's scope. `wallet_transactions.stripe_session_id` (4.1b) was renamed to
+`stripe_payment_intent_id` in a follow-up migration - same idempotency-key role, different
+kind of Stripe id.
+
+- [ ] 4.1 Stripe integration for Wallet Top-up (do first)
+  - [x] 4.1a Backend: `stripe` dependency (`backend/pyproject.toml`, added via `uv add stripe`) +
+        `Settings.stripe_secret_key` (`core/config.py`, a required `str` - empty string until
+        filled in, not `Optional`, so a missing key fails loud the moment a Stripe call is
+        attempted rather than silently). Placeholder in `backend/.env`/`backend/.env.example`
+        (`STRIPE_SECRET_KEY`) - **the live test-mode secret key is filled into `backend/.env`**
+        (user added it directly). No webhook secret needed, see the pattern note above.
+  - [x] 4.1b Backend: `supabase/migrations/20260825160000_stripe_topup.sql` adds
+        `wallet_transactions.stripe_session_id text unique` (nullable); a same-day follow-up
+        `supabase/migrations/20260825163000_stripe_topup_payment_intent.sql` renames it to
+        `stripe_payment_intent_id` once the pattern switched. Both pushed to the linked project
+        with `bunx supabase db push`.
+  - [x] 4.1c Backend: `POST /wallet/topup/payment-intent` (`routers/wallet.py`) - creates a
+        Stripe `PaymentIntent` for the chosen `topup_package_id`'s dollar amount (in cents),
+        `metadata` carries `user_id`/`package_id`, returns `{ clientSecret, paymentIntentId }`
+        for the frontend to confirm client-side. Nothing is credited by this call itself -
+        proving a client hit the endpoint proves nothing, which was the old mock `POST /topup`'s
+        exact flaw.
+  - [x] 4.1d Backend: `POST /wallet/topup` (`routers/wallet.py`) - the actual credit. Re-fetches
+        the `PaymentIntent` from Stripe (`stripe.PaymentIntent.retrieve`) and checks
+        `metadata.user_id` matches the caller, `status == 'succeeded'`, and `amount` matches the
+        package price, before crediting `coin_balance` + writing the `wallet_transactions` row
+        (`stripe_payment_intent_id` set). The unique constraint from 4.1b/the rename migration is
+        the idempotency guard - a second `POST /topup` with the same `payment_intent_id` hits a
+        DB conflict, caught and turned into a 400 "already been used", same shape as PawMart's
+        `orders.py`.
+  - [x] 4.1e Backend: the old direct-credit mock `POST /wallet/topup` is gone, replaced in place
+        by 4.1c/d above (it was explicitly documented as "no real processor wired, that's
+        Phase 4"; nothing else called it).
+  - [x] 4.1f Backend: live smoke test in Stripe test mode against the real Supabase project and a
+        running local uvicorn - a throwaway script created two real `auth.users` (buyer + a second
+        user), signed in for real bearer tokens (via a separate anon-keyed client from the
+        admin-key client, per 4.2d's lesson about `sign_out` revoking the token server-side rather
+        than just clearing local state - hit that exact bug on the first run, fixed by dropping the
+        `sign_out()` calls between sign-ins), then exercised `POST /wallet/topup/payment-intent` +
+        `stripe.PaymentIntent.confirm(..., payment_method="pm_card_visa")` (Stripe's standard
+        test-mode PaymentMethod id, no Stripe.js needed server-side) against `POST /wallet/topup`.
+        All 9 checks passed: a nonexistent `payment_intent_id` 400s and leaves the balance
+        untouched; a real PaymentIntent belonging to a different user 403s ("Not your payment") and
+        leaves the balance untouched; a genuine confirmed payment 201s and credits exactly the
+        package's `coins + bonus_coins`; replaying the same `payment_intent_id` 400s
+        ("already been used") and does not double-credit. Throwaway users deleted after
+        (`auth.admin.delete_user`) and verified cascaded cleanly - no leftover `auth.users` rows,
+        no orphaned `wallet_transactions` rows.
+  - [x] 4.1g Frontend: `@stripe/stripe-js` dependency (`bun add`) + `lib/stripe.ts`
+        (`loadStripe(VITE_STRIPE_PUBLISHABLE_KEY)`, same shape as PawMart's), publishable-key
+        placeholder in `frontend/.env`/`.env.example` - **still needs the real `pk_test_...` key
+        from the user**, same Stripe dashboard page as the secret key.
+  - [x] 4.1h Frontend: `stores/wallet.ts`'s `topUp` action split into `createTopupPaymentIntent`
+        (calls `/wallet/topup/payment-intent`) and `confirmTopup` (calls `/wallet/topup`,
+        updates `balance`/`pendingClearanceCoins`/`activity` from the response) - the split
+        matches the two backend calls `WalletView.vue` now makes around the client-side
+        `stripe.confirmCardPayment` step in between.
+  - [x] 4.1i Frontend: `WalletView.vue` mounts a Stripe Card Element into an always-visible "Card
+        details" box (same `mountCardElement`/`cardElement.on('change', ...)` pattern as
+        PawMart's `CheckoutView.vue`, minus the multi-step wizard - this page has one step).
+        "Confirm Top-Up" now: creates the PaymentIntent, calls `stripe.confirmCardPayment`,
+        then `confirmTopup` on success, with a toast on any failure (declined card, backend
+        rejection, etc.). Restructured the page so the package grid/card form/activity list
+        render unconditionally instead of being swapped out entirely by the zero-balance
+        `EmptyState` - the card form has to exist for a first-time top-up too, so only the
+        balance-card-vs-empty-banner hero at the top still forks on `balance === 0`. The old
+        "Pay with" card-brand `USelect` (`mockPaymentCards`) is gone - the real Stripe form
+        replaced it.
+  - [x] 4.1j Frontend: dropped Checkout's "Credit / debit card" button from `CheckoutView.vue`'s
+        payment-method section per this task's scope call above (every booking pays with Squad
+        Coin balance) — replaced with a static "Squad Coin balance" row (no longer a toggle,
+        there's only one option) plus a link to Wallet Top-up for a short balance. `PaymentMethod`
+        in `stores/bookings.ts` was **not** narrowed to `'coins'` — it stays `'coins' | 'card'`
+        since one historical mock booking (`mocks/bookings.ts`) legitimately used `'card'` as a
+        past order's record; only the picker UI is gone, the type still describes what a booking
+        *was* paid with, not what's offered going forward.
+  - [x] 4.1k Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean (the only eslint
+        hits are the same two pre-existing unrelated errors noted since 3.1k). Manual browser
+        walkthrough (a real Stripe test-mode top-up) left to the user per standing instruction
+        not to run the `run` skill in this project — also needs the frontend publishable key
+        filled in first.
+- [x] 4.2 Wire real Squad Coin ledger movement into the booking lifecycle — deduct the buyer's
+      `coin_balance` when a booking is placed, credit the Pal's on completion. Also covers
+      cancel/decline/dispute refund paths (`order_cancellations`/`order_disputes`'s
+      `refund_coins`) actually crediting back.
+  - [x] 4.2a Backend: `core/wallet.py` - new `get_coin_balance()`/`adjust_coin_balance()` shared
+        helper (mirrors `core/notify.py`'s role for notifications) so every ledger movement does
+        the same read-balance -> guard-against-negative -> update `coin_balance` -> insert
+        `wallet_transactions` row in one place, with an optional `booking_id` (the column already
+        existed on `wallet_transactions`, unused until now) linking the transaction back to its
+        booking. Deliberately doesn't touch `routers/wallet.py`'s own topup/withdrawal
+        read-modify-write - those insert the `wallet_transactions` row *before* crediting so a
+        replayed Stripe `payment_intent_id`'s unique constraint blocks a double-credit, an
+        ordering this new helper doesn't need (and would break) for booking events.
+  - [x] 4.2b Backend: `routers/bookings.py` wired to the new helper - `create_booking` pre-checks
+        the buyer's balance (so an underfunded buyer never gets an orphaned unpaid `pending` row)
+        then debits `total_coins` (kind=`order`) once the booking row exists; `complete_booking`
+        credits the Pal `total_coins` (kind=`order`) - no `players.user_id` lookup needed since
+        `_require_pal_booking` already proved the caller *is* that Pal; `decline_booking` refunds
+        the buyer in full (kind=`refund`) since a declined order was never fulfilled; `cancel_booking`
+        credits the buyer exactly `payload.refund_coins` (kind=`refund`, skipped entirely when 0)
+        rather than assuming a fixed refund amount, since the cancellation reason/refund-option
+        logic living client-side in `CancelOrderModal` already computed that number.
+  - [x] 4.2c Backend: `routers/admin.py`'s `update_dispute_status` wired so the Disputes tab's
+        "Refund" button actually credits the buyer - only on the transition *into* `refunded`
+        (guarded against a redundant re-click double-crediting), reading `refund_coins` off the
+        `order_disputes` row (`dispute_booking`, 3.4a, only ever populates it for a `full_refund`
+        request - a `partial_refund`/`reporting` dispute has nothing to credit yet, since no admin
+        UI exists to enter a partial amount). A plain report (`POST /bookings/{id}/dispute`)
+        still never credits anything on its own - only an admin's explicit `refunded` status does.
+  - [x] 4.2d Backend: live smoke test against the real Supabase project (two throwaway users -
+        buyer + Pal - through real HTTP with real bearer tokens against a local uvicorn: create ->
+        buyer debited exactly `total_coins` with a `booking_id`-linked `order` transaction ->
+        insufficient-balance booking rejected with 409 and balance left untouched -> accept ->
+        complete -> Pal credited `total_coins` -> a second booking declined -> buyer refunded in
+        full -> a third booking cancelled with a 40-coin partial refund -> buyer credited exactly
+        40 -> a fourth cancelled with `refundCoins: 0` -> buyer credited nothing -> a fifth
+        completed then disputed -> the report alone credits nothing -> admin sets `investigating`
+        -> still nothing credited -> admin sets `refunded` -> buyer credited the full amount ->
+        re-setting `refunded` a second time does not double-credit). All 27 checks passed on the
+        first run; all throwaway users/rows cleaned up and verified empty after. Caught one bug
+        only a live run surfaces: the smoke script's own first draft called `sign_in_with_password`
+        on the same client used for `auth.admin.create_user`, which silently swapped that client's
+        session onto the just-created user's own JWT and 403'd the *next* admin call - fixed by
+        signing in through a separate anon-keyed client, unrelated to `bookings.py`/`admin.py`
+        themselves (both were correct on the first pass).
+  - [x] 4.2e Verification: `ruff check` clean across the backend. No frontend changes were needed
+        for this task - `stores/bookings.ts`'s existing `placeOrder`/`declineBooking`/
+        `cancelBooking`/`reportIssue` calls already hit these same endpoints and refetch the
+        wallet-adjacent state (My Bookings/Orders lists) afterward, so the real balance movement
+        is visible through the UI with no client-side changes.
+- [x] 4.3 Manual platform commission tracking (%, recorded per booking — no escrow yet)
+  - [x] 4.3a Backend: `Settings.platform_commission_pct` (`core/config.py`, env
+        `PLATFORM_COMMISSION_PCT`, default `15.0` per recap_squadup.md's "e.g. 10-15%") +
+        migration adding `bookings.commission_pct numeric` / `bookings.commission_coins integer`
+        (both default 0, only ever populated once a booking completes). Pushed to the linked
+        project with `bunx supabase db push`.
+  - [x] 4.3b Backend: `complete_booking` (`routers/bookings.py`) computes
+        `commission_coins = round(total_coins * commission_pct / 100)` off the configured rate and
+        writes both columns alongside the `completed` status update; `BookingOut` exposes them.
+        No coin balance touched by this - the Pal is still credited the full `total_coins`, this
+        is tracking only (recap_squadup.md's "commission tracked manually", not real escrow - see
+        4.5).
+  - [x] 4.3c Backend: `/admin/overview` sums `commission_coins` across `completed` bookings into a
+        new `total_commission_coins` field, giving admin a running platform-revenue figure.
+  - [x] 4.3d Frontend: `AdminOverviewPanel.vue` + `mocks/admin.ts`'s `AdminOverviewStats` type
+        (the shape `stores/admin.ts`'s `fetchOverview` already types the real response against)
+        wired to render `totalCommissionCoins` as a 5th overview stat tile (grid widened to
+        `lg:grid-cols-5`).
+  - [x] 4.3e Verification: `ruff check` clean, `vue-tsc --build` clean, `eslint` clean apart from
+        the same two pre-existing unrelated errors noted since 3.1k/4.1k
+        (`StepRates.vue`/`RefundModal.vue`, untouched by this task).
+- [ ] 4.4 Bakong KHQR integration (do last — scope/complexity TBD when we get there, including
+      whether it plugs in at Wallet Top-up like Stripe or stays a Checkout-time payment method)
+      — generate QR, MVP manual payment verification
+- [ ] 4.5 Note in final report: proper escrow (user → platform → player) is a post-launch
+      enhancement, not built for submission
 
 ---
 

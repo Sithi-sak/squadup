@@ -143,7 +143,7 @@ function goToApplication() {
 
     <section class="px-4 pb-16 md:px-6">
       <form
-        class="mx-auto flex max-w-xl flex-col gap-5 rounded-2xl bg-white/5 p-8 ring-1 ring-inset ring-white/10"
+        class="mx-auto flex max-w-xl flex-col gap-5 rounded-2xl bg-white/5 p-8"
         @submit.prevent="goToApplication"
       >
         <div class="text-center">

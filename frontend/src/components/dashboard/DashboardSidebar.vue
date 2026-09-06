@@ -10,8 +10,8 @@ import {
   PhUserCircle,
 } from '@phosphor-icons/vue'
 import { mockCurrentUser } from '@/mocks/users'
-import { mockPlayerProfiles } from '@/mocks/playerProfiles'
 import { useAuthStore } from '@/stores/auth'
+import { usePlayersStore } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
 defineProps<{
@@ -19,14 +19,14 @@ defineProps<{
 }>()
 
 const authStore = useAuthStore()
+const playersStore = usePlayersStore()
 
 const online = ref(true)
 
 const displayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
-const myPlayerProfile = computed(() =>
-  mockCurrentUser.playerId ? (mockPlayerProfiles[mockCurrentUser.playerId] ?? null) : null,
+const avatarUrl = computed(() =>
+  resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, playersStore.mine?.avatarUrl),
 )
-const avatarUrl = computed(() => resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id))
 
 const navItems = [
   { key: 'dashboard', label: 'Dashboard', to: '/dashboard/player', icon: PhSquaresFour },
@@ -68,7 +68,7 @@ const navItems = [
         </UAvatar>
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-white">{{ displayName }}</p>
-          <p class="text-xs text-slate-400">{{ myPlayerProfile?.tier ?? 'Pal' }}</p>
+          <p class="text-xs text-slate-400">{{ playersStore.mine?.tier ?? 'Pal' }}</p>
         </div>
       </div>
     </div>

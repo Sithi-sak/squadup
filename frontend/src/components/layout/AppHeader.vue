@@ -16,12 +16,14 @@ import { mockCurrentUser } from '@/mocks/users'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
+import { usePlayersStore } from '@/stores/players'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
 const notificationsStore = useNotificationsStore()
 const authStore = useAuthStore()
 const walletStore = useWalletStore()
+const playersStore = usePlayersStore()
 
 const router = useRouter()
 
@@ -30,17 +32,21 @@ const searchQuery = ref('')
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
-/** Bell badge and coin balance need to be populated across every authenticated page, not just
- * `/notifications`/`/wallet`, so they're fetched here rather than per-view - re-fires whenever a
- * session is (re)established (initial mount once `authStore.init()` resolves, or a fresh login).
- * `walletStore` is the same Pinia instance `WalletView` uses, so a top-up there updates this
- * balance too without an extra fetch. */
+/** Bell badge, coin balance, and the navbar's own Pal avatar need to be populated across every
+ * authenticated page, not just the views that happen to fetch them, so they're fetched here
+ * rather than per-view - re-fires whenever a session is (re)established (initial mount once
+ * `authStore.init()` resolves, or a fresh login). `walletStore`/`playersStore` are the same
+ * Pinia instances `WalletView`/`FeedSidebar` etc. use, so this doesn't duplicate state - it just
+ * means the header no longer depends on some other component having fetched `playersStore.mine`
+ * first (previously it could sit on the generated fallback avatar for an entire page load if you
+ * refreshed on a page that never calls `fetchMine`, e.g. `/wallet` or `/messages` as a buyer). */
 watch(
   () => authStore.user,
   (user) => {
     if (!user) return
     notificationsStore.fetchNotifications()
     walletStore.fetchWallet()
+    playersStore.fetchMine()
   },
   { immediate: true },
 )
@@ -60,7 +66,9 @@ const dashboardPath = computed(() => (isPal.value ? '/dashboard/player' : '/feed
 const firstName = computed(
   () => (authStore.user?.displayName ?? mockCurrentUser.displayName)?.split(' ')[0] ?? 'Account',
 )
-const avatarUrl = computed(() => resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id))
+const avatarUrl = computed(() =>
+  resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, playersStore.mine?.avatarUrl),
+)
 
 const accountMenuItems = [
   [

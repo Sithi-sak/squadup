@@ -2079,6 +2079,26 @@ kind of Stripe id.
   - [x] 4.16d Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean; FastAPI app
         imports clean. Manual browser walkthrough left to the user.
 
+- [x] 4.17 Two more spots missed by 4.6c's avatar wiring pass (found 2026-09-07 by the user after
+      4.16: uploading a new Pal photo updated it everywhere except the navbar, and it would
+      intermittently still show the generated DiceBear avatar on a refresh).
+  - [x] 4.17a `AppHeader.vue` and `DashboardSidebar.vue` both called `resolveAvatarUrl` with only
+        the seed argument, never the real `avatarUrl` - so the navbar and the Pal dashboard's own
+        sidebar always rendered the generated fallback, upload or not.
+  - [x] 4.17b The intermittent case on other components (which do pass `playersStore.mine?.avatarUrl`
+        correctly): nothing fetches `playersStore.mine` globally, only specific views do
+        (`FeedSidebar.vue`, `PlayerDashboardView.vue`, etc.) on their own mount - so a refresh
+        landing on a page that never fetches it (`/wallet`, `/messages` as a buyer, `/bookings`,
+        ...) left `mine` unpopulated for that whole page load. `AppHeader.vue` (mounted on every
+        authenticated page) now calls `playersStore.fetchMine()` in its existing session-established
+        `watch` block, alongside the notifications/wallet fetches it already did there.
+  - [x] 4.17c `DashboardSidebar.vue`'s tier line was also still reading a stale
+        `mockPlayerProfiles` lookup keyed off `mockCurrentUser.playerId` (same rendered-mock
+        class of bug as 4.8b) - switched to `playersStore.mine?.tier`, dropping both mock imports
+        now that nothing in the file uses them.
+  - [x] 4.17d Verification: `vue-tsc --build` and `eslint` clean on the touched files. Manual
+        browser walkthrough left to the user.
+
 ---
 
 ## Cut list (only if time runs out)

@@ -278,9 +278,12 @@ unaffected. This surfaced 3.17 (seed script) being pulled forward — see below.
 - **Next task:** 4.1 is fully done (4.1a-k, including 4.1f's live smoke test). 4.2 (Squad Coin
   ledger wiring) and 4.3 (manual platform commission tracking) are done. 3.17 is done (see below).
   **3.19 (Admin: Pal application review + ban, PIN gate) was pulled forward on 2026-09-05** per
-  direct user request, and is now done (3.19a-i). **4.6 (DiceBear avatars everywhere) was pulled
-  forward on 2026-09-06** per direct user request and is now done (4.6a-e). Next up is 4.4 (Bakong
-  KHQR integration, scope TBD) then 4.5 (final-report escrow note), after which 3.16 resumes.
+  direct user request, and is now done (3.19a-i). **4.6 (DiceBear avatars everywhere)**, **4.7
+  (Suggested Pals/Explore/Trending de-mocking)**, **4.8 (eStars avatar fix)**, **4.9 (Become a Pal
+  prefill)**, **4.10 (auto-generated status posts on the Feed)**, and **4.11 (Feed composer image
+  upload)** were all pulled forward on 2026-09-06 per direct user request and are now done. Next
+  up is 4.4 (Bakong KHQR integration, scope TBD) then 4.5 (final-report escrow note), after which
+  3.16 resumes.
 - **Last updated:** 2026-09-06
 
 ---
@@ -1811,6 +1814,270 @@ kind of Stripe id.
         no account-level backing, out of scope here).
   - [x] 4.9f Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean. Manual browser
         walkthrough not run by Claude, left to the user.
+
+- [x] 4.10 Auto-generated "status" posts on the Feed (requested directly by the user on
+      2026-09-06 - the Feed had no content unless someone opened the composer; agreed approach:
+      real app events post short system-authored text updates, visually distinct from manual
+      posts, no image/video pipeline needed)
+  - [x] 4.10a Migration: `post_kind` enum (`user`/`status`) + `posts.kind` column, default
+        `'user'` (`20260906090000_post_status_kind.sql`), pushed live via `bunx supabase db push`.
+  - [x] 4.10b Backend: `core/feed_events.py`'s `post_status(user_id, text, category)` - inserts a
+        `kind='status'` post, fire-and-forget, same convention as `core/notify.py`'s `notify()`.
+        `feed.py`'s `PostOut`/`_post_out` now include `kind` so the frontend can distinguish them.
+  - [x] 4.10c Backend: wired into four existing event sites, each posting from the account that
+        experienced the event rather than inventing synthetic content: `bookings.py`'s
+        `complete_booking` (buyer, "wrapped up a session with {pal} on {service}"), `reviews.py`'s
+        `create_review` (reviewer, "rated a session with {pal} {n}⭐ on {service}" - also had to
+        widen the existing `players` select to pull `display_name` alongside `user_id`),
+        `feed.py`'s `follow_user` (follower, "started following {target}" - `_require_user_exists`
+        now returns the row instead of just checking existence, to get the display name for free),
+        and `admin.py`'s `update_pal_application_status` (new Pal, "Just got verified as a Pal on
+        SquadUp!" when status transitions to `approved`). Leaderboard rank-change and
+        withdrawal/streak triggers were considered but skipped - no history table to diff against
+        yet, out of scope here.
+  - [x] 4.10d Backend: live-verified directly against the real Supabase project (inserted +
+        deleted a throwaway `kind='status'` row via `post_status` against a real user id, confirmed
+        the enum/column round-trip); the four call sites themselves reuse the exact same
+        insert/client pattern already proven live by `notify()`'s callers, not separately
+        HTTP-smoke-tested.
+  - [x] 4.10e Frontend: `FeedPost.kind` added (`stores/feed.ts`), all three `FeedPost`-constructing
+        mock adapters (`feedPostFromMock`, `PostDetailView.vue`'s `postFromMockDetail`,
+        `mocks/playerProfiles.ts`'s `feedPostFromMockEntry`) default it to `'user'`.
+        `FeedPostCard.vue` gains a `kind` prop (default unset = `'user'` styling): a `'status'`
+        post renders smaller/muted (compact avatar, no image slot, trimmed like/comment row with
+        the share button dropped) so it reads as activity rather than fake user content. Wired
+        through `FeedView.vue`, `FeedFollowingView.vue`, and `PostDetailView.vue` (the three
+        store-backed consumers - `FeedSavedView.vue` stays as-is, `SavedItemOut` doesn't carry
+        `kind`, out of scope).
+  - [x] 4.10f Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean (same two
+        pre-existing unrelated eslint errors noted since 3.1k, one of them on
+        `EstarsLeaderboardView.vue` which was already mid-edit by the user before this task
+        started). Manual browser walkthrough not run by Claude, left to the user.
+  - [x] 4.10g Polish requested after trying it live: the compact status card's like/comment icons
+        bumped to match the regular row's size (user manually bumped the regular row to 24px in
+        `FeedPostCard.vue`; the status row's followed to 20px to match), and the Follow button in
+        `FeedView.vue`/`PostDetailView.vue`'s `#action` slot is now hidden on your own posts
+        (`post.authorId !== currentUserId`) - it was rendering "Follow" on a status post about
+        yourself, which is meaningless since you can't follow yourself. `FeedFollowingView.vue`
+        didn't need the same fix, it only ever lists posts from accounts you follow.
+  - [x] 4.10h Bug found after 4.10g: the like button felt unresponsive - `toggleLike`
+        (`stores/feed.ts`) awaited the full like/unlike round trip before updating anything.
+        Fixed with an optimistic `patchPost` before the request, reconciled with the server
+        response after (reverted on failure).
+  - [x] 4.10i Bug found after 4.10h: rapid double-clicking the like button produced impossible
+        counts (liked with 0 likes, or 2 likes from one account). Two causes, both fixed: (1)
+        backend - `_refresh_post`/`_refresh_comment` (`feed.py`) recomputed `likes_count` via a
+        `SELECT` then a separate `UPDATE`, two round trips with no locking, so overlapping
+        like/unlike calls on the same post could interleave and leave a permanently wrong count
+        stored (not just a UI glitch) - replaced with atomic `refresh_post_likes_count`/
+        `refresh_comment_likes_count` Postgres functions (`20260906100000_atomic_likes_count.sql`)
+        that recompute-and-write in one statement, live-audited against the real project's
+        existing rows (all counts were already correct, but the race window was real). (2)
+        frontend - `toggleLike` fired each click as an independent request, so a fast double-click
+        raced a like against an unlike and whichever response landed second won regardless of
+        which was actually newer; fixed by chaining requests per post id
+        (`likeRequestChains` in `stores/feed.ts`) so a queued second click's request only fires
+        after the first resolves, and a stale response can no longer overwrite a newer one.
+
+- [x] 4.11 Feed composer image upload (found 2026-09-06: the user attached a 187KB image to a
+      post and it never appeared - the composer's `UFileUpload` had been visual-only since 1.6b,
+      capturing a file but never sending it, and `POST /feed/posts` only ever accepted an
+      `imageUrl` *string* with no upload endpoint or storage bucket behind it; `PostOut` also
+      never exposed `image_url` at all, so `FeedPostCard.vue`/`ProfileFeedsTab.vue` could only
+      ever render a blank gray placeholder for `hasImage`, never the real image)
+  - [x] 4.11a New `post-images` public storage bucket (`20260906110000_post_images_bucket.sql`),
+        pushed live via `bunx supabase db push`. Allowed mime type is just `image/webp` - every
+        upload is re-encoded before it lands here (4.11b), so nothing else ever gets stored.
+  - [x] 4.11b Backend: `core/storage.py` gains `upload_image_as_webp()` - downscales to fit
+        1920px and re-encodes to WebP (Pillow, added as a dependency) before uploading, so a
+        multi-MB phone photo doesn't get stored at full resolution for a feed-card thumbnail
+        (live-verified: a 2.4MB test JPEG landed as a 4.4KB WebP). `routers/feed.py`'s
+        `POST /feed/posts` switched from a JSON `PostCreateIn` body to multipart
+        (`Form`/`File`, same convention as `players.py`'s service-cover upload), taking an
+        optional `image` file alongside `text`/`category`. `PostOut` gains `image_url` (was
+        `has_image` only - the frontend had no way to render the actual image even when one
+        existed).
+  - [x] 4.11c Frontend: `stores/feed.ts`'s `FeedPost` gains `imageUrl`, all three mock adapters
+        (`feedPostFromMock`, `PostDetailView.vue`'s `postFromMockDetail`,
+        `mocks/playerProfiles.ts`'s `feedPostFromMockEntry`) default it to `null`. `createPost`
+        now builds `FormData` instead of a JSON body (same pattern as `CreateServiceView.vue`).
+        `CreatePostModal.vue`'s file picker restricted to a single image (`multiple` dropped,
+        `accept` narrowed to png/jpg/webp) since video/multi-image were never backed by the
+        endpoint either - `canPost` now also allows an image-only post (backend already accepted
+        that, the UI just never let you). `FeedPostCard.vue`/`ProfileFeedsTab.vue` render a real
+        `<img>` when `imageUrl` is present, falling back to the old gray placeholder only for
+        mock-fixture posts that carry `hasImage` with no real URL.
+  - [x] 4.11d Backend: live-verified end-to-end against the real Supabase project (a throwaway
+        auth user, `POST /feed/posts` via `TestClient` with a real multipart image, confirmed the
+        response's `imageUrl` round-trips to a fetchable WebP object, then deleted the post row,
+        storage object, and throwaway user).
+  - [x] 4.11e Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean. Manual browser
+        walkthrough not run by Claude, left to the user.
+  - [x] 4.10j Requested after seeing the feed load with no placeholder: new
+        `components/feed/FeedPostSkeleton.vue` (avatar/name/text/like-row skeleton mirroring
+        `FeedPostCard.vue`'s layout via `USkeleton`, the same primitive `HomeView.vue`/
+        `NotificationsView.vue`/`FeedRightRail.vue` already use for loading states). Shown for 3
+        placeholder cards while `feedStore.postsLoading`/`followingLoading` is true in
+        `FeedView.vue`/`FeedFollowingView.vue`. `FeedFollowingView.vue` had a related latent bug
+        this surfaced: its "Your feed is quiet" empty state rendered on `following.length === 0`
+        with no loading check at all, so it flashed before every real fetch, not just when
+        genuinely empty - fixed by gating it behind `v-else-if` after the new loading branch.
+        `PostDetailView.vue` had the same gap the other direction (`post === null` showed "Post
+        not found" while still loading, not just when actually missing) - added a `postLoading`
+        ref set around `loadPost()` and a single skeleton shown ahead of the post/not-found
+        branches.
+  - [x] 4.10k Verification: `vue-tsc --build` and `ruff check` clean; `eslint` clean apart from the
+        same two pre-existing unrelated errors.
+
+- [x] 4.12 Stripped-down profile page for non-Pal users (found 2026-09-06 by the user: `FeedSidebar.vue`'s
+      "Your profile" link and `AppHeader.vue`'s "Dashboard" button both send a non-Pal to
+      `/dashboard/user`, which was a full-page "Become a Pal" upsell with no way to actually see
+      your own profile - misleading and restrictive for a plain buyer)
+  - [x] 4.12a Backend: `GET /feed` (`routers/feed.py`) gains an optional `author_id` query filter
+        so a single account's own posts can be fetched without a new endpoint - reuses the
+        existing `_serialize_posts` pipeline as-is.
+  - [x] 4.12b Frontend: `stores/feed.ts` gains `fetchAuthorPosts(authorId)`, kept separate from
+        `posts`/`following` state (no mock fallback - unlike `fetchFeed`, a failure here has no
+        reasonable stand-in) so it doesn't clobber the shared Feed/Following views' state.
+  - [x] 4.12c Frontend: `UserDashboardView.vue` rebuilt from a full-page CTA into an actual
+        profile: avatar/name/email header with the real posts/followers/following counts
+        (`authStore.user`, same source `FeedSidebar.vue` already used), a post composer + own
+        post list (`FeedPostCard`/`FeedPostSkeleton`, `fetchAuthorPosts` + `toggleLike` wired the
+        same way `ProfileFeedsTab.vue`/`FeedView.vue` already do it), with the Become-a-Pal pitch
+        demoted to a compact banner + perk row rather than the entire page.
+  - [x] 4.12d Requested after seeing it live: render inside the Feed page's center column instead
+        of a standalone page. Route moved from `/dashboard/user` to `/feed/me`
+        (`router/index.ts`), `UserDashboardView.vue` now renders through `FeedLayout.vue` (gained
+        a `'profile'` `active` variant, mirrored onto `FeedSidebar.vue`'s prop type) so the
+        sidebar/right rail stay visible same as Feed/Following/Explore/Saved.
+        `FeedSidebar.vue`'s "Your profile" link and `AppHeader.vue`'s `dashboardPath` both repoint
+        a non-Pal to `/feed/me`; a Pal still goes to `/dashboard/player`, unchanged.
+  - [x] 4.12e Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean. Manual browser
+        walkthrough not run by Claude, left to the user.
+
+- [x] 4.13 Editable posts (requested directly by the user on 2026-09-06 - the composer could
+      create a post but there was no way to edit one afterward, anywhere it appeared)
+  - [x] 4.13a Backend: `PATCH /feed/posts/{post_id}` (`routers/feed.py`) - author-only (403
+        otherwise), text-only edit (image/category stay fixed once posted, same as the composer
+        never let you change those on create either). Reuses `_get_post`/`_serialize_posts`
+        as-is; a `PostUpdateIn` schema added alongside the existing `*In`/`*Out` models.
+  - [x] 4.13b Frontend: `stores/feed.ts` gains `updatePost(postId, text)`, patched through the
+        existing `patchPost` helper so `posts`/`following`/`current` all pick up the edit for
+        free, same as `toggleLike`.
+  - [x] 4.13c Frontend: `CreatePostModal.vue` gains an edit mode via an optional `post` prop -
+        prefills the text, hides the image/tag/visibility controls (not editable), retitles to
+        "Edit post" / "Save changes", and emits `updated` with the saved post for callers holding
+        their own local copy outside `feedStore`'s lists. Wired into the three places a post
+        renders via `FeedPostCard`: `FeedView.vue` and `PostDetailView.vue` (edit button replaces
+        the Follow button's slot when `post.authorId === currentUserId`, same condition already
+        used to hide Follow) and `UserDashboardView.vue`'s own-posts list (`/feed/me`, every post
+        there is already the viewer's own). Hidden for `kind === 'status'` posts in all three -
+        system-generated activity posts aren't user-authored text to edit.
+  - [x] 4.13d Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean. Manual browser
+        walkthrough not run by Claude, left to the user.
+  - [x] 4.13e Requested after seeing it live: the edit modal had no way to change a post's image
+        at all, only text. `PATCH /feed/posts/{post_id}` (`routers/feed.py`) widened from a JSON
+        `PostUpdateIn` body to multipart (`text`/`image`/`remove_image` `Form`/`File` params, same
+        shape as `create_post`) - a new `image` replaces the existing one via
+        `upload_image_as_webp`, `remove_image` clears it with no replacement, and the old
+        `PostUpdateIn` schema was dropped as unused. `stores/feed.ts`'s `updatePost` takes the
+        same `{ text, image?, removeImage? }` shape and posts `FormData` instead of JSON.
+        `CreatePostModal.vue`'s edit mode now shows the existing image as a preview with a remove
+        (✕) button, falling back to the same upload dropzone create mode uses once removed (or if
+        there was never an image); `canPost` and the submit payload account for the image/removal
+        state alongside text.
+
+- [x] 4.14 Two bugs found by the user 2026-09-06: the feed avatar changes when you edit your
+      display name, and Settings' "Username" field is captured in the form but never persisted or
+      shown anywhere - the email leaks into that spot instead in a couple of places.
+  - [x] 4.14a Feed avatar fix: `FeedPostCard.vue` seeded its avatar off the mutable `author`
+        display-name string (`resolveAvatarUrl(props.author)`) instead of a stable id, so editing
+        your display name changes which generated avatar you get. Added `authorId`/`avatarUrl`
+        props and seeded `resolveAvatarUrl(props.authorId ?? props.author, props.avatarUrl)`
+        instead (matches every other avatar call site in the app; falls back to the old
+        name-seeded behavior only where a caller has no id, e.g. `FeedSavedView.vue`'s
+        mock-fixture rows), and passed `:author-id`/`:avatar-url` from all 5 places a
+        `FeedPostCard` renders (`FeedView.vue`, `FeedFollowingView.vue`, `FeedSavedView.vue`,
+        `UserDashboardView.vue`, `FeedPostThread.vue`) - `FeedPost.avatarUrl`/`.authorId` already
+        existed on the store type but were never wired through. `SavedItemOut`/`FeedSavedItem`
+        gained `authorId`/`avatarUrl` too (`routers/feed.py`'s `_saved_item_out`) since a saved
+        post had neither field to pass.
+  - [x] 4.14b Backend: unify the Pal-only `players.handle` and the never-wired Settings
+        "Username" into one `users.handle` column (user's choice - one handle everywhere, not two
+        separate systems). Migration `20260906120000_users_handle.sql` adds `handle text unique`
+        to `public.users`, backfills it from existing `players.handle` values, then drops
+        `players.handle` - applied via `bunx supabase db push`. `routers/users.py`'s
+        `UserOut`/`UserUpdateIn` gain `handle`, with a 409 (`postgrest.exceptions.APIError` code
+        `23505`) on a uniqueness conflict.
+  - [x] 4.14c Backend: `routers/players.py`'s `create_my_player` no longer writes its own random
+        `@id`-style handle into the (now-gone) `players.handle` column - it ensures the account's
+        `users.handle` is set (assigning the same auto-generated fallback only if the user has
+        none yet) so a Pal's marketplace handle and their account username are the same value.
+        `_with_social_counts` (already joining `users` for the social counts) pulls `handle`
+        across too so `PlayerDetailOut.handle` keeps working unchanged from the frontend's
+        perspective.
+  - [x] 4.14d Backend: `routers/feed.py`'s `_resolve_authors` selects `handle` off `users`
+        alongside `display_name`; `_post_out` and `_saved_item_out` read it off the resolved
+        author instead of the player row.
+  - [x] 4.14e Frontend: `stores/auth.ts`'s `AuthUser` gains `handle: string | null`,
+        `loadAuthUser` maps it, and `updateAccount`'s payload type accepts `handle`.
+  - [x] 4.14f Frontend: `SettingsAccountTab.vue`'s Username field now reads/writes
+        `authStore.user?.handle` (dropping the old borrow-from-Pal-profile placeholder that never
+        saved) and is actually included in the `updateAccount()` save call; a 409 surfaces as
+        "Username already taken" through the existing save-error toast.
+  - [x] 4.14g Frontend: replaced the email-as-username-stand-in spots - `FeedSidebar.vue`'s
+        profile card and `UserDashboardView.vue`'s header now show `authStore.user?.handle`
+        instead of `authStore.user?.email` (hidden entirely if the account has no handle set yet,
+        rather than falling back to email again). Also fixed `ProfileFeedsTab.vue`'s post byline,
+        which was fabricating `@{{ player.id }}` (a raw UUID) because its `player` prop is
+        `PlayerSummary`-shaped (no handle) - added a dedicated `handle` prop, passed from
+        `PlayerProfileView.vue` as `profile.handle` (the `PlayerProfile`-shaped sibling object
+        that does carry it).
+  - [x] 4.14h Verification: `bunx supabase db push`, `vue-tsc --build`, `eslint`, `ruff check` all
+        clean (the 2 pre-existing `eslint` errors in `StepRates.vue`/`EstarsLeaderboardView.vue`
+        are unrelated unused-import issues from earlier uncommitted work, untouched by this task).
+        Manual browser walkthrough left to the user.
+
+- [x] 4.15 A freshly-turned Pal (found 2026-09-06 by the user testing account `intmaster`) still
+      got the plain-buyer experience everywhere `isPal` is checked: `AppHeader.vue`'s "Dashboard"
+      button, "Become a Pal" nav link, and `MessagesView.vue`'s layout choice - all gated on
+      `authStore.user?.playerId`, which turned out to always be `null`.
+  - [x] 4.15a Root cause: `stores/auth.ts`'s `loadAuthUser` reads `players` directly with the
+      signed-in user's own Supabase client to populate `playerId`, but `players` was left
+      locked to `service_role` only when RLS was enabled (2.5's `auth_wiring.sql` deferred a
+      self-access policy to "each Phase 3 feature" - nobody ever added one for `players`, unlike
+      `users`). The query silently returned no rows for every account, Pal or not.
+  - [x] 4.15b Migration `20260906170000_players_self_select.sql` adds a `players` select
+        policy for `auth.uid() = user_id`, mirroring `users`' existing "view their own row"
+        policy. Pushed live via `bunx supabase db push`. Fixes `AppHeader`/`MessagesView`'s
+        `isPal` everywhere at the source - no frontend changes needed for those.
+  - [x] 4.15c Frontend: `BecomePlayerView.vue`'s `handleSubmit` now sets `authStore.user.playerId`
+        from the just-created profile's id right after `playersStore.createMine` succeeds, so
+        `isPal` flips true immediately for the current session instead of waiting on the next
+        page load/RLS round-trip.
+  - [x] 4.15d Verification: `bunx supabase db push`, `vue-tsc --build`, `eslint` clean on the
+        touched files (pre-existing errors in `StepGames.vue`/`mocks/playerProfiles.ts` from
+        earlier uncommitted work are unrelated). Manual browser walkthrough left to the user.
+
+- [x] 4.16 Pal avatar upload (found 2026-09-06 by the user on account `intmaster`: Settings'
+      Profile tab "Change photo" button was `disabled` - a real photo could only ever be set
+      once, during the Become a Pal wizard's Account step).
+  - [x] 4.16a Backend: `PATCH /players/me/avatar` (`routers/players.py`, multipart `avatar`
+        `File`) - re-encodes to WebP via `upload_image_as_webp` (same as feed/post images,
+        unlike `create_my_player`'s raw upload for the wizard's one-off signup avatar), updates
+        `players.avatar_url`, returns the refreshed `PlayerDetailOut`.
+  - [x] 4.16b Frontend: `stores/players.ts` gains `updateAvatar(file)`, posting the multipart
+        body and replacing `mine` with the response directly (no extra `fetchMine` round-trip) so
+        every place already reading `playersStore.mine.avatarUrl` (feed sidebar, both
+        dashboards, post composer) picks up the new photo at once.
+  - [x] 4.16c Frontend: `SettingsProfileTab.vue`'s avatar preview now reads
+        `playersStore.mine?.avatarUrl` (was unset, so it always fell back to the generated
+        DiceBear avatar even after 4.6c wired every other `UAvatar` to real photos) and fetches
+        `mine` on mount if not already loaded. "Change photo" opens a hidden file input
+        (`StepAccount.vue`'s pattern) and calls `updateAvatar`, with a loading state and an
+        error toast on failure.
+  - [x] 4.16d Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean; FastAPI app
+        imports clean. Manual browser walkthrough left to the user.
 
 ---
 

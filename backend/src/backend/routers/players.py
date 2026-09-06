@@ -10,7 +10,7 @@ from pydantic import BaseModel, ValidationError
 
 from ..core.auth import get_current_user_id, get_optional_user_id
 from ..core.schema import CamelModel
-from ..core.storage import upload_file
+from ..core.storage import upload_file, upload_image_as_webp
 from ..core.supabase import get_supabase_client
 from .feed import _POST_SELECT, PostOut, _serialize_posts
 
@@ -311,17 +311,19 @@ def _fetch_services(player_id: str, *, active_only: bool):
 
 def _with_social_counts(client, player: dict) -> dict:
     """Posts/follows are unified around `users` now (3.18), not `players` - a Pal's own social
-    counts live on their `users` row, same place a plain buyer's would."""
+    counts live on their `users` row, same place a plain buyer's would. `handle` is unified there
+    too (4.14) - a Pal's marketplace handle is just their account username."""
+    stub = {"handle": None, "posts_count": 0, "followers_count": 0, "following_count": 0}
     if not player.get("user_id"):
-        return {**player, "posts_count": 0, "followers_count": 0, "following_count": 0}
+        return {**player, **stub}
     result = (
         client.table("users")
-        .select("posts_count, followers_count, following_count")
+        .select("handle, posts_count, followers_count, following_count")
         .eq("id", player["user_id"])
         .maybe_single()
         .execute()
     )
-    counts = result.data if result and result.data else {"posts_count": 0, "followers_count": 0, "following_count": 0}
+    counts = result.data if result and result.data else stub
     return {**player, **counts}
 
 
@@ -586,6 +588,23 @@ def get_my_player(user_id: str = Depends(get_current_user_id)) -> dict:
     return _fetch_player_by_user_id(user_id, active_only=False)
 
 
+@router.patch("/me/avatar", response_model=PlayerDetailOut)
+def update_my_player_avatar(
+    avatar: UploadFile = File(...),  # noqa: B008
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """Settings' Profile tab "Change photo" (4.16) - re-encoded to WebP same as feed/post
+    images, unlike the raw upload `create_my_player` does for the Become-a-Pal wizard's initial
+    avatar (that one's a one-off at signup, not worth the extra Pillow round-trip there)."""
+    client = get_supabase_client()
+    player = client.table("players").select("id").eq("user_id", user_id).maybe_single().execute()
+    if not player or not player.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
+    avatar_url = upload_image_as_webp("avatars", f"{user_id}/avatar-{uuid4()}", avatar)
+    client.table("players").update({"avatar_url": avatar_url}).eq("id", player.data["id"]).execute()
+    return _fetch_player_by_user_id(user_id, active_only=False)
+
+
 @router.get("/me/earnings", response_model=EarningsOut)
 def get_my_earnings(user_id: str = Depends(get_current_user_id)) -> dict:
     """Player Dashboard / Earnings (3.7) - not a `_fetch_player_by_user_id` call since only the
@@ -639,11 +658,16 @@ def create_my_player(
     id_front_url = upload_file("id-documents", f"{user_id}/id-front-{uuid4()}", id_front)
     id_back_url = upload_file("id-documents", f"{user_id}/id-back-{uuid4()}", id_back) if id_back else None
 
+    # A Pal's marketplace handle is just their account username (4.14) - only assign the old
+    # auto-generated fallback if they haven't already set one in Settings.
+    account = client.table("users").select("handle").eq("id", user_id).maybe_single().execute()
+    if not (account and account.data and account.data.get("handle")):
+        client.table("users").update({"handle": f"@{user_id[:10]}"}).eq("id", user_id).execute()
+
     client.table("players").insert(
         {
             "id": player_id,
             "user_id": user_id,
-            "handle": f"@{user_id[:10]}",
             "display_name": display_name,
             "avatar_url": avatar_url,
             "tagline": tagline,

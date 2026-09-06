@@ -15,7 +15,7 @@ const profile = computed(() =>
 )
 
 const displayName = ref(authStore.user?.displayName ?? mockCurrentUser.displayName ?? '')
-const username = ref(profile.value?.handle ?? '')
+const username = ref(authStore.user?.handle ?? '')
 const email = computed(() => authStore.user?.email ?? mockCurrentUser.email)
 const phone = ref(authStore.user?.phone ?? '')
 const country = ref(authStore.user?.country ?? '')
@@ -37,6 +37,7 @@ async function saveAccountDetails() {
   try {
     await authStore.updateAccount({
       displayName: displayName.value,
+      handle: username.value,
       phone: phone.value,
       country: country.value,
     })

@@ -114,10 +114,6 @@ export function createVerifyStepData(): VerifyStepData {
   }
 }
 
-// Mock Squad Coin wallet handle shared by the Verify and Review steps — real
-// accounts will get a generated handle once auth is wired up in Phase 2/3.
-export const mockWalletHandle = '1525835767'
-
 export interface ReviewStepData {
   confirmedAccurate: boolean
 }

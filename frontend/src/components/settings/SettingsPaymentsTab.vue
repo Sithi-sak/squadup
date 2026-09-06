@@ -84,7 +84,7 @@ async function removeCard(cardId: string) {
             </p>
           </div>
         </div>
-        <UBadge color="primary" variant="soft" size="sm" class="rounded-full">Default</UBadge>
+        <UBadge color="primary" variant="soft" size="md" class="rounded-full">Default</UBadge>
       </div>
 
       <button

@@ -84,7 +84,6 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
         <div>
           <h1 class="flex items-center gap-2 text-3xl font-bold text-white md:text-4xl">
             eStars Leaderboard
-            <PhTrophy :size="28" weight="fill" class="text-brand-400" />
           </h1>
           <p class="mt-2 text-slate-400">The top-earning Pals on SquadUp this week</p>
         </div>

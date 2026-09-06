@@ -1,25 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { PhPlus, PhX } from '@phosphor-icons/vue'
-import { games } from '@/data/games'
+import { competitiveGames, games } from '@/data/games'
 import type { GamesStepData } from './types'
 
 const data = defineModel<GamesStepData>({ required: true })
 
 const emit = defineEmits<{ continue: []; back: [] }>()
 
-const gameOptions = [
-  'Valorant',
-  'League of Legends',
-  'Mobile Legends: Bang Bang',
-  'Dota 2',
-  'Counter-Strike 2',
-  'Overwatch 2',
-  'Apex Legends',
-  'PUBG Mobile',
-  'Free Fire',
-  'Honor of Kings',
-]
+const gameOptions = competitiveGames.map((game) => game.name)
 
 const languageOptions = ['English', 'Khmer', 'Vietnamese', 'Chinese', 'Korean', 'Japanese']
 
@@ -28,16 +17,26 @@ const remainingLanguages = computed(() =>
   languageOptions.filter((lang) => !data.value.languages.includes(lang)),
 )
 
-const gameMenuItems = computed(() =>
-  remainingGames.value.map((game) => ({ label: game, onSelect: () => addGame(game) })),
-)
+const pendingGame = ref<string | null>(null)
+watch(pendingGame, (game) => {
+  if (!game) return
+  addGame(game)
+  pendingGame.value = null
+})
 
-// Drive the "Highest rank" field off the first selected game with a known rank ladder,
-// since the form only tracks a single rank across all of a Pal's games.
+// Drive the "Highest rank" and "Role" fields off the first selected game with a known
+// rank/role ladder, since the form only tracks a single rank and role across all of a Pal's games.
 const rankOptions = computed(() => {
   for (const game of data.value.games) {
     const ranks = games.find((g) => g.name === game)?.ranks
     if (ranks) return ranks
+  }
+  return null
+})
+const roleOptions = computed(() => {
+  for (const game of data.value.games) {
+    const roles = games.find((g) => g.name === game)?.roles
+    if (roles) return roles
   }
   return null
 })
@@ -74,6 +73,7 @@ const fieldUi = {
 }
 
 const pillButtonClass = 'gap-2 rounded-full bg-gray-800 text-white hover:bg-gray-700'
+const gamePickerUi = { base: `${pillButtonClass} px-4 py-2` }
 </script>
 
 <template>
@@ -102,12 +102,21 @@ const pillButtonClass = 'gap-2 rounded-full bg-gray-800 text-white hover:bg-gray
           </button>
         </span>
 
-        <UDropdownMenu v-if="remainingGames.length" :items="gameMenuItems">
-          <UButton color="neutral" variant="soft" :class="pillButtonClass">
-            <PhPlus :size="16" />
-            Add game
-          </UButton>
-        </UDropdownMenu>
+        <USelectMenu
+          v-if="remainingGames.length"
+          v-model="pendingGame"
+          :items="remainingGames"
+          placeholder="Add a game"
+          variant="none"
+          :ui="gamePickerUi"
+        >
+          <template #default>
+            <span class="flex items-center gap-2">
+              <PhPlus :size="16" />
+              Add game
+            </span>
+          </template>
+        </USelectMenu>
       </div>
     </div>
 
@@ -137,7 +146,19 @@ const pillButtonClass = 'gap-2 rounded-full bg-gray-800 text-white hover:bg-gray
 
     <div class="flex flex-col gap-2">
       <label for="role" class="text-sm font-medium text-white">Roles you main</label>
+      <USelect
+        v-if="roleOptions"
+        id="role"
+        v-model="data.role"
+        :items="roleOptions"
+        placeholder="Select your role"
+        variant="subtle"
+        size="md"
+        class="w-full"
+        :ui="fieldUi"
+      />
       <UInput
+        v-else
         id="role"
         v-model="data.role"
         placeholder="Healer"

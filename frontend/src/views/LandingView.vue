@@ -4,15 +4,13 @@ import { useRouter } from 'vue-router'
 import {
   PhMagnifyingGlass,
   PhUserCircle,
-  PhCheckCircle,
-  PhStar,
   PhCaretLeft,
   PhCaretRight,
 } from '@phosphor-icons/vue'
 import { usePlayersStore } from '@/stores/players'
-import coinIcon from '@/assets/squadup-coin.svg'
 import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
 import { featuredGames } from '@/data/games'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const router = useRouter()
 const playersStore = usePlayersStore()
@@ -191,49 +189,26 @@ function handleSearch() {
     <section v-if="topPlayers.length" class="px-4 py-10 md:px-6 md:py-14">
       <div class="mx-auto max-w-4/5">
         <h2 class="mb-5 text-2xl font-bold text-white">Top Pal</h2>
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          <article
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <button
             v-for="player in topPlayers"
             :key="player.id"
-            class="flex flex-col overflow-hidden rounded-xl bg-white/5"
+            type="button"
+            class="flex cursor-pointer flex-col items-center gap-3 rounded-2xl bg-gray-800/70 p-5 text-center transition-colors hover:bg-gray-800"
+            @click="router.push(`/players/${player.id}`)"
           >
-            <div class="flex aspect-square items-center justify-center bg-white/5 text-slate-500">
-              <PhUserCircle :size="48" />
+            <UAvatar
+              :src="resolveAvatarUrl(player.id, player.avatarUrl)"
+              size="2xl"
+              class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60"
+            >
+              <PhUserCircle :size="32" />
+            </UAvatar>
+            <div>
+              <p class="font-semibold text-white">{{ player.displayName }}</p>
+              <p class="text-xs text-slate-400">{{ player.games[0] }} · {{ player.rating ?? '—' }}</p>
             </div>
-            <div class="flex flex-1 flex-col gap-2 p-3">
-              <div class="flex items-center gap-1.5">
-                <span class="text-[15px] font-bold text-white">{{ player.displayName }}</span>
-                <PhCheckCircle :size="16" weight="fill" class="shrink-0 text-brand-600" />
-              </div>
-              <p class="truncate text-xs text-slate-400">{{ player.games[0] }} · {{ player.rank }}</p>
-              <div class="flex gap-1.5">
-                <span class="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] text-slate-300">
-                  PC
-                </span>
-                <span class="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] text-slate-300">
-                  Ranked
-                </span>
-              </div>
-              <div class="flex items-center justify-between text-[13px] text-white">
-                <span class="inline-flex items-center gap-1">
-                  <PhStar :size="14" weight="fill" class="text-amber-400" />
-                  {{ player.rating ?? '—' }}
-                </span>
-                <span class="inline-flex items-center gap-1">
-                  <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
-                  {{ player.pricePerHour ?? '—' }}/hr
-                </span>
-              </div>
-              <UButton
-                color="primary"
-                block
-                class="mt-auto justify-center rounded-full"
-                @click="router.push(`/players/${player.id}`)"
-              >
-                Play now
-              </UButton>
-            </div>
-          </article>
+          </button>
         </div>
       </div>
     </section>

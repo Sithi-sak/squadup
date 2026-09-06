@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
 
+from ..core.feed_events import post_status
 from ..core.schema import CamelModel
 from ..core.storage import create_signed_url
 from ..core.supabase import get_supabase_client
@@ -177,6 +178,8 @@ def update_pal_application_status(player_id: str, payload: AdminPalApplicationSt
     result = (
         client.table("players").select(_PAL_APPLICATION_SELECT).eq("id", player_id).single().execute()
     )
+    if payload.status == "approved" and result.data.get("user_id"):
+        post_status(result.data["user_id"], "🎉 Just got verified as a Pal on SquadUp!", category="chilling")
     return _pal_application_out(result.data)
 
 

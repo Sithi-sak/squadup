@@ -83,7 +83,8 @@ async function handleSubmit() {
       phone: accountData.value.phone,
       country: accountData.value.region,
     })
-    await playersStore.createMine(formData)
+    const profile = await playersStore.createMine(formData)
+    if (authStore.user) authStore.user = { ...authStore.user, playerId: profile.id }
     submitted.value = true
   } catch (err) {
     submitError.value = err instanceof Error ? err.message : 'Failed to submit your application'

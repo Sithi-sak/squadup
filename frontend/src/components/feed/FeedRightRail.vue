@@ -133,7 +133,7 @@ async function follow(pal: PlayerSummary) {
           @click="exploreCategory(topic.category)"
         >
           <div>
-            <p class="text-sm text-white">{{ topic.category }}</p>
+            <p class="text-sm text-white">#{{ topic.category }}</p>
             <p class="text-xs text-slate-400">{{ formatCount(topic.count) }} posts</p>
           </div>
           <PhCaretRight :size="16" class="shrink-0 text-slate-500" />

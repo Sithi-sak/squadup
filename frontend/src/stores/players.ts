@@ -375,6 +375,16 @@ export const usePlayersStore = defineStore('players', () => {
     return mine.value
   }
 
+  /** Settings' Profile tab "Change photo" (`PATCH /players/me/avatar`, multipart). Response
+   * replaces `mine` directly (no `fetchMine` refetch needed) so every place reading
+   * `playersStore.mine.avatarUrl` (feed sidebar, dashboards, post composer) updates at once. */
+  async function updateAvatar(file: File) {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    mine.value = await api.patch<MyPlayerProfile>('/players/me/avatar', formData)
+    return mine.value
+  }
+
   /** Create Service submission (`POST /players/me/services`, multipart). Refetches `mine` so
    * derived fields (e.g. `highlightedServiceId`, the profile-level `priceCoins`) stay correct
    * rather than re-deriving them client-side. */
@@ -478,6 +488,7 @@ export const usePlayersStore = defineStore('players', () => {
     mineError,
     fetchMine,
     createMine,
+    updateAvatar,
     createService,
     updateService,
     deleteService,

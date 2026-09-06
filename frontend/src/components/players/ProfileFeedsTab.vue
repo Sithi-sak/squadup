@@ -8,7 +8,7 @@ import type { PlayerSummary } from '@/stores/players'
 import { formatTimeAgo } from '@/utils/timeAgo'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
-const props = defineProps<{ player: PlayerSummary; feed: FeedPost[] }>()
+const props = defineProps<{ player: PlayerSummary; handle: string | null; feed: FeedPost[] }>()
 
 const feedStore = useFeedStore()
 const toast = useToast()
@@ -100,7 +100,7 @@ async function toggleLike(post: FeedPost) {
                 {{ post.tier }}
               </UBadge>
             </div>
-            <p class="text-xs text-slate-400">@{{ player.id }} · {{ formatTimeAgo(post.createdAt) }}</p>
+            <p class="text-xs text-slate-400">{{ handle ?? player.displayName }} · {{ formatTimeAgo(post.createdAt) }}</p>
           </div>
         </div>
         <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Post options">
@@ -110,7 +110,16 @@ async function toggleLike(post: FeedPost) {
 
       <p class="mt-3 text-sm leading-relaxed text-slate-200">{{ post.text }}</p>
 
-      <div v-if="post.hasImage" class="mt-3 aspect-video w-full rounded-lg bg-white/5 ring-1 ring-inset ring-white/10" />
+      <img
+        v-if="post.imageUrl"
+        :src="post.imageUrl"
+        alt=""
+        class="mt-3 aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
+      />
+      <div
+        v-else-if="post.hasImage"
+        class="mt-3 aspect-video w-full rounded-lg bg-white/5 ring-1 ring-inset ring-white/10"
+      />
 
       <div class="mt-3 flex items-center gap-4 text-sm text-slate-400">
         <button

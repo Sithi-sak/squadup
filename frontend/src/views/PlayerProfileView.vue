@@ -149,7 +149,12 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
           :detail="selectedDetail"
           :reviews="selectedReviews"
         />
-        <ProfileFeedsTab v-else-if="activeTab === 'feeds'" :player="player" :feed="profile.feed" />
+        <ProfileFeedsTab
+          v-else-if="activeTab === 'feeds'"
+          :player="player"
+          :handle="profile.handle"
+          :feed="profile.feed"
+        />
         <ProfileAlbumTab v-else-if="activeTab === 'album'" :album="profile.album" />
         <ProfileWishTab
           v-else-if="activeTab === 'wish'"

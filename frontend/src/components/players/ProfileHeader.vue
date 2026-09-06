@@ -40,8 +40,9 @@ async function toggleFollow() {
   }
 }
 
-function copyLink() {
-  navigator.clipboard?.writeText(window.location.href)
+function copyUsername() {
+  navigator.clipboard?.writeText(props.profile.handle)
+  toast.add({ title: 'Username copied', color: 'success' })
 }
 
 const subscriptionsStore = useSubscriptionsStore()
@@ -129,8 +130,8 @@ function confirmBlock() {
         variant="soft"
         square
         :ui="{ base: 'rounded-full' }"
-        aria-label="Copy profile link"
-        @click="copyLink"
+        aria-label="Copy username"
+        @click="copyUsername"
       >
         <PhCopy :size="18" weight="bold" />
       </UButton>

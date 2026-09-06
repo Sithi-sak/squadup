@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { PhArrowUp, PhCheck, PhLock } from '@phosphor-icons/vue'
-import coinIcon from '@/assets/squadup-coin.svg'
-import { mockWalletHandle, type PayoutSchedule, type VerifyStepData } from './types'
+import type { PayoutSchedule, VerifyStepData } from './types'
 
 const data = defineModel<VerifyStepData>({ required: true })
 
@@ -38,7 +37,8 @@ const canSubmit = computed(() => data.value.idFrontFile !== null)
 <template>
   <h2 class="text-2xl font-semibold text-white sm:text-3xl">Verify your identity &amp; payout</h2>
   <p class="mt-2 text-slate-400">
-    We verify every Pal to keep SquadUp safe. Payouts are sent in Squad Coin.
+    We verify every Pal to keep SquadUp safe. You'll connect how you get paid after you're
+    approved.
   </p>
 
   <div class="mt-6 flex items-center gap-3 rounded-full bg-brand-600/10 px-6 py-2.5 text-brand-300">
@@ -124,7 +124,7 @@ const canSubmit = computed(() => data.value.idFrontFile !== null)
       <label class="text-sm font-medium text-white">Selfie verification</label>
       <button
         type="button"
-        class="flex cursor-pointer items-center justify-between gap-4 rounded-full bg-gray-800/70 px-6 py-4 text-left"
+        class="flex cursor-pointer items-center justify-between gap-4 rounded-xl bg-gray-800/70 px-6 py-4 text-left"
         @click="toggleSelfie"
       >
         <div>
@@ -135,22 +135,6 @@ const canSubmit = computed(() => data.value.idFrontFile !== null)
           {{ data.selfieVerified ? 'Verified' : 'Pending' }}
         </UBadge>
       </button>
-    </div>
-
-    <div class="flex flex-col gap-3">
-      <label class="text-sm font-medium text-white">Payout method</label>
-      <div
-        class="flex items-center justify-between gap-4 rounded-full border-2 border-brand-600 bg-brand-600/5 px-6 py-4"
-      >
-        <div class="flex items-center gap-3">
-          <img :src="coinIcon" alt="" class="size-9 shrink-0" />
-          <div>
-            <p class="text-sm font-medium text-white">Squad Coin Wallet</p>
-            <p class="text-sm text-slate-400">@{{ mockWalletHandle }} · Balance 0 SC</p>
-          </div>
-        </div>
-        <UBadge color="success" variant="subtle" class="rounded-full">Selected</UBadge>
-      </div>
     </div>
 
     <div class="flex flex-col gap-3">

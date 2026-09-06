@@ -92,6 +92,18 @@ const router = createRouter({
       meta: { hideFooter: true },
     },
     {
+      path: '/feed/me',
+      name: 'feed-profile',
+      component: () => import('@/views/UserDashboardView.vue'),
+      meta: { hideFooter: true, requiresAuth: true },
+    },
+    {
+      path: '/feed/u/:id',
+      name: 'user-profile',
+      component: () => import('@/views/PublicProfileView.vue'),
+      meta: { hideFooter: true },
+    },
+    {
       path: '/feed/:postId',
       name: 'post-detail',
       component: () => import('@/views/PostDetailView.vue'),
@@ -193,12 +205,6 @@ const router = createRouter({
       path: '/dashboard/player/earnings',
       name: 'player-dashboard-earnings',
       component: () => import('@/views/PlayerEarningsView.vue'),
-      meta: { hideFooter: true, requiresAuth: true },
-    },
-    {
-      path: '/dashboard/user',
-      name: 'user-dashboard',
-      component: () => import('@/views/UserDashboardView.vue'),
       meta: { hideFooter: true, requiresAuth: true },
     },
     {

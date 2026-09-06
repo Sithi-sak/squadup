@@ -56,7 +56,7 @@ const navLinks = computed(() => [
   { label: 'Help', to: '/help' },
 ])
 
-const dashboardPath = computed(() => (isPal.value ? '/dashboard/player' : '/dashboard/user'))
+const dashboardPath = computed(() => (isPal.value ? '/dashboard/player' : '/feed/me'))
 const firstName = computed(
   () => (authStore.user?.displayName ?? mockCurrentUser.displayName)?.split(' ')[0] ?? 'Account',
 )

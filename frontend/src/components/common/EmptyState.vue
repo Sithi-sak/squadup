@@ -15,6 +15,7 @@ withDefaults(
 
 <template>
   <UEmpty
+    variant="naked"
     :title="title"
     :description="description"
     class="mx-auto max-w-md py-16 text-center"
@@ -28,6 +29,7 @@ withDefaults(
   >
     <template #leading>
       <UAvatar
+        v-if="icon || $slots.icon"
         size="3xl"
         class="mb-4 h-20 w-20 text-white"
         :class="

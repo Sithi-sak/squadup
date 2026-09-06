@@ -138,6 +138,7 @@ async function handleSend() {
 
           <UEmpty
             v-else-if="store.threadsError"
+            variant="naked"
             title="Couldn't load chats"
             :description="store.threadsError"
             class="py-10 text-white"
@@ -186,11 +187,17 @@ async function handleSend() {
 
             <UEmpty
               v-if="filteredThreads.length === 0 && store.threads.length === 0"
+              variant="naked"
               title="No chats yet"
               description="Start a conversation from a Pal's profile or booking to see it here."
               class="py-10 text-white"
             />
-            <UEmpty v-else-if="filteredThreads.length === 0" title="No chats found" class="py-10 text-white" />
+            <UEmpty
+              v-else-if="filteredThreads.length === 0"
+              variant="naked"
+              title="No chats found"
+              class="py-10 text-white"
+            />
           </template>
         </div>
       </div>
@@ -215,10 +222,10 @@ async function handleSend() {
           </div>
           <div class="flex items-center gap-1.5">
             <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Call">
-              <PhPhone :size="18" />
+              <PhPhone :size="24" />
             </UButton>
             <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="More">
-              <PhDotsThree :size="18" />
+              <PhDotsThree :size="24" />
             </UButton>
           </div>
         </div>
@@ -233,6 +240,7 @@ async function handleSend() {
 
           <UEmpty
             v-else-if="store.messagesError"
+            variant="naked"
             title="Couldn't load messages"
             :description="store.messagesError"
             class="py-10 text-white"
@@ -268,22 +276,23 @@ async function handleSend() {
 
         <div class="flex items-center gap-2 border-t border-white/10 px-4 py-3">
           <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Attach">
-            <PhPaperclip :size="18" />
+            <PhPaperclip :size="24" />
           </UButton>
           <UInput
             v-model="draft"
             :placeholder="`Message ${store.activeThread.participantDisplayName}...`"
             variant="subtle"
+            size="lg"
             class="flex-1 rounded-full"
             :ui="{ base: 'rounded-full' }"
             :disabled="sending"
             @keyup.enter="handleSend"
           >
             <template #trailing>
-              <PhSmiley :size="18" class="text-slate-400" />
+              <PhSmiley :size="24" class="text-slate-400" />
             </template>
           </UInput>
-          <UButton color="primary" class="rounded-full px-5" :loading="sending" @click="handleSend">
+          <UButton color="primary" size="lg" class="rounded-full px-5" :loading="sending" @click="handleSend">
             Send
           </UButton>
         </div>
@@ -291,6 +300,7 @@ async function handleSend() {
 
       <UEmpty
         v-else
+        variant="naked"
         title="Select a chat"
         description="Choose a conversation to start messaging."
         class="flex-1 text-white"

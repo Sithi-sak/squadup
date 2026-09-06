@@ -2,6 +2,7 @@ export interface Game {
   id: string
   name: string
   ranks?: string[]
+  roles?: string[]
   coverUrl?: string
 }
 
@@ -159,6 +160,29 @@ const gameRanks: Record<string, string[]> = {
   'EA Sports FC 24': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite'],
   'EA Sports FC 25': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite'],
   'Brawl Stars': ['Bronze', 'Silver', 'Gold', 'Diamond', 'Mythic', 'Legendary', 'Masters', 'Pro'],
+}
+
+// Role/position ladders for team-based games with a fixed set of in-game roles.
+// Games left out here (1v1 fighters, card games, racing sims, RTS civ picks) don't have
+// a natural "role" concept, so they fall back to free text.
+const gameRoles: Record<string, string[]> = {
+  'League of Legends': ['Top', 'Jungle', 'Mid', 'ADC', 'Support'],
+  Valorant: ['Duelist', 'Controller', 'Initiator', 'Sentinel', 'Flex'],
+  'Dota 2': ['Carry', 'Mid', 'Offlane', 'Soft Support', 'Hard Support'],
+  'Apex Legends': ['Assault', 'Skirmisher', 'Recon', 'Support', 'Controller'],
+  'Counter-Strike 2': ['Entry Fragger', 'AWPer', 'Support', 'IGL', 'Lurker'],
+  'Overwatch 2': ['Tank', 'Damage', 'Support'],
+  'Rainbow Six Siege': ['Entry Fragger', 'Support', 'Flex', 'Anchor', 'IGL'],
+  'Call of Duty: Warzone': ['Fragger', 'Support', 'Sniper', 'IGL'],
+  'PUBG: Battlegrounds': ['Assaulter', 'Support', 'Sniper', 'IGL', 'Scout'],
+  'PUBG Mobile': ['Assaulter', 'Support', 'Sniper', 'IGL', 'Scout'],
+  'Mobile Legends: Bang Bang': ['Tank', 'Fighter', 'Assassin', 'Mage', 'Marksman', 'Support'],
+  Smite: ['Solo', 'Jungle', 'Mid', 'Support', 'Carry'],
+  'Heroes of the Storm': ['Tank', 'Bruiser', 'Ranged Assassin', 'Melee Assassin', 'Healer', 'Support'],
+  'The Finals': ['Light', 'Medium', 'Heavy'],
+  'NBA 2K25': ['Point Guard', 'Shooting Guard', 'Small Forward', 'Power Forward', 'Center'],
+  'Rocket League': ['Striker', 'Midfield', 'Goalkeeper'],
+  'Brawl Stars': ['Tank', 'Damage Dealer', 'Support', 'Assassin', 'Marksman', 'Controller'],
 }
 
 const gameNames = [
@@ -403,5 +427,10 @@ export const games: Game[] = gameNames.map((name) => ({
   id: slugify(name),
   name,
   ranks: gameRanks[name],
+  roles: gameRoles[name],
   coverUrl: gameCovers[name],
 }))
+
+// Games with a known competitive rank ladder — the pool Pals pick from during onboarding,
+// so their rank (and role, where applicable) can be a dropdown instead of free text.
+export const competitiveGames: Game[] = games.filter((game) => game.ranks)

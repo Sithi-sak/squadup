@@ -10,11 +10,19 @@ export interface FeedPost {
   author: string
   handle: string | null
   tier: string | null
+  /** Non-null only when the author has also become a Pal - `FeedPostCard` uses this to route a
+   * click on their name/avatar to `/players/{playerId}` instead of the plain profile page. */
+  playerId: string | null
   avatarUrl: string | null
   online: boolean
   text: string | null
   hasImage: boolean
+  imageUrl: string | null
   category: string
+  /** `'status'` posts are system-generated (booking completed, review left, new follower, Pal
+   * approved, ...) rather than composed by the author - `FeedPostCard.vue` renders them in a
+   * compact, visually distinct style so they don't read as fake user content. */
+  kind: 'user' | 'status'
   likes: number
   comments: number
   liked: boolean
@@ -43,9 +51,12 @@ export interface FeedSavedItem {
   kind: 'post' | 'service'
   createdAt: string
   postId?: string | null
+  authorId?: string | null
   author?: string | null
+  avatarUrl?: string | null
   handle?: string | null
   tier?: string | null
+  playerId?: string | null
   text?: string | null
   hasImage?: boolean | null
   likes?: number | null
@@ -59,9 +70,18 @@ export interface FeedSavedItem {
   promoLabel?: string | null
 }
 
+export interface FollowUser {
+  id: string
+  displayName: string
+  handle: string | null
+  avatarUrl: string | null
+  tier: string | null
+  following: boolean
+}
+
 export interface CreatePostPayload {
   text?: string
-  imageUrl?: string
+  image?: File
   category?: string
 }
 
@@ -76,11 +96,14 @@ function feedPostFromMock(post: MockFeedPost): FeedPost {
     author: post.author,
     handle: post.handle,
     tier: post.tier,
+    playerId: null,
     avatarUrl: null,
     online: post.online,
     text: post.text,
     hasImage: post.hasImage,
+    imageUrl: null,
     category: post.category,
+    kind: 'user',
     likes: post.likes,
     comments: post.comments,
     liked: false,
@@ -154,6 +177,11 @@ export const useFeedStore = defineStore('feed', () => {
   const commentsLoading = ref(false)
   const commentsError = ref<string | null>(null)
 
+  /** Chains `toggleLike` calls per post id so a rapid double-click (like then unlike before the
+   * first request lands) fires its requests in order instead of two concurrent PATCH-race
+   * requests whose responses can arrive out of order and stomp each other with a stale count. */
+  const likeRequestChains: Record<string, Promise<unknown>> = {}
+
   function patchPost(updated: FeedPost) {
     for (const list of [posts.value, following.value]) {
       const index = list.findIndex((p) => p.id === updated.id)
@@ -206,6 +234,14 @@ export const useFeedStore = defineStore('feed', () => {
     }
   }
 
+  /** A single author's posts (`/feed?authorId=`) - used by a plain buyer's own stripped-down
+   * profile page, kept out of the shared `posts`/`following` lists so it doesn't clobber the
+   * main Feed/Following views' state. No mock fallback: unlike `fetchFeed`, a failure here has
+   * no reasonable stand-in content. */
+  async function fetchAuthorPosts(authorId: string) {
+    return api.get<FeedPost[]>(`/feed?authorId=${encodeURIComponent(authorId)}`)
+  }
+
   /** Following (`/feed/following`). Same fallback behavior as `fetchFeed`. */
   async function fetchFollowing() {
     followingLoading.value = true
@@ -232,19 +268,62 @@ export const useFeedStore = defineStore('feed', () => {
     return posts.value.find((p) => p.id === id) ?? following.value.find((p) => p.id === id)
   }
 
-  /** Feed composer (`CreatePostModal.vue`). */
+  /** Feed composer (`CreatePostModal.vue`) - multipart, not JSON, so an attached image rides
+   * along as a real file (see `lib/api.ts`'s `FormData` handling); the backend re-encodes it to
+   * WebP before storing it. */
   async function createPost(payload: CreatePostPayload) {
-    const post = await api.post<FeedPost>('/feed/posts', payload)
+    const formData = new FormData()
+    if (payload.text) formData.append('text', payload.text)
+    if (payload.category) formData.append('category', payload.category)
+    if (payload.image) formData.append('image', payload.image)
+
+    const post = await api.post<FeedPost>('/feed/posts', formData)
     posts.value.unshift(post)
     return post
   }
 
-  async function toggleLike(post: FeedPost) {
-    const updated = post.liked
-      ? await api.delete<FeedPost>(`/feed/posts/${post.id}/like`)
-      : await api.post<FeedPost>(`/feed/posts/${post.id}/like`)
+/** Edit a post's text and/or image (author-only, enforced server-side). `removeImage` clears
+   * an existing image with no replacement - ignored if `image` is also given. Multipart like
+   * `createPost`, for the same reason (an attached image rides as a real file). Patches the same
+   * shared lists `toggleLike` does via `patchPost`; callers keeping their own local copy
+   * (`UserDashboardView`'s own-posts list, same convention as `ProfileFeedsTab.vue`) still need to
+   * reconcile that copy themselves off the returned post. */
+  async function updatePost(postId: string, payload: { text: string; image?: File; removeImage?: boolean }) {
+    const formData = new FormData()
+    formData.append('text', payload.text)
+    if (payload.image) formData.append('image', payload.image)
+    else if (payload.removeImage) formData.append('remove_image', 'true')
+
+    const updated = await api.patch<FeedPost>(`/feed/posts/${postId}`, formData)
     patchPost(updated)
     return updated
+  }
+
+  /** Flips `liked`/`likes` locally before the request lands (`patchPost`) so the button responds
+   * instantly instead of waiting on the backend's recount-and-refetch round trip, then reconciles
+   * with the server's real counts once they arrive - or reverts on failure. Requests for the same
+   * post are chained off `likeRequestChains` (queued after whatever's already in flight for that
+   * post) rather than fired concurrently, so a fast double-click can't let two responses land out
+   * of order and leave a stale/impossible count displayed. */
+  async function toggleLike(post: FeedPost) {
+    const wasLiked = post.liked
+    patchPost({ ...post, liked: !wasLiked, likes: post.likes + (wasLiked ? -1 : 1) })
+
+    const previous = likeRequestChains[post.id] ?? Promise.resolve()
+    const request = previous.catch(() => {}).then(() =>
+      wasLiked
+        ? api.delete<FeedPost>(`/feed/posts/${post.id}/like`)
+        : api.post<FeedPost>(`/feed/posts/${post.id}/like`),
+    )
+    likeRequestChains[post.id] = request
+    try {
+      const updated = await request
+      if (likeRequestChains[post.id] === request) patchPost(updated)
+      return updated
+    } catch (err) {
+      if (likeRequestChains[post.id] === request) patchPost(post)
+      throw err
+    }
   }
 
   async function toggleFollow(authorId: string, currentlyFollowing: boolean) {
@@ -257,6 +336,16 @@ export const useFeedStore = defineStore('feed', () => {
         )
     applyFollow(authorId, result.following)
     return result
+  }
+
+  /** A user's followers/following list (Followers/Following tabs on a profile). No mock
+   * fallback, same reasoning as `fetchAuthorPosts`. */
+  async function fetchFollowers(userId: string) {
+    return api.get<FollowUser[]>(`/feed/follows/${encodeURIComponent(userId)}/followers`)
+  }
+
+  async function fetchFollowingUsers(userId: string) {
+    return api.get<FollowUser[]>(`/feed/follows/${encodeURIComponent(userId)}/following`)
   }
 
   /** Post Detail / a post's comment thread. Falls back to `mockPostComments`. */
@@ -363,10 +452,14 @@ export const useFeedStore = defineStore('feed', () => {
     commentsLoading,
     commentsError,
     fetchFeed,
+    fetchAuthorPosts,
     fetchFollowing,
+    fetchFollowers,
+    fetchFollowingUsers,
     fetchPost,
     getPost,
     createPost,
+    updatePost,
     toggleLike,
     toggleFollow,
     fetchComments,

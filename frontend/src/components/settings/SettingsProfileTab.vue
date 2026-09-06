@@ -1,16 +1,51 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
 import { useAuthStore } from '@/stores/auth'
+import { usePlayersStore } from '@/stores/players'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 import SettingsActionRow from './SettingsActionRow.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
 const authStore = useAuthStore()
+const playersStore = usePlayersStore()
+const toast = useToast()
 const profile = mockPlayerProfiles.self!
-const avatarUrl = computed(() => resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id))
+const avatarUrl = computed(() =>
+  resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, playersStore.mine?.avatarUrl),
+)
+
+onMounted(() => {
+  if (!playersStore.mine) playersStore.fetchMine()
+})
+
+const avatarFileInput = ref<HTMLInputElement | null>(null)
+const avatarUploading = ref(false)
+
+function openAvatarPicker() {
+  avatarFileInput.value?.click()
+}
+
+async function onAvatarSelected(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  ;(event.target as HTMLInputElement).value = ''
+  if (!file) return
+  avatarUploading.value = true
+  try {
+    await playersStore.updateAvatar(file)
+  } catch (err) {
+    toast.add({
+      title: 'Could not update photo',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    avatarUploading.value = false
+  }
+}
 
 const accountDisplayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
 const accountEmail = computed(() => authStore.user?.email ?? mockCurrentUser.email)
@@ -42,9 +77,23 @@ const pushNotifications = ref(true)
             <p class="text-sm text-slate-400">{{ profile.tier }} · {{ profile.handle }}</p>
           </div>
         </div>
-        <UButton color="neutral" variant="soft" size="md" class="rounded-full" disabled>
+        <UButton
+          color="neutral"
+          variant="soft"
+          size="md"
+          class="rounded-full"
+          :loading="avatarUploading"
+          @click="openAvatarPicker"
+        >
           Change photo
         </UButton>
+        <input
+          ref="avatarFileInput"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          class="hidden"
+          @change="onAvatarSelected"
+        />
       </div>
 
       <div class="mt-6 flex flex-col gap-2">

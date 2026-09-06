@@ -7,7 +7,7 @@ import type {
   ReviewStepData,
   VerifyStepData,
 } from './types'
-import { availabilityDays, mockWalletHandle } from './types'
+import { availabilityDays } from './types'
 
 const data = defineModel<ReviewStepData>({ required: true })
 
@@ -78,7 +78,7 @@ const reviewSections = computed(() => [
   {
     stepId: 1,
     title: 'Account',
-    line1: `${props.accountData.displayName || 'Pal'} · @${mockWalletHandle}`,
+    line1: props.accountData.displayName || 'Pal',
     line2: [props.accountData.email, props.accountData.region, props.accountData.timezone]
       .filter(Boolean)
       .join(' · '),
@@ -101,7 +101,7 @@ const reviewSections = computed(() => [
     stepId: 4,
     title: 'Verify & payout',
     line1: `ID ${props.verifyData.idFrontFile ? 'verified' : 'not uploaded'} · Selfie ${props.verifyData.selfieVerified ? 'verified' : 'pending review'}`,
-    line2: `Squad Coin wallet @${mockWalletHandle} · ${payoutScheduleLabel.value} payout`,
+    line2: `${payoutScheduleLabel.value} payout · connect a payout method after approval`,
   },
 ])
 

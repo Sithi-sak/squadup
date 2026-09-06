@@ -5,6 +5,7 @@ export const mockCurrentUser: AuthUser = {
   id: 'user-1',
   email: 'dara.chan@example.com',
   displayName: 'Dara Chan',
+  handle: '@dara.chan',
   phone: null,
   country: null,
   role: 'user',

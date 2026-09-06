@@ -8,7 +8,7 @@ import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
 defineProps<{
-  active: 'feed' | 'following' | 'explore' | 'saved'
+  active: 'feed' | 'following' | 'explore' | 'saved' | 'profile'
   showCreatePost?: boolean
 }>()
 
@@ -20,7 +20,7 @@ onMounted(() => {
 })
 
 const displayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
-const email = computed(() => authStore.user?.email ?? mockCurrentUser.email)
+const handle = computed(() => authStore.user?.handle ?? mockCurrentUser.handle)
 const myPlayerProfile = computed(() => playersStore.mine)
 const avatarUrl = computed(() =>
   resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, myPlayerProfile.value?.avatarUrl),
@@ -68,7 +68,7 @@ function formatCount(count: number) {
           {{ myPlayerProfile.tier }}
         </UBadge>
       </template>
-      <p v-else class="text-sm text-slate-400">{{ email }}</p>
+      <p v-else-if="handle" class="text-sm text-slate-400">{{ handle }}</p>
 
       <div v-if="stats" class="mt-4 grid w-full grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4">
         <div>
@@ -102,10 +102,15 @@ function formatCount(count: number) {
         {{ item.label }}
       </router-link>
       <router-link
-        :to="myPlayerProfile ? '/dashboard/player' : '/dashboard/user'"
-        class="flex items-center gap-3 rounded-full px-3 py-2.5 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+        :to="myPlayerProfile ? '/dashboard/player' : '/feed/me'"
+        class="flex items-center gap-3 rounded-full px-3 py-2.5 text-sm transition-colors"
+        :class="
+          active === 'profile'
+            ? 'bg-brand-600/15 text-brand-400'
+            : 'text-slate-300 hover:bg-white/5 hover:text-white'
+        "
       >
-        <PhUserCircle :size="20" />
+        <PhUserCircle :size="20" :weight="active === 'profile' ? 'fill' : 'regular'" />
         Your profile
       </router-link>
     </nav>

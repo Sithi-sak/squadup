@@ -9,6 +9,7 @@ export interface AuthUser {
   id: string
   email: string
   displayName: string | null
+  handle: string | null
   phone: string | null
   country: string | null
   role: 'user' | 'admin'
@@ -31,7 +32,7 @@ async function loadAuthUser(supabaseUser: User): Promise<AuthUser> {
     supabase
       .from('users')
       .select(
-        'display_name, phone, country, role, onboarding_complete, coin_balance, posts_count, followers_count, following_count',
+        'display_name, handle, phone, country, role, onboarding_complete, coin_balance, posts_count, followers_count, following_count',
       )
       .eq('id', supabaseUser.id)
       .maybeSingle(),
@@ -42,6 +43,7 @@ async function loadAuthUser(supabaseUser: User): Promise<AuthUser> {
     id: supabaseUser.id,
     email: supabaseUser.email ?? '',
     displayName: data?.display_name ?? null,
+    handle: data?.handle ?? null,
     phone: data?.phone ?? null,
     country: data?.country ?? null,
     role: (data?.role as AuthUser['role']) ?? 'user',
@@ -106,15 +108,17 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** Patches the caller's own account row (`PATCH /users/me`) - shared by Settings' Account tab
-   * and Become a Pal's step 1, both of which edit the same `displayName`/`phone`/`country`
+   * and Become a Pal's step 1, both of which edit the same `displayName`/`handle`/`phone`/`country`
    * fields on `public.users` rather than keeping their own copies. Email isn't included: it's
    * Supabase-auth-backed and only changeable through Settings' own dedicated flow. */
-  async function updateAccount(updates: { displayName?: string; phone?: string; country?: string }) {
+  async function updateAccount(updates: { displayName?: string; handle?: string; phone?: string; country?: string }) {
     if (!user.value) return
-    const updated = await api.patch<{ displayName: string | null; phone: string | null; country: string | null }>(
-      '/users/me',
-      updates,
-    )
+    const updated = await api.patch<{
+      displayName: string | null
+      handle: string | null
+      phone: string | null
+      country: string | null
+    }>('/users/me', updates)
     user.value = { ...user.value, ...updated }
   }
 

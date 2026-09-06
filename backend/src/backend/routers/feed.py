@@ -1,10 +1,21 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from pydantic import Field
 
 from ..core.auth import get_current_user_id, get_optional_user_id
+from ..core.feed_events import post_status
 from ..core.schema import CamelModel
+from ..core.storage import upload_image_as_webp
 from ..core.supabase import get_supabase_client
 
 router = APIRouter(prefix="/feed", tags=["feed"])
@@ -13,23 +24,20 @@ router = APIRouter(prefix="/feed", tags=["feed"])
 # Schemas ---------------------------------------------------------------------------------
 
 
-class PostCreateIn(CamelModel):
-    text: str | None = None
-    image_url: str | None = None
-    category: str = "games"
-
-
 class PostOut(CamelModel):
     id: str
     author_id: str
     author: str
     handle: str | None
     tier: str | None
+    player_id: str | None
     avatar_url: str | None
     online: bool
     text: str | None
     has_image: bool
+    image_url: str | None
     category: str
+    kind: str
     likes: int
     comments: int
     liked: bool
@@ -62,6 +70,15 @@ class FollowOut(CamelModel):
     followers_count: int
 
 
+class FollowUserOut(CamelModel):
+    id: str
+    display_name: str
+    handle: str | None
+    avatar_url: str | None
+    tier: str | None
+    following: bool
+
+
 class SavedItemIn(CamelModel):
     kind: str
     post_id: str | None = None
@@ -73,7 +90,9 @@ class SavedItemOut(CamelModel):
     kind: str
     created_at: str
     post_id: str | None = None
+    author_id: str | None = None
     author: str | None = None
+    avatar_url: str | None = None
     handle: str | None = None
     tier: str | None = None
     text: str | None = None
@@ -87,6 +106,7 @@ class SavedItemOut(CamelModel):
     price_coins: int | None = None
     price_unit: str | None = None
     promo_label: str | None = None
+    player_id: str | None = None
 
 
 # Helpers -----------------------------------------------------------------------------------
@@ -110,18 +130,20 @@ def _resolve_authors(client, author_ids: set[str]) -> tuple[dict[str, dict], dic
     """Batch-resolves post/comment author display info for a set of user ids - same
     "aggregate in Python" convention `_serialize_posts`'s `liked_ids`/`following_ids` already use.
     Any signed-in user can be an author now (3.18), so this always looks up `users` for the
-    display name and separately looks up `players` (may be absent - a plain buyer has no Pal
-    profile) for the handle/tier/avatar/online fields."""
+    display name/handle (4.14 - one handle for every account, not just Pals) and separately looks
+    up `players` (may be absent - a plain buyer has no Pal profile) for the tier/avatar/online
+    fields."""
     if not author_ids:
         return {}, {}
     ids = list(author_ids)
     users_by_id = {
-        u["id"]: u for u in client.table("users").select("id, display_name").in_("id", ids).execute().data or []
+        u["id"]: u
+        for u in client.table("users").select("id, display_name, handle").in_("id", ids).execute().data or []
     }
     players_by_user_id = {
         p["user_id"]: p
         for p in client.table("players")
-        .select("user_id, handle, tier, avatar_url, online")
+        .select("id, user_id, tier, avatar_url, online")
         .in_("user_id", ids)
         .execute()
         .data
@@ -144,13 +166,16 @@ def _post_out(row: dict, author: dict | None, player: dict | None, *, liked: boo
         "id": row["id"],
         "author_id": row["author_id"],
         "author": author.get("display_name") or "SquadUp user",
-        "handle": player.get("handle"),
+        "handle": author.get("handle"),
         "tier": player.get("tier"),
+        "player_id": player.get("id"),
         "avatar_url": player.get("avatar_url"),
         "online": bool(player.get("online")),
         "text": row["text"],
         "has_image": row["image_url"] is not None,
+        "image_url": row["image_url"],
         "category": row["category"],
+        "kind": row["kind"],
         "likes": row["likes_count"],
         "comments": row["comments_count"],
         "liked": liked,
@@ -202,8 +227,11 @@ def _serialize_posts(client, rows: list[dict], viewer_id: str | None) -> list[di
 
 
 def _refresh_post(client, post_id: str, viewer_id: str) -> dict:
-    count = len(client.table("post_likes").select("user_id").eq("post_id", post_id).execute().data or [])
-    client.table("posts").update({"likes_count": count}).eq("id", post_id).execute()
+    """Recomputes and writes `likes_count` in one atomic statement (`refresh_post_likes_count`
+    RPC) instead of a separate select-then-update - the old two-step version raced under
+    overlapping like/unlike calls on the same post and could leave a wrong count permanently
+    stored."""
+    client.rpc("refresh_post_likes_count", {"target_post_id": post_id}).execute()
     row = _get_post(client, post_id)
     return _serialize_posts(client, [row], viewer_id)[0]
 
@@ -266,8 +294,8 @@ def _get_comment_with_creator(client, comment_id: str) -> tuple[dict, str | None
 
 
 def _refresh_comment(client, comment_id: str, *, liked: bool) -> dict:
-    count = len(client.table("comment_likes").select("user_id").eq("comment_id", comment_id).execute().data or [])
-    client.table("comments").update({"likes_count": count}).eq("id", comment_id).execute()
+    """Same atomic-RPC fix as `_refresh_post`, for comment likes."""
+    client.rpc("refresh_comment_likes_count", {"target_comment_id": comment_id}).execute()
     row, creator_user_id = _get_comment_with_creator(client, comment_id)
     return _comment_out(row, liked=liked, creator_user_id=creator_user_id)
 
@@ -302,9 +330,12 @@ def _saved_item_out(row: dict, author: dict | None = None, player: dict | None =
         return {
             **base,
             "post_id": row["post_id"],
+            "author_id": post.get("author_id"),
             "author": author.get("display_name"),
-            "handle": player.get("handle"),
+            "avatar_url": player.get("avatar_url"),
+            "handle": author.get("handle"),
             "tier": player.get("tier"),
+            "player_id": player.get("id"),
             "text": post.get("text"),
             "has_image": post.get("image_url") is not None if post else None,
             "likes": post.get("likes_count"),
@@ -333,11 +364,15 @@ def _saved_item_out(row: dict, author: dict | None = None, player: dict | None =
 
 
 @router.get("", response_model=list[PostOut])
-def list_feed(user_id: str | None = Depends(get_optional_user_id)) -> list[dict]:
+def list_feed(
+    author_id: str | None = Query(None),
+    user_id: str | None = Depends(get_optional_user_id),
+) -> list[dict]:
     client = get_supabase_client()
-    rows = (
-        client.table("posts").select(_POST_SELECT).order("created_at", desc=True).limit(50).execute().data or []
-    )
+    query = client.table("posts").select(_POST_SELECT).order("created_at", desc=True).limit(50)
+    if author_id:
+        query = query.eq("author_id", author_id)
+    rows = query.execute().data or []
     return _serialize_posts(client, rows, user_id)
 
 
@@ -364,27 +399,69 @@ def list_following_feed(user_id: str | None = Depends(get_optional_user_id)) -> 
 
 
 @router.post("/posts", response_model=PostOut, status_code=status.HTTP_201_CREATED)
-def create_post(payload: PostCreateIn, user_id: str = Depends(get_current_user_id)) -> dict:
+def create_post(
+    text: str | None = Form(None),
+    category: str = Form("games"),
+    image: UploadFile | None = File(None),  # noqa: B008
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
     """The Feed composer (`CreatePostModal.vue`) - any signed-in account can post (3.18), Pal or
-    plain buyer, so this just needs the caller's own user id, no `players` lookup."""
+    plain buyer, so this just needs the caller's own user id, no `players` lookup. Multipart
+    (not JSON) so an attached image can ride along as a real file - re-encoded to WebP and
+    downscaled by `upload_image_as_webp` before it lands in the `post-images` bucket, so a
+    multi-MB phone photo doesn't get stored at full size for a feed-card thumbnail."""
     client = get_supabase_client()
 
-    text = (payload.text or "").strip() or None
-    if not text and not payload.image_url:
+    clean_text = (text or "").strip() or None
+    if not clean_text and not image:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Post must have text or an image")
+
+    image_url = upload_image_as_webp("post-images", f"{user_id}/{uuid4()}", image) if image else None
 
     post_id = str(uuid4())
     client.table("posts").insert(
         {
             "id": post_id,
             "author_id": user_id,
-            "text": text,
-            "image_url": payload.image_url,
-            "category": payload.category,
+            "text": clean_text,
+            "image_url": image_url,
+            "category": category,
         }
     ).execute()
     _refresh_posts_count(client, user_id)
 
+    row = _get_post(client, post_id)
+    return _serialize_posts(client, [row], user_id)[0]
+
+
+@router.patch("/posts/{post_id}", response_model=PostOut)
+def update_post(
+    post_id: str,
+    text: str = Form(""),
+    image: UploadFile | None = File(None),  # noqa: B008
+    remove_image: bool = Form(False),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """Author-only edit - category stays fixed once posted (never was editable, same as before),
+    but text and the image can both change: a new `image` replaces the existing one, or
+    `remove_image` clears it with no replacement, matching the composer's own multipart shape."""
+    client = get_supabase_client()
+    post = _get_post(client, post_id)
+    if post["author_id"] != user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your post")
+
+    clean_text = text.strip() or None
+    if image:
+        image_url = upload_image_as_webp("post-images", f"{user_id}/{uuid4()}", image)
+    elif remove_image:
+        image_url = None
+    else:
+        image_url = post["image_url"]
+
+    if not clean_text and not image_url:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Post must have text or an image")
+
+    client.table("posts").update({"text": clean_text, "image_url": image_url}).eq("id", post_id).execute()
     row = _get_post(client, post_id)
     return _serialize_posts(client, [row], user_id)[0]
 
@@ -499,10 +576,11 @@ def unlike_comment(comment_id: str, user_id: str = Depends(get_current_user_id))
 # Follows -----------------------------------------------------------------------------------
 
 
-def _require_user_exists(client, user_id: str) -> None:
-    result = client.table("users").select("id").eq("id", user_id).maybe_single().execute()
+def _require_user_exists(client, user_id: str) -> dict:
+    result = client.table("users").select("id, display_name").eq("id", user_id).maybe_single().execute()
     if not result or not result.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    return result.data
 
 
 @router.post("/follows/{target_id}", response_model=FollowOut)
@@ -511,8 +589,9 @@ def follow_user(target_id: str, user_id: str = Depends(get_current_user_id)) -> 
     client = get_supabase_client()
     if target_id == user_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot follow yourself")
-    _require_user_exists(client, target_id)
+    target = _require_user_exists(client, target_id)
     client.table("follows").upsert({"follower_id": user_id, "followed_id": target_id}).execute()
+    post_status(user_id, f"Started following {target['display_name']}.", category="chilling")
     return _refresh_follow(client, target_id, user_id, following=True)
 
 
@@ -522,6 +601,71 @@ def unfollow_user(target_id: str, user_id: str = Depends(get_current_user_id)) -
     _require_user_exists(client, target_id)
     client.table("follows").delete().eq("follower_id", user_id).eq("followed_id", target_id).execute()
     return _refresh_follow(client, target_id, user_id, following=False)
+
+
+def _follow_user_rows(client, user_ids: list[str], viewer_id: str | None) -> list[dict]:
+    if not user_ids:
+        return []
+    users_by_id, players_by_user_id = _resolve_authors(client, set(user_ids))
+    following_ids: set[str] = set()
+    if viewer_id:
+        following_ids = {
+            f["followed_id"]
+            for f in client.table("follows")
+            .select("followed_id")
+            .eq("follower_id", viewer_id)
+            .in_("followed_id", user_ids)
+            .execute()
+            .data
+            or []
+        }
+    rows = []
+    for uid in user_ids:
+        user = users_by_id.get(uid) or {}
+        player = players_by_user_id.get(uid) or {}
+        rows.append(
+            {
+                "id": uid,
+                "display_name": user.get("display_name") or "SquadUp user",
+                "handle": user.get("handle"),
+                "avatar_url": player.get("avatar_url"),
+                "tier": player.get("tier"),
+                "following": uid in following_ids,
+            }
+        )
+    return rows
+
+
+@router.get("/follows/{user_id}/followers", response_model=list[FollowUserOut])
+def list_followers(user_id: str, viewer_id: str | None = Depends(get_optional_user_id)) -> list[dict]:
+    client = get_supabase_client()
+    _require_user_exists(client, user_id)
+    rows = (
+        client.table("follows")
+        .select("follower_id, created_at")
+        .eq("followed_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    return _follow_user_rows(client, [r["follower_id"] for r in rows], viewer_id)
+
+
+@router.get("/follows/{user_id}/following", response_model=list[FollowUserOut])
+def list_following_users(user_id: str, viewer_id: str | None = Depends(get_optional_user_id)) -> list[dict]:
+    client = get_supabase_client()
+    _require_user_exists(client, user_id)
+    rows = (
+        client.table("follows")
+        .select("followed_id, created_at")
+        .eq("follower_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    return _follow_user_rows(client, [r["followed_id"] for r in rows], viewer_id)
 
 
 # Saved items ---------------------------------------------------------------------------------

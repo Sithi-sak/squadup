@@ -36,8 +36,16 @@ export function usePlayerProfileData(id: Ref<string>) {
       fetchedAlbum.value = []
       fetchedWish.value = []
       try {
-        fetchedDetail.value = await playersStore.fetchPlayer(playerId)
-        ;[fetchedReviews.value, fetchedFeed.value, fetchedAlbum.value, fetchedWish.value] = await Promise.all([
+        // All 5 only depend on `playerId`, not on each other's results, so they fire together
+        // instead of waiting on `fetchPlayer` first.
+        ;[
+          fetchedDetail.value,
+          fetchedReviews.value,
+          fetchedFeed.value,
+          fetchedAlbum.value,
+          fetchedWish.value,
+        ] = await Promise.all([
+          playersStore.fetchPlayer(playerId),
           playersStore.fetchPlayerReviews(playerId),
           playersStore.fetchPlayerFeed(playerId),
           playersStore.fetchPlayerAlbum(playerId),

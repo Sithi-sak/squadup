@@ -5,6 +5,7 @@ import { PhCheck, PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
 import { useSubscriptionsStore } from '@/stores/subscriptions'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = withDefaults(
   defineProps<{
@@ -78,7 +79,7 @@ async function confirmSubscribe() {
     <template #body>
       <div class="flex flex-col gap-5">
         <div class="flex items-center gap-3">
-          <UAvatar size="lg" class="bg-white/10 text-slate-300 ring-2 ring-brand-500">
+          <UAvatar :src="resolveAvatarUrl(playerId)" size="lg" class="bg-white/10 text-slate-300 ring-2 ring-brand-500">
             <PhUserCircle :size="28" />
           </UAvatar>
           <div class="min-w-0">

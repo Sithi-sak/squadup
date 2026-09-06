@@ -38,6 +38,9 @@ const drawerOpen = ref(false)
 const activeTab = ref<CategoryTab>('games')
 const search = ref('')
 
+type GameFilter = 'all' | 'multiplayer'
+const gameFilter = ref<GameFilter>('all')
+
 const tabItems = [
   { label: 'Games', value: 'games' },
   { label: 'Chilling', value: 'chilling' },
@@ -46,6 +49,7 @@ const tabItems = [
 function openDrawer(tab: CategoryTab) {
   activeTab.value = tab
   search.value = ''
+  gameFilter.value = 'all'
   drawerOpen.value = true
 }
 
@@ -53,6 +57,7 @@ const gameGroups = computed(() => {
   const query = search.value.trim().toLowerCase()
   const filtered = games
     .filter((game) => game.name.toLowerCase().includes(query))
+    .filter((game) => gameFilter.value === 'all' || (game.ranks && game.ranks.length > 0))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   const groups = new Map<string, Game[]>()
@@ -99,7 +104,7 @@ const filteredChillingSections = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] px-4 pt-14 pb-8 md:px-6 md:pt-16">
+  <div class="min-h-[calc(100vh-65px)] px-4 pt-14 pb-8 md:px-6 md:pt-16">
     <div class="mx-auto max-w-5xl">
       <div class="mx-auto max-w-8xl">
         <h1 class="mb-6 text-3xl font-bold text-white">All Services</h1>
@@ -174,8 +179,28 @@ const filteredChillingSections = computed(() => {
           />
 
           <div class="mt-4 flex items-center justify-between gap-3">
-            <UBadge color="primary" variant="solid" size="lg" class="rounded-full text-sm">
-              {{ activeTab === 'games' ? 'Regular' : 'Popular' }}
+            <div v-if="activeTab === 'games'" class="flex items-center gap-2">
+              <UButton
+                :color="gameFilter === 'all' ? 'primary' : 'neutral'"
+                :variant="gameFilter === 'all' ? 'solid' : 'soft'"
+                size="sm"
+                class="rounded-full"
+                @click="gameFilter = 'all'"
+              >
+                Regular
+              </UButton>
+              <UButton
+                :color="gameFilter === 'multiplayer' ? 'primary' : 'neutral'"
+                :variant="gameFilter === 'multiplayer' ? 'solid' : 'soft'"
+                size="sm"
+                class="rounded-full"
+                @click="gameFilter = 'multiplayer'"
+              >
+                Multiplayer games
+              </UButton>
+            </div>
+            <UBadge v-else color="primary" variant="solid" size="lg" class="rounded-full text-sm">
+              Popular
             </UBadge>
             <UInput
               v-model="search"

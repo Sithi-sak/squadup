@@ -1,13 +1,44 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { PhCopy, PhDotsThree, PhPlus, PhUserCircle } from '@phosphor-icons/vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { PhCopy, PhDotsThree, PhUserCircle } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import type { PlayerProfile, PlayerSummary } from '@/stores/players'
 import { useSubscriptionsStore } from '@/stores/subscriptions'
+import { useFeedStore } from '@/stores/feed'
 import SubscriptionModal from './SubscriptionModal.vue'
 import ReportProfileModal from '@/components/modals/ReportProfileModal.vue'
 import BlockProfileModal from '@/components/modals/BlockProfileModal.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = defineProps<{ player: PlayerSummary; profile: PlayerProfile }>()
+
+const feedStore = useFeedStore()
+const toast = useToast()
+
+const following = ref(props.profile.following)
+watch(
+  () => props.profile.following,
+  (value) => (following.value = value),
+)
+
+const followLoading = ref(false)
+
+async function toggleFollow() {
+  const userId = props.profile.userId ?? props.player.userId
+  if (!userId || followLoading.value) return
+  followLoading.value = true
+  try {
+    following.value = (await feedStore.toggleFollow(userId, following.value)).following
+  } catch (err) {
+    toast.add({
+      title: following.value ? 'Could not unfollow' : 'Could not follow',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    followLoading.value = false
+  }
+}
 
 function copyLink() {
   navigator.clipboard?.writeText(window.location.href)
@@ -49,7 +80,7 @@ function confirmBlock() {
   <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="flex items-start gap-4">
       <div class="relative shrink-0">
-        <UAvatar size="3xl" class="bg-white/10 text-slate-300">
+        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="3xl" class="bg-white/10 text-slate-300">
           <PhUserCircle :size="40" />
         </UAvatar>
         <span
@@ -104,13 +135,14 @@ function confirmBlock() {
         <PhCopy :size="18" weight="bold" />
       </UButton>
       <UButton
-        color="neutral"
-        variant="soft"
-        square
-        :ui="{ base: 'rounded-full' }"
-        aria-label="Add to favorites"
+        v-if="profile.userId ?? player.userId"
+        :color="following ? 'neutral' : 'primary'"
+        :variant="following ? 'soft' : 'solid'"
+        class="rounded-full"
+        :loading="followLoading"
+        @click="toggleFollow"
       >
-        <PhPlus :size="18" weight="bold" />
+        {{ following ? 'Following' : 'Follow' }}
       </UButton>
       <UButton
         v-if="profile.subscribeLabel"

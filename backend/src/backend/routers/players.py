@@ -1,4 +1,6 @@
 import json
+import random
+import re
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -51,6 +53,9 @@ class PlayerSummaryOut(CamelModel):
     services/service_details a card never renders (frontend's `PlayerSummary`)."""
 
     id: str
+    # Null for a seed Pal with no linked account yet - present so a browse card can follow a
+    # Pal (`follows` keys on `users.id`, not `players.id`, see `20260905142123_unify_social_graph`).
+    user_id: str | None
     display_name: str
     avatar_url: str | None
     games: list[str]
@@ -73,6 +78,9 @@ class PlayerDetailOut(CamelModel):
     can back both the profile header and the services tab from one payload."""
 
     id: str
+    # Never null for `/players/me` (always set on creation), but seed Pals reachable via
+    # `/players/{id}` may have no linked account yet.
+    user_id: str | None
     handle: str | None
     display_name: str
     avatar_url: str | None
@@ -99,6 +107,9 @@ class PlayerDetailOut(CamelModel):
     posts_count: int
     followers_count: int
     following_count: int
+    # Whether the requesting viewer follows this Pal - always False for `/players/me` (can't
+    # follow yourself) and for an anonymous viewer, same as `feed.py`'s per-viewer `following`.
+    following: bool
 
 
 class RateIn(BaseModel):
@@ -254,6 +265,7 @@ def _service_out(service: dict) -> dict:
 def _player_summary(player: dict, primary_listing: dict | None) -> dict:
     return {
         "id": player["id"],
+        "user_id": player.get("user_id"),
         "display_name": player["display_name"],
         "avatar_url": player["avatar_url"],
         "games": player["games"],
@@ -297,22 +309,63 @@ def _fetch_services(player_id: str, *, active_only: bool):
     return query.execute().data or []
 
 
-def _fetch_player_by_id(player_id: str, *, active_only: bool) -> dict:
-    result = get_supabase_client().table("players").select("*").eq("id", player_id).maybe_single().execute()
+def _with_social_counts(client, player: dict) -> dict:
+    """Posts/follows are unified around `users` now (3.18), not `players` - a Pal's own social
+    counts live on their `users` row, same place a plain buyer's would."""
+    if not player.get("user_id"):
+        return {**player, "posts_count": 0, "followers_count": 0, "following_count": 0}
+    result = (
+        client.table("users")
+        .select("posts_count, followers_count, following_count")
+        .eq("id", player["user_id"])
+        .maybe_single()
+        .execute()
+    )
+    counts = result.data if result and result.data else {"posts_count": 0, "followers_count": 0, "following_count": 0}
+    return {**player, **counts}
+
+
+def _is_following(client, viewer_id: str | None, target_user_id: str | None) -> bool:
+    """Same `follows` lookup `feed.py` batches for the feed list, done for one target here -
+    False for an anonymous viewer, a Pal with no linked account, or viewing your own profile."""
+    if not viewer_id or not target_user_id or viewer_id == target_user_id:
+        return False
+    result = (
+        client.table("follows")
+        .select("follower_id")
+        .eq("follower_id", viewer_id)
+        .eq("followed_id", target_user_id)
+        .maybe_single()
+        .execute()
+    )
+    return bool(result and result.data)
+
+
+def _fetch_player_by_id(
+    player_id: str, *, active_only: bool, public_only: bool = False, viewer_id: str | None = None
+) -> dict:
+    client = get_supabase_client()
+    result = client.table("players").select("*").eq("id", player_id).maybe_single().execute()
     if not result or not result.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
+    # A pending/rejected application or a banned Pal isn't reachable via the public profile link
+    # (3.19), same as it's excluded from `GET /players` - `GET /players/me` passes
+    # `public_only=False` so a Pal can always see their own profile regardless of status.
+    if public_only and (result.data["status"] != "approved" or result.data["is_banned"]):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
     services = _fetch_services(player_id, active_only=active_only)
-    return _serialize_player(result.data, services)
+    player = _serialize_player(_with_social_counts(client, result.data), services)
+    return {**player, "following": _is_following(client, viewer_id, player.get("user_id"))}
 
 
 def _fetch_player_by_user_id(user_id: str, *, active_only: bool) -> dict:
-    result = (
-        get_supabase_client().table("players").select("*").eq("user_id", user_id).maybe_single().execute()
-    )
+    client = get_supabase_client()
+    result = client.table("players").select("*").eq("user_id", user_id).maybe_single().execute()
     if not result or not result.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
     services = _fetch_services(result.data["id"], active_only=active_only)
-    return _serialize_player(result.data, services)
+    player = _serialize_player(_with_social_counts(client, result.data), services)
+    return {**player, "following": False}
 
 
 def _require_player_exists(player_id: str) -> None:
@@ -425,21 +478,7 @@ def _compute_earnings(bookings: list[dict]) -> dict:
 # for readability alongside the other literal routes.
 
 
-@router.get("", response_model=list[PlayerSummaryOut])
-def list_players(
-    q: str | None = None,
-    game: str | None = None,
-    rank: str | None = None,
-    role: str | None = None,
-    language: str | None = None,
-    max_price: int | None = None,
-    online: bool | None = None,
-    is_new: bool | None = None,
-    sort: str | None = None,
-) -> list[dict]:
-    client = get_supabase_client()
-    players = client.table("players").select("*").execute().data or []
-
+def _player_summaries(client, players: list[dict]) -> list[dict]:
     highlighted_ids = [p["highlighted_service_id"] for p in players if p.get("highlighted_service_id")]
     services_by_id: dict[str, dict] = {}
     if highlighted_ids:
@@ -453,8 +492,54 @@ def list_players(
             or []
         )
         services_by_id = {s["id"]: _service_listing(s) for s in rows}
+    return [_player_summary(p, services_by_id.get(p.get("highlighted_service_id") or "")) for p in players]
 
-    summaries = [_player_summary(p, services_by_id.get(p.get("highlighted_service_id") or "")) for p in players]
+
+@router.get("", response_model=list[PlayerSummaryOut])
+def list_players(
+    q: str | None = None,
+    game: str | None = None,
+    rank: str | None = None,
+    role: str | None = None,
+    language: str | None = None,
+    max_price: int | None = None,
+    online: bool | None = None,
+    is_new: bool | None = None,
+    sort: str | None = None,
+    limit: int | None = None,
+) -> list[dict]:
+    client = get_supabase_client()
+
+    if limit is not None and not any(
+        [q, game, rank, role, language, max_price, online, is_new],
+    ):
+        # Fast path for callers that only want a small top-rated slice (Home's "eStars"/"More
+        # Pals" rails, Landing's "Top Pal") - order/limit in the query itself instead of fetching
+        # every approved player just to discard most of them client-side.
+        players = (
+            client.table("players")
+            .select("*")
+            .eq("status", "approved")
+            .eq("is_banned", False)
+            .order("rating", desc=True, nullsfirst=False)
+            .limit(limit)
+            .execute()
+            .data
+            or []
+        )
+        return _player_summaries(client, players)
+
+    players = (
+        client.table("players")
+        .select("*")
+        .eq("status", "approved")
+        .eq("is_banned", False)
+        .execute()
+        .data
+        or []
+    )
+
+    summaries = _player_summaries(client, players)
 
     def matches(player: dict, summary: dict) -> bool:
         # game/rank/role are scored (`_match_score`), not filtered here - see that docstring.
@@ -572,6 +657,7 @@ def create_my_player(
             "payout_schedule": payout_schedule,
             "id_front_url": id_front_url,
             "id_back_url": id_back_url,
+            "status": "pending_review",
         }
     ).execute()
 
@@ -715,26 +801,93 @@ def delete_my_service(service_id: str, user_id: str = Depends(get_current_user_i
     get_supabase_client().table("services").delete().eq("id", service_id).execute()
 
 
+@router.get("/suggested", response_model=list[PlayerSummaryOut])
+def get_suggested_players(user_id: str | None = Depends(get_optional_user_id), limit: int = 4) -> list[dict]:
+    """Feed's right-rail "Suggested Pals" - previously mock-only (see CHECKPOINT 3.8a). A random
+    sample of approved, account-linked Pals, excluding the viewer themself and anyone already
+    followed."""
+    client = get_supabase_client()
+    players = (
+        client.table("players")
+        .select("*")
+        .eq("status", "approved")
+        .eq("is_banned", False)
+        .execute()
+        .data
+        or []
+    )
+    players = [p for p in players if p.get("user_id")]
+
+    if user_id:
+        followed_ids = {
+            f["followed_id"]
+            for f in client.table("follows").select("followed_id").eq("follower_id", user_id).execute().data or []
+        }
+        players = [p for p in players if p["user_id"] != user_id and p["user_id"] not in followed_ids]
+
+    random.shuffle(players)
+    return _player_summaries(client, players[:limit])
+
+
+def _slugify(name: str) -> str:
+    """Mirrors `frontend/src/data/games.ts`'s `slugify()` exactly, so counts keyed here line up
+    with a `FeaturedGame.id` without the frontend needing a second name->id lookup."""
+    slug = name.lower()
+    slug = re.sub(r"['’]", "", slug)
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    return re.sub(r"(^-|-$)", "", slug)
+
+
+@router.get("/game-counts", response_model=dict[str, int])
+def get_game_counts() -> dict[str, int]:
+    """Real per-game Pal counts for the "Browse by game" rails (Home/Landing), which previously
+    hardcoded fake numbers in `data/games.ts`'s `featuredGames`. Counts every approved,
+    non-banned player's `games` entries, keyed by slug so the frontend can look counts up by
+    `featuredGame.id` directly."""
+    client = get_supabase_client()
+    players = (
+        client.table("players")
+        .select("games")
+        .eq("status", "approved")
+        .eq("is_banned", False)
+        .execute()
+        .data
+        or []
+    )
+    counts: dict[str, int] = defaultdict(int)
+    for player in players:
+        for game in player.get("games") or []:
+            counts[_slugify(game)] += 1
+    return counts
+
+
 # Public profile ------------------------------------------------------------------------------
 # Catch-all, must stay below every literal `/players/...` route declared above.
 
 
 @router.get("/{player_id}", response_model=PlayerDetailOut)
-def get_player(player_id: str) -> dict:
-    return _fetch_player_by_id(player_id, active_only=True)
+def get_player(player_id: str, user_id: str | None = Depends(get_optional_user_id)) -> dict:
+    return _fetch_player_by_id(player_id, active_only=True, public_only=True, viewer_id=user_id)
 
 
 @router.get("/{player_id}/feed", response_model=list[PostOut])
 def get_player_feed(player_id: str, user_id: str | None = Depends(get_optional_user_id)) -> list[dict]:
     """Public Feed tab (3.8h) - reuses `feed.py`'s `PostOut`/`_serialize_posts` so a Pal's own
     posts carry the same `liked`/`following` per-viewer fields the main Feed/Following pages do,
-    just scoped to this one Pal instead of the global timeline."""
-    _require_player_exists(player_id)
+    just scoped to this one Pal instead of the global timeline. Posts key off `author_id` (a
+    `users.id`) since 3.18, so this looks up the Pal's `user_id` first rather than filtering
+    posts by `player_id` directly."""
     client = get_supabase_client()
+    player = client.table("players").select("user_id").eq("id", player_id).maybe_single().execute()
+    if not player or not player.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
+    author_id = player.data["user_id"]
+    if not author_id:
+        return []
     rows = (
         client.table("posts")
         .select(_POST_SELECT)
-        .eq("player_id", player_id)
+        .eq("author_id", author_id)
         .order("created_at", desc=True)
         .limit(50)
         .execute()

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
 import { PhChatCircle, PhHeart, PhShareFat, PhUserCircle } from '@phosphor-icons/vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = defineProps<{
   id: string
   author: string
-  handle: string
+  handle?: string | null
   tier?: string | null
   timeAgo: string
   text: string
@@ -39,7 +40,7 @@ function toggleLike() {
   <article class="rounded-xl bg-gray-800/70 p-4">
     <div class="flex items-start justify-between gap-3">
       <div class="flex items-center gap-3">
-        <UAvatar size="md" class="shrink-0 bg-white/10 text-slate-300">
+        <UAvatar :src="resolveAvatarUrl(props.author)" size="md" class="shrink-0 bg-white/10 text-slate-300">
           <PhUserCircle :size="20" />
         </UAvatar>
         <div>
@@ -47,7 +48,7 @@ function toggleLike() {
             <span class="font-semibold text-white">{{ author }}</span>
             <UBadge v-if="tier" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">{{ tier }}</UBadge>
           </div>
-          <p class="text-xs text-slate-400">{{ handle }} · {{ timeAgo }}</p>
+          <p class="text-xs text-slate-400">{{ handle ? `${handle} · ` : '' }}{{ timeAgo }}</p>
         </div>
       </div>
       <slot name="action" />

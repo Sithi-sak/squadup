@@ -5,16 +5,19 @@ import { PhCaretLeft, PhCheck, PhLock, PhStar, PhUserCircle } from '@phosphor-ic
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload, type DisputePayload } from '@/stores/bookings'
+import { useMessagesStore } from '@/stores/messages'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import { getMockBooking } from '@/mocks/bookings'
 import { orderStatusMeta, type OrderDisplayStatusKey } from '@/utils/orderStatus'
 import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
 import RefundModal from '@/components/modals/RefundModal.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const route = useRoute()
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+const messagesStore = useMessagesStore()
 const toast = useToast()
 
 const booking = ref<Booking | null>(null)
@@ -44,6 +47,9 @@ const profile = computed(() => (player.value ? getPlayerProfile(player.value) : 
 const detail = computed(() => (booking.value ? profile.value?.serviceDetails[booking.value.serviceId] : null))
 
 const palName = computed(() => booking.value?.playerDisplayName ?? player.value?.displayName ?? 'Pal')
+const palAvatarUrl = computed(() =>
+  resolveAvatarUrl(booking.value?.playerId ?? palName.value, booking.value?.playerAvatarUrl ?? player.value?.avatarUrl),
+)
 const serviceTitle = computed(() => booking.value?.serviceName ?? detail.value?.title ?? booking.value?.serviceTypeLabel ?? '')
 
 function formatDate(iso: string) {
@@ -134,6 +140,24 @@ async function confirmCancel(payload: CancelPayload) {
   }
 }
 
+async function handleMessage() {
+  const participantId = booking.value?.playerUserId
+  if (!participantId) {
+    toast.add({ title: "Can't message this Pal yet", color: 'error' })
+    return
+  }
+  try {
+    await messagesStore.startThread(participantId)
+    router.push('/messages')
+  } catch (err) {
+    toast.add({
+      title: "Couldn't start chat",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
 async function confirmRefundRequest(payload: DisputePayload) {
   if (!booking.value) return
   try {
@@ -192,7 +216,7 @@ async function confirmRefundRequest(payload: DisputePayload) {
         <div class="rounded-xl bg-gray-800/70 p-5">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">
-              <UAvatar size="lg" class="bg-white/10 text-slate-300">
+              <UAvatar :src="palAvatarUrl" size="lg" class="bg-white/10 text-slate-300">
                 <PhUserCircle :size="26" />
               </UAvatar>
               <div>
@@ -208,7 +232,7 @@ async function confirmRefundRequest(payload: DisputePayload) {
                 </p>
               </div>
             </div>
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="router.push('/messages')">
+            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="handleMessage">
               Message
             </UButton>
           </div>
@@ -308,7 +332,7 @@ async function confirmRefundRequest(payload: DisputePayload) {
           </div>
         </div>
 
-        <UButton color="primary" block size="lg" class="rounded-full" @click="router.push('/messages')">
+        <UButton color="primary" block size="lg" class="rounded-full" @click="handleMessage">
           Message {{ palName }}
         </UButton>
         <UButton color="neutral" variant="soft" block size="lg" class="rounded-full" @click="refundModalOpen = true">

@@ -5,13 +5,16 @@ import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload } from '@/stores/bookings'
+import { useMessagesStore } from '@/stores/messages'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
 import LeaveReviewModal from '@/components/modals/LeaveReviewModal.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+const messagesStore = useMessagesStore()
 const toast = useToast()
 
 onMounted(() => {
@@ -92,6 +95,13 @@ function palName(booking: Booking) {
   return booking.playerDisplayName ?? mockPlayers.find((p) => p.id === booking.playerId)?.displayName ?? 'Pal'
 }
 
+function palAvatarUrl(booking: Booking) {
+  return resolveAvatarUrl(
+    booking.playerId,
+    booking.playerAvatarUrl ?? mockPlayers.find((p) => p.id === booking.playerId)?.avatarUrl,
+  )
+}
+
 function palOnline(booking: Booking) {
   return mockPlayers.find((p) => p.id === booking.playerId)?.online ?? false
 }
@@ -138,6 +148,23 @@ function primaryActionLabel(booking: Booking) {
   return 'View order'
 }
 
+async function handleMessage(booking: Booking) {
+  if (!booking.playerUserId) {
+    toast.add({ title: "Can't message this Pal yet", color: 'error' })
+    return
+  }
+  try {
+    await messagesStore.startThread(booking.playerUserId)
+    router.push('/messages')
+  } catch (err) {
+    toast.add({
+      title: "Couldn't start chat",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
 function handlePrimaryAction(booking: Booking) {
   if (booking.status === 'completed') {
     if (booking.hasReview) return
@@ -175,7 +202,7 @@ async function confirmReview(payload: { rating: number; highlights: string[]; co
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] px-4 pt-14 pb-14 md:px-6 md:pt-16">
-    <div class="mx-auto max-w-(--content-max-width)">
+    <div class="mx-auto max-w-4/5">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <h1 class="text-3xl font-bold text-white">My orders</h1>
         <UInput
@@ -227,7 +254,7 @@ async function confirmReview(payload: { rating: number; highlights: string[]; co
         >
           <div class="flex items-start gap-3">
             <div class="relative shrink-0">
-              <UAvatar size="lg" class="bg-white/10 text-slate-300">
+              <UAvatar :src="palAvatarUrl(booking)" size="lg" class="bg-white/10 text-slate-300">
                 <PhUserCircle :size="26" />
               </UAvatar>
               <span
@@ -271,7 +298,7 @@ async function confirmReview(payload: { rating: number; highlights: string[]; co
                 variant="soft"
                 size="sm"
                 class="rounded-full"
-                @click="router.push('/messages')"
+                @click="handleMessage(booking)"
               >
                 Message
               </UButton>

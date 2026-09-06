@@ -2,8 +2,9 @@
 import { PhHeart, PhUserCircle } from '@phosphor-icons/vue'
 import type { FeedComment } from '@/stores/feed'
 import { formatTimeAgo } from '@/utils/timeAgo'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
-defineProps<{
+const props = defineProps<{
   comment: FeedComment
   nested?: boolean
 }>()
@@ -14,7 +15,11 @@ const emit = defineEmits<{ 'toggle-like': [comment: FeedComment] }>()
 <template>
   <div>
     <div class="flex items-start gap-3">
-      <UAvatar size="sm" class="shrink-0 bg-white/10 text-slate-300">
+      <UAvatar
+        :src="resolveAvatarUrl(props.comment.authorId || props.comment.author)"
+        size="sm"
+        class="shrink-0 bg-white/10 text-slate-300"
+      >
         <PhUserCircle :size="18" />
       </UAvatar>
       <div class="min-w-0 flex-1">

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import type { PlayerReview } from '@/stores/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = defineProps<{ reviews: PlayerReview[] }>()
 
@@ -52,7 +53,7 @@ const visibleReviews = computed(() => {
     <p v-if="visibleReviews.length === 0" class="py-8 text-center text-sm text-slate-400">No reviews yet.</p>
     <div v-else class="mt-4 flex flex-col divide-y divide-white/10">
       <div v-for="review in visibleReviews" :key="review.id" class="flex gap-3 py-4 first:pt-0 last:pb-0">
-        <UAvatar size="md" class="shrink-0 bg-white/10 text-slate-300">
+        <UAvatar :src="resolveAvatarUrl(review.author)" size="md" class="shrink-0 bg-white/10 text-slate-300">
           <PhUserCircle :size="20" />
         </UAvatar>
         <div class="min-w-0 flex-1">

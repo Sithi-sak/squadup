@@ -18,14 +18,26 @@ import {
   createVerifyStepData,
 } from '@/components/become-player/types'
 import { usePlayersStore } from '@/stores/players'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const playersStore = usePlayersStore()
+const authStore = useAuthStore()
 
 const currentStep = ref(1)
 const progressPct = computed(() => (currentStep.value === 1 ? 8 : (currentStep.value - 1) * 20))
 
-const accountData = ref(createAccountStepData())
+/** Step 1 starts from whatever the account already has (a buyer who signed up first and is only
+ * now becoming a Pal) rather than blank fields - only a genuinely fresh account (nothing set
+ * since signup) sees empty phone/region. Email always comes from the account and stays locked in
+ * `StepAccount.vue`; there's no "fresh" case for it since `/become-player` requires auth. */
+const accountData = ref({
+  ...createAccountStepData(),
+  displayName: authStore.user?.displayName ?? '',
+  email: authStore.user?.email ?? '',
+  phone: authStore.user?.phone ?? '',
+  region: authStore.user?.country ?? '',
+})
 const gamesData = ref(createGamesStepData())
 const ratesData = ref(createRatesStepData())
 const verifyData = ref(createVerifyStepData())
@@ -66,6 +78,11 @@ async function handleSubmit() {
   if (verifyData.value.idBackFile) formData.append('id_back', verifyData.value.idBackFile)
 
   try {
+    await authStore.updateAccount({
+      displayName: accountData.value.displayName,
+      phone: accountData.value.phone,
+      country: accountData.value.region,
+    })
     await playersStore.createMine(formData)
     submitted.value = true
   } catch (err) {
@@ -80,7 +97,7 @@ async function handleSubmit() {
   <div class="min-h-screen bg-squadup-dark">
     <header class="border-b border-gray-800 px-6 py-5">
       <div class="mx-auto flex max-w-5xl items-center justify-between">
-        <router-link to="/" class="flex items-center gap-2">
+        <router-link to="/home" class="flex items-center gap-2">
           <img :src="brandLogo" alt="SquadUp" class="h-6 w-auto" />
           <span class="text-sm text-slate-400">· Pal Application</span>
         </router-link>
@@ -91,7 +108,7 @@ async function handleSubmit() {
           square
           class="rounded-full bg-gray-800 text-white hover:bg-gray-700"
           aria-label="Close"
-          @click="router.push('/')"
+          @click="router.push('/home')"
         >
           <PhX :size="18" weight="bold" />
         </UButton>

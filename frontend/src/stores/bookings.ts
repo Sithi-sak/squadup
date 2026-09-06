@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { api } from '@/lib/api'
 import { mockBookings, mockIncomingBookings } from '@/mocks/bookings'
+import { isRealId } from '@/utils/id'
 
 export type BookingStatus = 'pending' | 'accepted' | 'declined' | 'completed'
 export type PaymentMethod = 'coins' | 'card'
@@ -17,6 +18,9 @@ export interface Booking {
   /** Human-facing order number shown on Checkout / Order Confirmation, e.g. "SQ-84213". */
   orderNumber: string
   playerId: string
+  /** The Pal's `users.id` - who "Message" starts a thread with (`startThread` in
+   * `stores/messages.ts`). Absent on the static mock fixtures / seed Pals with no linked user. */
+  playerUserId?: string | null
   /** Denormalized display fields the backend joins in (`GET /bookings/...`) so list/detail
    * views don't need a separate per-row player fetch. Absent on the static mock fixtures, which
    * views fall back to `mocks/players.ts` lookups for. */
@@ -157,9 +161,16 @@ export const useBookingsStore = defineStore('bookings', () => {
     return current.value
   }
 
-  /** Checkout's "Place order" - the point where a draft actually becomes a submitted booking. */
+  /** Checkout's "Place order" - the point where a draft actually becomes a submitted booking.
+   * Guards against demo Pal ids up front rather than letting the backend 500 on a non-uuid
+   * `service_id` (seed Pals `p1`..`p8` aren't real rows yet, see `isRealId`). */
   async function placeOrder(payload: { paymentMethod: PaymentMethod; scheduledFor: string | null }) {
     if (!draft.value) throw new Error('No booking draft to submit')
+    if (!isRealId(draft.value.serviceId)) {
+      throw new Error(
+        "This Pal is a demo profile without a real listing yet, so it can't be booked. Try a Pal who has signed up for real from Browse Players.",
+      )
+    }
     const booking = await api.post<Booking>('/bookings', { ...draft.value, ...payload })
     list.value.unshift(booking)
     current.value = booking

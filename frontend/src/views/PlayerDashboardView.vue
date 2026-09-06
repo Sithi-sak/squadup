@@ -9,17 +9,22 @@ import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
 import { getBuyer } from '@/mocks/buyers'
 import { orderStatusMeta } from '@/utils/orderStatus'
+import { useAuthStore } from '@/stores/auth'
 import { useBookingsStore, type Booking } from '@/stores/bookings'
 import { usePlayersStore } from '@/stores/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 /** Squad Coin → USD display rate, same constant used on Wallet/Withdraw/Subscriptions (no
  * backend-decided exchange rate yet, see CHECKPOINT.md's Booking flow note). */
 const COINS_PER_USD = 99
 
 const router = useRouter()
+const authStore = useAuthStore()
 const bookingsStore = useBookingsStore()
 const playersStore = usePlayersStore()
 const toast = useToast()
+
+const displayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
 
 onMounted(() => {
   bookingsStore.fetchIncoming()
@@ -65,6 +70,10 @@ function buyerName(booking: Booking) {
   return booking.buyerDisplayName ?? getBuyer(booking.userId)?.displayName ?? 'Buyer'
 }
 
+function buyerAvatarUrl(booking: Booking) {
+  return resolveAvatarUrl(booking.userId)
+}
+
 async function respond(booking: Booking, action: 'accept' | 'decline') {
   actingOn.value = booking.id
   try {
@@ -92,7 +101,7 @@ function formatScheduled(iso: string) {
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">
-            Welcome back, {{ (mockCurrentUser.displayName ?? 'Pal').split(' ')[0] }} 👋
+            Welcome back, {{ (displayName ?? 'Pal').split(' ')[0] }}
           </h1>
           <p class="mt-1 text-sm text-slate-400">
             {{ today }}
@@ -169,7 +178,7 @@ function formatScheduled(iso: string) {
               class="flex flex-wrap items-center justify-between gap-3 py-3"
             >
               <div class="flex items-center gap-3">
-                <UAvatar size="md" class="bg-white/10 text-slate-300">
+                <UAvatar :src="buyerAvatarUrl(booking)" size="md" class="bg-white/10 text-slate-300">
                   <PhUserCircle :size="22" />
                 </UAvatar>
                 <div>

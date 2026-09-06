@@ -86,7 +86,7 @@ async function toggleLike(post: FeedPost) {
       :key="post.id"
       :id="post.id"
       :author="post.author"
-      :handle="post.handle ?? ''"
+      :handle="post.handle"
       :tier="post.tier"
       :time-ago="formatTimeAgo(post.createdAt)"
       :text="post.text ?? ''"

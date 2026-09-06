@@ -22,7 +22,7 @@ defineEmits<{ action: [] }>()
       color="neutral"
       variant="soft"
       size="sm"
-      class="shrink-0 rounded-full"
+      class="shrink-0 rounded-full text-xs"
       :class="danger && 'text-red-400'"
       :disabled="disabled"
       @click="$emit('action')"

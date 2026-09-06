@@ -11,16 +11,22 @@ import {
 } from '@phosphor-icons/vue'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+import { useAuthStore } from '@/stores/auth'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 defineProps<{
   active: 'dashboard' | 'orders' | 'services' | 'earnings' | 'messages' | 'settings'
 }>()
 
+const authStore = useAuthStore()
+
 const online = ref(true)
 
+const displayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
 const myPlayerProfile = computed(() =>
   mockCurrentUser.playerId ? (mockPlayerProfiles[mockCurrentUser.playerId] ?? null) : null,
 )
+const avatarUrl = computed(() => resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id))
 
 const navItems = [
   { key: 'dashboard', label: 'Dashboard', to: '/dashboard/player', icon: PhSquaresFour },
@@ -57,11 +63,11 @@ const navItems = [
         <USwitch v-model="online" color="primary" />
       </div>
       <div class="flex items-center gap-2.5">
-        <UAvatar size="md" class="bg-white/10 text-slate-300">
+        <UAvatar :src="avatarUrl" size="md" class="bg-white/10 text-slate-300">
           <PhUserCircle :size="22" />
         </UAvatar>
         <div class="min-w-0">
-          <p class="truncate text-sm font-semibold text-white">{{ mockCurrentUser.displayName }}</p>
+          <p class="truncate text-sm font-semibold text-white">{{ displayName }}</p>
           <p class="text-xs text-slate-400">{{ myPlayerProfile?.tier ?? 'Pal' }}</p>
         </div>
       </div>

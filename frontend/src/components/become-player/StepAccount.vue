@@ -2,8 +2,11 @@
 import { computed, ref } from 'vue'
 import { PhCamera } from '@phosphor-icons/vue'
 import type { AccountStepData } from './types'
+import { generatedAvatarUrl } from '@/utils/avatar'
 
 const data = defineModel<AccountStepData>({ required: true })
+
+const previewAvatarUrl = computed(() => data.value.avatarUrl || generatedAvatarUrl(data.value.displayName || 'new-pal'))
 
 const emit = defineEmits<{ continue: [] }>()
 
@@ -66,8 +69,7 @@ function onFileSelected(event: Event) {
         class="size-16 shrink-0 overflow-hidden rounded-full bg-linear-to-br from-gray-600 to-gray-800"
       >
         <img
-          v-if="data.avatarUrl"
-          :src="data.avatarUrl"
+          :src="previewAvatarUrl"
           alt=""
           class="size-full object-cover"
         />
@@ -110,14 +112,14 @@ function onFileSelected(event: Event) {
         <label for="email" class="text-sm font-medium text-white">Email</label>
         <UInput
           id="email"
-          v-model="data.email"
+          :model-value="data.email"
           type="email"
-          placeholder="ari@squadup.gg"
-          autocomplete="email"
+          disabled
           variant="subtle"
           size="md"
           :ui="fieldUi"
         />
+        <p class="text-xs text-slate-500">Change your email from Settings &gt; Account.</p>
       </div>
       <div class="flex flex-col gap-2">
         <label for="phone" class="text-sm font-medium text-white">Phone</label>

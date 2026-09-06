@@ -4,7 +4,7 @@ import type { Component } from 'vue'
 withDefaults(
   defineProps<{
     icon?: Component
-    tone?: 'brand' | 'gold'
+    tone?: 'brand' | 'gold' | 'none'
     badge: string
     title: string
     description: string
@@ -33,7 +33,9 @@ withDefaults(
         :class="
           tone === 'gold'
             ? 'bg-linear-to-br from-amber-300 to-amber-600'
-            : 'bg-linear-to-br from-brand-400 to-brand-700'
+            : tone === 'none'
+              ? 'bg-transparent'
+              : 'bg-linear-to-br from-brand-400 to-brand-700'
         "
       >
         <slot name="icon">

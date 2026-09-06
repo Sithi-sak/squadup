@@ -248,18 +248,40 @@ email/password — `LoginView`/`SignupView`'s email forms are unchanged stubs, s
   verification for FastAPI routes (nothing calls the API with a bearer token yet), and replacing
   the pervasive `mockCurrentUser` reads across the app (header, dashboards, settings, etc.) with
   the real `authStore.user` — 2.5 only wires the session itself, not every consumer of it.
+- **2026-09-04 follow-up:** `mockCurrentUser.displayName`/`.email` reads in the header, feed
+  sidebar, dashboard sidebar/greeting, create-post modal, and Settings' Profile/Account tabs now
+  prefer `authStore.user?.displayName`/`.email` (falling back to the mock only when signed out),
+  so a real Google account's name/email show instead of the "Dara Chan" placeholder. Other
+  `mockCurrentUser` fields (`coinBalance`, `playerId` in a few spots) are still unmigrated —
+  same pervasive-reads gap as above, left for 3.16 or further one-off follow-ups.
+
+**Booking against a seed Pal (found 2026-09-04):** `POST /bookings` only works against a real
+`services` row — seed Pals `p1`..`p8` (`mocks/playerProfiles.ts`) are demo-only fixtures with
+hand-authored non-uuid ids (`"main"`, `"p2"`, ...), not real database rows, so Checkout's "Place
+order" against one 500'd (`invalid input syntax for type uuid`). Fixed on both ends: a new
+`utils/id.ts`'s `isRealId()` gates `stores/bookings.ts`'s `placeOrder()` (throws a clear error
+instead of hitting the backend) and `CheckoutView.vue` (disables "Place order" up front with an
+inline note) whenever the draft's `serviceId` isn't a real uuid. Real signed-up Pals are
+unaffected. This surfaced 3.17 (seed script) being pulled forward — see below.
 
 ---
 
 ## Status
 
 - **Current phase:** Phase 4 — Payment, moved up ahead of 3.16/3.17 per user direction
-  (2026-08-25). 3.15 (Docker + Docker Compose) is done; 3.16 (clean out mock/demo data) and
-  3.17 (seed script) are deferred until Phase 4 finishes.
+  (2026-08-25). 3.15 (Docker + Docker Compose) is done. **3.17 (seed script) was pulled forward
+  out of order on 2026-09-04**, ahead of 4.4/4.5, so real Pals exist to test the booking flow
+  against (seed Pals `p1`..`p8` have no real `players`/`services` row and can't be booked for
+  real — see the "Booking against a seed Pal" note below). 3.16 (clean out mock/demo data) stays
+  deferred until Phase 4 actually finishes, since it depends on every 3.x mock-fallback path
+  being audited out, not just this one gap.
 - **Next task:** 4.1 is fully done (4.1a-k, including 4.1f's live smoke test). 4.2 (Squad Coin
-  ledger wiring) and 4.3 (manual platform commission tracking) are done. Next up is 4.4 (Bakong
-  KHQR integration, scope TBD) then 4.5 (final-report escrow note), after which 3.16/3.17 resume.
-- **Last updated:** 2026-08-26
+  ledger wiring) and 4.3 (manual platform commission tracking) are done. 3.17 is done (see below).
+  **3.19 (Admin: Pal application review + ban, PIN gate) was pulled forward on 2026-09-05** per
+  direct user request, and is now done (3.19a-i). **4.6 (DiceBear avatars everywhere) was pulled
+  forward on 2026-09-06** per direct user request and is now done (4.6a-e). Next up is 4.4 (Bakong
+  KHQR integration, scope TBD) then 4.5 (final-report escrow note), after which 3.16 resumes.
+- **Last updated:** 2026-09-06
 
 ---
 
@@ -1335,31 +1357,180 @@ unchecked box until the whole thing is done.
         real and stable
   - [ ] 3.16b Delete the now-unreferenced fixtures under `frontend/src/mocks/` (players, bookings,
         messages, admin, feed, etc.)
-  - [ ] 3.16c Remove the client-side merge of seed Pals `p1`..`p8` into Browse Players/Player
-        Profile (`PlayersView.vue`'s `allPlayers`) now that 3.17's seeded accounts are real DB rows
-        instead
+  - [x] 3.16c Remove the client-side merge of seed Pals `p1`..`p8` into Browse Players/Home/
+        Landing (`PlayersView.vue`/`HomeView.vue`'s `allPlayers`, `LandingView.vue`'s `topPlayers`)
+        now that 3.17's seeded accounts are real DB rows instead. **Pulled forward on 2026-09-06**
+        after the user noticed eStars Leaderboard entries had no avatar and asked where else the
+        app still showed fake players instead of real ones — rest of 3.16 (a/b/d, the store
+        fallback-to-mock branches and fixture deletion) stays deferred, scoped down to just this
+        on the user's call. `LandingView.vue` previously had no player fetch at all (`topPlayers =
+        mockPlayers`); now fetches real players on mount and sorts top 8 by rating, section hides
+        when empty (same convention as 4.7's Suggested Pals).
   - [ ] 3.16d Verify via `vue-tsc --build`/`eslint` plus a manual walkthrough that no page silently
         regresses to an empty state now that the mock fallback is gone
-- [ ] 3.17 Seed script: populate the real Supabase project with realistic demo content so the
-      marketplace looks alive (not test/throwaway rows — meant to stay through launch)
-  - [ ] 3.17a Backend: a one-off script (e.g. `backend/scripts/seed_demo_data.py`) using the
-        service-role client's admin API (`auth.admin.createUser`) to create a few hundred
-        `auth.users` rows with placeholder (non-deliverable) emails — no real Gmail needed since
-        these accounts are never meant to log in, just to exist as FK targets, same as the
-        `on_auth_user_created` trigger from `auth_wiring.sql` handles for a real Google signup.
-        Then create matching realistic `players`/`services`/`service_pricing_options`/
-        `service_promotions` rows (varied games/ranks/roles/pricing) for each
-  - [ ] 3.17b Seed a smaller number of `bookings`/reviews and `message_threads`/`messages` between
-        seeded accounts so Player Dashboard/Order history/Messages thread lists have real
-        history to show, not empty states — this is just for populated-looking history, not a
-        substitute for the live two-way Realtime demo (that stays on the 2 real Gmail accounts
-        signed in for that purpose)
-  - [ ] 3.17c Make the script idempotent (safe to re-run without duplicating) or pair it with a
-        teardown script that deletes every seeded row by a marker (e.g. a shared email domain
-        suffix), so the seed set can be regenerated or wiped cleanly
-  - [ ] 3.17d Verification: run against the linked Supabase project, spot-check row counts and
-        relations, confirm Browse Players/Player Profile/Dashboard render populated real data end
-        to end with no mock fallback needed
+- [x] 3.17 Seed script: populate the real Supabase project with realistic demo content so the
+      marketplace looks alive (not test/throwaway rows — meant to stay through launch). **Pulled
+      forward on 2026-09-04**, ahead of 4.4/4.5, to unblock testing the booking flow (see the
+      "Booking against a seed Pal" note above) — 3.16 is still deferred.
+  - [x] 3.17a Backend: `backend/scripts/seed_demo_data.py`, using the service-role client's admin
+        API (`client.auth.admin.create_user`/`list_users`/`delete_user`) to create `auth.users`
+        rows under a placeholder `@squadup-seed.test` domain (`.test` is IANA-reserved, guaranteed
+        non-deliverable — no real Gmail needed, these never log in, just exist as FK targets, same
+        role `on_auth_user_created` fills for a real Google signup) plus matching `players`/
+        `services`/`service_pricing_options`/`service_promotions` rows. **Deviates from the
+        "few hundred" scale named in the original scope line**: defaults to 24 Pals across 8 games
+        (Valorant/LoL/MLBB/Dota 2/CS2/Overwatch 2/Apex/PUBG Mobile, each with its own rank
+        ladder/role list) + 12 buyers — enough to make Browse Players/Player Profile look alive
+        and give every game a few real, bookable listings without a multi-minute admin-API run;
+        `--pals`/`--buyers` flags scale it up later if needed.
+  - [x] 3.17b Seed a lighter slice of `bookings`/reviews (not `message_threads`/`messages` — left
+        out to keep scope tight, and the 3.17b line already calls the Messages Realtime demo a
+        job for 2 real Gmail accounts, not seed data) for roughly half of the seeded Pals: 1-3
+        completed bookings each (real coin debit/credit via `core/wallet.py`'s
+        `adjust_coin_balance`, `commission_pct`/`commission_coins` set like a real
+        `complete_booking` call, ~85% get a review feeding the same rating-recompute helper
+        `routers/reviews.py` uses) plus sometimes one still-`pending` booking, so Pal
+        Dashboard/Orders/Earnings have real history instead of every seeded Pal looking brand new.
+  - [x] 3.17c Idempotency: `seed` lists existing `@squadup-seed.test` accounts first and refuses
+        to run if any exist, rather than merging into them — `teardown` (same file) deletes every
+        seeded `auth.users` row by that domain marker, which cascades through
+        `players`/`services`/`bookings`/`reviews`/`wallet_transactions` automatically (per
+        `account_deletion_cascade.sql`), so reseeding is just `teardown` then `seed`.
+  - [x] 3.17d Verification: ran against the real linked Supabase project (24 players, 24 services,
+        40 bookings [33 completed / 7 pending], 30 reviews — row counts and relations spot-checked
+        directly). Confirmed end to end through the actual API rather than the browser: local
+        uvicorn's `GET /players` and `GET /players/{id}` return the seeded Pals with real uuid
+        `id`/`serviceId` values, exactly the shape Browse Players/Service Detail/Checkout need,
+        satisfying `isRealId()`'s guard. A full browser click-through placing a real order was
+        **not** run — the natural next step (signing in as a seeded buyer to call `POST /bookings`
+        live) needed setting a password on an account, which the permission classifier blocked as
+        a credential-modification action; left for the user to verify by placing a real order
+        against one of these Pals from Browse Players.
+- [x] 3.18 Unify social graph: any account (not just Pals) can post and be followed, not just Pals
+      — pulled forward on 2026-09-05 after wiring the Feed sidebar to `GET /players/me` surfaced
+      that a plain buyer account has nowhere to keep post/follow counts and can't post at all
+      (`create_post` 404s without a `players` row). Confirmed via a live read against the linked
+      Supabase project that `posts`/`follows` are both empty and every `players` row has a
+      non-null `user_id`, so the migration below has zero backfill risk. Scope boundary: only the
+      social layer (posts/follows/likes/comments/saved-post display) moves to `author_id`/
+      `followed_id` on `users`; services/bookings/reviews stay Pal-only.
+  - [x] 3.18a Migration: `users` gains `posts_count`/`followers_count`/`following_count`;
+        `posts.player_id` → `author_id references users(id)`; `follows.player_id` →
+        `followed_id references users(id)` (+ `check (follower_id <> followed_id)`); `players`
+        loses the now-redundant count columns. Pushed to the linked project
+        (`supabase/migrations/20260905142123_unify_social_graph.sql`) via `bunx supabase db push`.
+  - [x] 3.18b Backend: `routers/feed.py` posting/follow/comment-creator logic reworked around
+        `author_id` (drops `_get_my_player_id`/`_get_player_row`, adds `_resolve_authors`/
+        `_resolve_author` batch helpers replacing the old `players(...)` embeds, `PostOut.player_id`
+        → `author_id`, `FollowOut.player_id` → `followed_id`, `follow_player`/`unfollow_player`
+        renamed `follow_user`/`unfollow_user` keyed on any `users.id`). Comment `is_creator`
+        resolution simplified to a direct `author_id` compare (no more double-hop
+        `posts(players(user_id))` embed). `ruff check` clean.
+  - [x] 3.18c Backend: `routers/players.py` surfaces the moved counts on Player Profile /
+        `players/me` (`_with_social_counts`, merged in before `_serialize_player`) and
+        `GET /players/{id}/feed` filters by the player's `user_id` instead of `player_id`. `ruff
+        check` clean.
+  - [x] 3.18d Frontend: `stores/auth.ts` (`AuthUser`/`loadAuthUser` gain
+        `postsCount`/`followersCount`/`followingCount` off the same `users` row read) and
+        `stores/feed.ts` (`FeedPost.playerId` → `authorId`, `toggleFollow`/`applyFollow` updated)
+        renamed/extended.
+  - [x] 3.18e Frontend: `FeedSidebar.vue` (new `stats` computed - Pal counts from
+        `usePlayersStore().mine`, buyer counts from `authStore.user`, so the stat grid renders for
+        any signed-in account while handle/tier stays Pal-only), `CreatePostModal.vue` (swapped its
+        mock `myPlayerProfile` for the real `usePlayersStore().mine`, matching `FeedSidebar.vue`),
+        `FeedPostCard.vue` (`handle` prop now nullable, no stray " · " for a buyer author),
+        `FeedView.vue`/`PostDetailView.vue`/`FeedFollowingView.vue` wired to `authorId`.
+  - [x] 3.18f Verification: `ruff check` and `vue-tsc --build` both clean; `eslint` clean on every
+        touched file (only the 3 pre-existing unrelated errors elsewhere, noted since 3.1k). Live
+        smoke test against the linked Supabase project, calling the real router functions directly
+        (same approach as 3.8c): the confirmed-Pal-less buyer account
+        (`sithisakleak001@gmail.com`) created a post (previously 404'd) → appeared in `GET /feed`
+        with no handle/tier and `users.posts_count` incremented → followed a seeded Pal → followed
+        a second plain buyer account → both targets' `users.followers_count` incremented, the
+        acting buyer's `following_count` hit 2 → self-follow still rejected (400) →
+        `players.py`'s player-profile fetch surfaced the same `followers_count` off `users`. 12/12
+        checks passed; follow rows/post deleted and all four accounts' counts verified back to 0
+        after.
+
+- [x] 3.19 Admin: Pal application review + player ban, PIN-gated access (pulled forward on
+      2026-09-05 per direct user request, ahead of 4.4/3.16 — replaces 1.15's mock email/password
+      login on `/admin` with a single 4-digit code, `1234`; there is still exactly one admin
+      "account" and no real admin auth, this is just a simpler gate)
+  - [x] 3.19a Migration: `players` gains `status pal_application_status not null default
+        'approved'` (new enum `pal_application_status` — `pending_review`/`approved`/`rejected`,
+        existing rows default to `approved` so seeded/live Pals are unaffected) and `is_banned
+        boolean not null default false`. Pushed with `bunx supabase db push`
+        (`supabase/migrations/20260905160703_pal_application_status_and_ban.sql`).
+  - [x] 3.19b Backend: `routers/players.py` — `create_my_player` now inserts `status:
+        'pending_review'` instead of going live immediately; `list_players` (`GET /players`)
+        filters to `status = 'approved' and is_banned = false` in the initial query, and
+        `_fetch_player_by_id` gained a `public_only` flag (`get_player`/`GET /players/{id}` passes
+        `True`, 404ing a pending/rejected/banned Pal) so a pending/rejected/banned Pal doesn't show
+        up in Browse Players or a direct profile link. `GET /players/me` is untouched (a Pal can
+        always see their own profile regardless of status — `_fetch_player_by_user_id` never sets
+        `public_only`). `ruff check` clean. Not covered here: booking creation
+        (`routers/bookings.py`) doesn't itself re-check a service's Pal's status/ban - a banned
+        Pal's service just can't be discovered/booked through the normal browse/profile flow
+        anymore, but a booking against a previously-bookmarked service URL for a since-banned Pal
+        isn't blocked server-side. Small enough to leave as a follow-up rather than widen this
+        task's scope.
+  - [x] 3.19c Backend: `core/storage.py` gains `create_signed_url(bucket, path, expires_in)` for
+        the private `id-documents` bucket (no signed-URL helper existed anywhere yet — `upload_file`
+        only returns a bare path for private buckets). New `routers/admin.py` section: `GET
+        /admin/pal-applications` (players with `status = 'pending_review'`, joined `users` for
+        email, with `idFrontUrl`/`idBackUrl` swapped for 1-hour signed URLs so the admin can
+        actually view the submitted ID photos) and `PATCH /admin/pal-applications/{id}/status`
+        (`approved`/`rejected`, pass-through-to-Postgres like the existing flagged-players/disputes
+        status endpoints). Also `PATCH /admin/players/{id}/ban` (body: `isBanned`) toggling the new
+        column - returns the player's most recent `admin_flags` row (rejoined, same shape as
+        `AdminFlaggedPlayerOut`) if one exists so the Flagged Players panel can patch it in place,
+        or `null` if the banned player has no flag on file. `AdminFlaggedPlayerOut`/`_flag_out`
+        extended with `isBanned` (joined off `players`) so the panel can show current ban state
+        regardless of which endpoint last touched the row. Same no-auth-dependency posture as the
+        rest of `admin.py`. `ruff check` clean, module imports clean.
+  - [x] 3.19d Backend: live smoke test against the real Supabase project (two throwaway
+        `pending_review` players, each with a real tiny file uploaded to the private
+        `id-documents` bucket, through real HTTP against a local uvicorn): `GET
+        /admin/pal-applications` listed both with the joined email and a usable signed
+        `idFrontUrl` (`?token=...`) - approving one and rejecting the other both updated status
+        and dropped them out of the pending-applications list; the approved one appeared in `GET
+        /players` and `GET /players/{id}`, the rejected one 404'd on the profile and was absent
+        from browse. `PATCH /admin/players/{id}/ban` on the now-approved player hid it from both
+        `GET /players` and its profile despite `status = 'approved'` (confirming ban and status
+        are independent gates), returned `null` with no flag on file, unbanning restored
+        visibility, and banning again after creating a throwaway `admin_flags` row returned that
+        flag re-joined with `isBanned: true`. 24/24 checks passed on the first run, no bugs found.
+        All throwaway players/users/storage objects/flag rows cleaned up and verified empty after.
+  - [x] 3.19e Frontend: `stores/admin.ts`'s mock email/password gate replaced with a single PIN
+        check (`login(code)`, matches `'1234'`), same `sessionStorage`-only persistence as before.
+        New `palApplications`/`palApplicationsLoading`/`palApplicationsError` state +
+        `fetchPalApplications`/`updatePalApplicationStatus` actions (the latter removes the row
+        from `palApplications` in place, since an approved/rejected application no longer shows up
+        in a refetch) and a `banPlayer` action, mirroring the flagged-players fetch/update pattern.
+        `mocks/admin.ts` gains `AdminPalApplication`/`PalApplicationStatus` types + two mock
+        fallback applications, and `AdminFlaggedPlayer` gains `isBanned: boolean` (all five
+        existing mock flags set to `false`).
+  - [x] 3.19f Frontend: `AdminView.vue`'s login form is now a single PIN `UInput`
+        (`type="password"`, `inputmode="numeric"`, `maxlength="4"`, centered/letter-spaced) instead
+        of email+password, copy updated to "Enter the admin access code." New `tabs` entry `{ key:
+        'applications', label: 'Pal applications' }` wired to a new `AdminPalApplicationsPanel`;
+        the sidebar's hardcoded `admin@squadup.gg` line (no longer meaningful with a code-only
+        gate) replaced with a plain "SquadUp moderation" label.
+  - [x] 3.19g Frontend: `AdminPalApplicationsPanel.vue` — same structural pattern as
+        `AdminFlaggedPlayersPanel.vue` (search + table + review `UModal`, loading/error/empty
+        states), showing the applicant's games/rank/role/languages/tagline/payout schedule and
+        links (new tab) to the signed ID-document URLs, with Approve/Reject buttons calling
+        `updatePalApplicationStatus` and closing the modal on success (the row leaves the list
+        rather than needing an updated status shown in place).
+  - [x] 3.19h Frontend: `AdminFlaggedPlayersPanel.vue` - table row gets a small red "Banned" badge
+        next to a banned Pal's name; the review modal gains a Ban/Unban row (own `banUpdating` busy
+        state, separate from the existing Dismiss/Reviewing/Take action `statusUpdating` flag since
+        it's a different endpoint) calling the new `banPlayer` action and reflecting/toggling
+        `isBanned`.
+  - [x] 3.19i Verification: `vue-tsc --build` clean; `eslint` clean apart from the same two
+        pre-existing unrelated errors noted since 3.1k (`StepRates.vue`/`RefundModal.vue`,
+        untouched by this task); `ruff check` clean across the backend. Manual browser walkthrough
+        skipped per standing instruction not to run the `run` skill in this project.
 
 ## Phase 4 — Payment: Stripe / Bakong KHQR (moved up ahead of 3.16/3.17, see Status)
 
@@ -1385,7 +1556,7 @@ project's scope. `wallet_transactions.stripe_session_id` (4.1b) was renamed to
 `stripe_payment_intent_id` in a follow-up migration - same idempotency-key role, different
 kind of Stripe id.
 
-- [ ] 4.1 Stripe integration for Wallet Top-up (do first)
+- [x] 4.1 Stripe integration for Wallet Top-up (do first)
   - [x] 4.1a Backend: `stripe` dependency (`backend/pyproject.toml`, added via `uv add stripe`) +
         `Settings.stripe_secret_key` (`core/config.py`, a required `str` - empty string until
         filled in, not `Optional`, so a missing key fails loud the moment a Stripe call is
@@ -1538,6 +1709,108 @@ kind of Stripe id.
       — generate QR, MVP manual payment verification
 - [ ] 4.5 Note in final report: proper escrow (user → platform → player) is a post-launch
       enhancement, not built for submission
+- [x] 4.6 DiceBear avatar integration across the app (ad-hoc UI polish, requested directly by the
+      user on 2026-09-06 with a screenshot of dicebear.com's style picker; done ahead of 4.4/4.5
+      since it's small and isolated — every `UAvatar` currently renders a hardcoded `PhUserCircle`
+      icon regardless of data, so no avatar ever actually shows a face)
+  - [x] 4.6a Frontend: new `utils/avatar.ts` — a curated list of DiceBear styles from its
+        "Character" category only (dicebear.com groups styles into Minimalist/Character/Scene;
+        per the user's explicit instruction, Minimalist and Scene styles are excluded), a seeded
+        hash that picks one style per entity so the same id always renders the same style/art
+        consistently across the app, `generatedAvatarUrl(seed)` building the
+        `https://api.dicebear.com/9.x/{style}/svg?seed=...` URL, and `resolveAvatarUrl(seed,
+        explicitUrl)` preferring a real uploaded photo (`avatarUrl`/`avatar_url`) when present and
+        falling back to the generated one otherwise.
+  - [x] 4.6b Frontend: mock data cleanup — replace the placeholder `i.pravatar.cc` stock-photo
+        URLs in `mocks/players.ts`, `mocks/playerProfiles.ts`, `mocks/admin.ts`, `mocks/estars.ts`
+        with `generatedAvatarUrl(...)` calls so demo Pals/leaderboard/admin rows showcase the
+        mixed illustrated styles instead of stock stranger photos.
+  - [x] 4.6c Frontend: wire every `UAvatar` across the ~34 components/views that render one to
+        bind `:src="resolveAvatarUrl(...)"` off the best available stable id, instead of always
+        falling through to the hardcoded icon — covers player cards/profiles, Pal + admin
+        dashboards, feed (posts/comments/suggested Pals/right rail), messages (thread list + chat
+        bubbles), settings, header, and booking/review/subscription modals.
+  - [x] 4.6d Frontend: Become a Pal wizard's Account step (`StepAccount.vue`) shows a live
+        generated-avatar preview before a real photo is uploaded, instead of a blank placeholder.
+  - [x] 4.6e Verification: `vue-tsc --build` and `eslint` clean (same two pre-existing unrelated
+        errors noted since 3.1k).
+- [x] 4.7 Feed right rail's "Suggested Pals" wired to real data (was mock-only per 3.8a's decision
+      to leave it that way "unless a later pass decides it's worth deriving from `posts`/
+      `players`" — revisited after the user noticed the Follow button and profile link did nothing)
+  - [x] 4.7a Backend: `GET /players/suggested` (`routers/players.py`) — a random sample (default
+        4) of approved, account-linked Pals, excluding the viewer and anyone they already follow.
+        Reuses `PlayerSummaryOut`/browse-card shape rather than a bespoke type; extracted the
+        highlighted-service-listing lookup out of `list_players` into `_player_summaries` so both
+        routes share it. Also added `user_id` to `PlayerSummaryOut`/`_player_summary` (and the
+        frontend's `PlayerSummary`) since `follows` keys on `users.id`, not `players.id` - a
+        browse card had no way to be followed before this.
+  - [x] 4.7b Frontend: `stores/players.ts` gets `suggested`/`suggestedLoading`/`fetchSuggested()`
+        (no mock fallback - empty is a normal state, same convention as the profile tabs).
+        `FeedRightRail.vue` now renders `playersStore.suggested` instead of the hardcoded
+        `mockSuggestedPals` (deleted, no other consumers): each row links to `/players/{id}`, and
+        Follow calls `feedStore.toggleFollow` then drops the pal from the list on success. Section
+        hides entirely when there's nothing to suggest.
+  - [x] 4.7c Verification: `vue-tsc --build`, `eslint`, and `ruff check` all clean.
+  - [x] 4.7d `FeedExploreView.vue`'s post grid was the same 3.8a mock-only gap (`mockExplorePosts`
+        - 9 hardcoded tiles all authored by "Meowa" with fake "5.9k" like counts). Swapped for
+        `feedStore.fetchFeed()`/`feedStore.posts` (the same real `GET /feed` data `FeedView.vue`
+        already renders): category tabs filter on the post's real `category`, each tile links to
+        `/feed/{id}` (Post Detail), avatar/likes use `resolveAvatarUrl`/the same `k`-suffix
+        `formatCount` convention as `PlayerCard.vue`/`FeedSidebar.vue`. `exploreCategories` (the
+        tab labels) stays as-is - it's curated UI copy, not fake data. Deleted the now-unused
+        `ExplorePost`/`mockExplorePosts`. Caveat: real posts have no composer UI to tag a category
+        yet (`CreatePostPayload.category` defaults to `"games"` server-side), so non-"Trending"
+        tabs will look empty until that's wired up - not fixed here, out of scope for de-mocking
+        the view.
+  - [x] 4.7e `FeedRightRail.vue`'s "Trending now" was the same gap (`mockTrendingTopics` - 5
+        hardcoded topics, dead buttons). Derived it from real data instead: groups
+        `feedStore.posts` by `category`, top 5 by count, each row navigates to
+        `/feed/explore?category=...` (which `FeedExploreView.vue` now reads on load and on
+        in-place query changes to preselect that tab). Section hides when there are 0 posts,
+        same as 4.7's Suggested Pals - correctly empty beats fake content. Deleted the
+        now-unused `TrendingTopic`/`mockTrendingTopics`.
+- [x] 4.8 eStars Leaderboard avatar fix (found 2026-09-06: the user noticed it was the only page
+      with no avatars showing at all, real players included)
+  - [x] 4.8a `EstarsLeaderboardView.vue` bound `entry.avatarUrl` raw on both `UAvatar`s instead of
+        `resolveAvatarUrl(entry.id, entry.avatarUrl)` like every other component 4.6c covered - the
+        one component that rollout missed. Real leaderboard entries (`GET /estars/leaderboard`)
+        have `avatar_url = null` since no seed/signup path writes one, so this always fell through
+        to the plain icon. Fixed to generate a DiceBear avatar the same way everywhere else does.
+  - [x] 4.8b Audited the rest of the app for the same "mock rendered unconditionally instead of
+        real data" class of bug (see 4.7's precedent). Found several around wallet balance/account
+        settings (`SettingsPaymentsTab.vue`, `SettingsAccountTab.vue`, `SubscriptionModal.vue`,
+        `CheckoutView.vue`, etc. reading `mockCurrentUser`/`mockPlayerProfiles.self` instead of
+        `walletStore`/`authStore`) and confirmed two (`SettingsAccountTab.vue`'s phone/country/
+        member-since, `SettingsPrivacyTab.vue`'s blocked-accounts count) have no backing DB field
+        or endpoint at all yet. Scoped down to just 3.16c (player-list mock splices) on the user's
+        call; the settings/wallet mock leaks and the two backend-gap fields are still open -
+        tracked here, not fixed.
+
+- [x] 4.9 Become a Pal step 1 prefill from the real account, phone/country closing the 4.8b gap
+      (requested directly by the user on 2026-09-06)
+  - [x] 4.9a Migration: `public.users` gets nullable `phone`/`country` columns (previously
+        nowhere - `SettingsAccountTab.vue`'s inputs were mock-only, per 4.8b). Pushed live via
+        `bunx supabase db push`.
+  - [x] 4.9b Backend: `routers/users.py`'s `UserOut`/`UserUpdateIn` extended with `phone`/
+        `country`, so the existing `GET`/`PATCH /users/me` cover them for free.
+  - [x] 4.9c Frontend: `stores/auth.ts`'s `AuthUser` gets `phone`/`country` (read via
+        `loadAuthUser`'s existing `users` select) plus a new `updateAccount()` action
+        (`PATCH /users/me`) shared by the wizard and Settings.
+  - [x] 4.9d Frontend: `BecomePlayerView.vue` seeds step 1's `accountData` from
+        `authStore.user` instead of always-blank `createAccountStepData()` - a buyer who signed
+        up first and becomes a Pal later sees their real display name/email/phone/country, a
+        genuinely fresh signup sees empty phone/country same as before. `handleSubmit` now also
+        calls `authStore.updateAccount()` so edits made in step 1 land on the account instead of
+        vanishing (they previously weren't sent to `POST /players/me` at all). `StepAccount.vue`'s
+        email input is locked (`disabled`) with a hint pointing at Settings - email stays
+        Supabase-auth-backed and out of this form's reach.
+  - [x] 4.9e Frontend: `SettingsAccountTab.vue` wired the same phone/country fields to
+        `authStore.user`/`updateAccount()` with a "Save changes" button (`useToast` feedback,
+        matching 3.13g's pattern) instead of the mock-only inputs 4.8b flagged; email input
+        locked here too. `username`/`language`/`timezone` stay as before (player-profile fields,
+        no account-level backing, out of scope here).
+  - [x] 4.9f Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean. Manual browser
+        walkthrough not run by Claude, left to the user.
 
 ---
 

@@ -2,17 +2,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PhMagnifyingGlass } from '@phosphor-icons/vue'
-import { mockPlayers } from '@/mocks/players'
 import { usePlayersStore, type PlayerSummary } from '@/stores/players'
 import PlayerCard from '@/components/players/PlayerCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const playersStore = usePlayersStore()
 
-/** Seed Pals (`mockPlayers`, `p1`..`p8`) stay in the catalog as demo content alongside whatever
- * real Pal profiles the backend returns (`GET /players`) — see the 3.1j/3.2 notes in
- * CHECKPOINT.md on why seed Pals aren't DB rows yet. */
-const allPlayers = computed<PlayerSummary[]>(() => [...playersStore.list, ...mockPlayers])
+const allPlayers = computed<PlayerSummary[]>(() => playersStore.list)
 
 interface FilterChip {
   key: string
@@ -128,7 +124,7 @@ function formatCount(count: number) {
 <template>
   <div class="min-h-[calc(100vh-4rem)] pb-14">
     <div v-if="isGameMode" class="border-b border-white/10 bg-white/3 px-4 py-12 md:px-6 md:py-16">
-      <div class="mx-auto max-w-(--content-max-width)">
+      <div class="mx-auto max-w-4/5">
         <h1 class="text-4xl font-bold text-white md:text-5xl">{{ gameFilter }}</h1>
         <p class="mt-2 text-slate-400">{{ formatCount(matchedPlayers.length) }} Pals</p>
       </div>

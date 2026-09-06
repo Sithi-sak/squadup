@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import brandLogo from '@/assets/brand.svg'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 const year = new Date().getFullYear()
 
@@ -43,7 +48,7 @@ const bottomLinks: FooterLink[] = [
       class="mx-auto grid max-w-(--content-max-width) grid-cols-1 gap-8 px-4 pt-12 pb-8 md:grid-cols-[2fr_1fr_1fr_1fr]"
     >
       <div>
-        <router-link to="/" class="inline-flex items-center">
+        <router-link :to="isAuthenticated ? '/home' : '/'" class="inline-flex items-center">
           <img :src="brandLogo" alt="SquadUp" class="h-[26px] w-auto" />
         </router-link>
         <p class="mt-3 max-w-80 text-sm leading-relaxed">

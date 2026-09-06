@@ -65,7 +65,19 @@ async function markAllRead() {
         </UButton>
       </div>
 
-      <p v-if="store.loading" class="mt-10 text-center text-sm text-slate-400">Loading notifications...</p>
+      <div v-if="store.loading" class="mt-6 overflow-hidden rounded-xl bg-gray-800/70">
+        <div
+          v-for="n in 5"
+          :key="n"
+          class="flex items-start gap-3 border-b border-white/5 px-5 py-4 last:border-b-0"
+        >
+          <USkeleton class="h-10 w-10 shrink-0 rounded-full" />
+          <div class="min-w-0 flex-1 space-y-2">
+            <USkeleton class="h-4 w-3/4" />
+            <USkeleton class="h-3 w-20" />
+          </div>
+        </div>
+      </div>
 
       <UEmpty
         v-else-if="filtered.length === 0"

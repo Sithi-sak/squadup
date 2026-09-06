@@ -6,7 +6,7 @@ import { mockFeedPosts, mockFollowingPosts, mockPostComments, mockSavedItems } f
 
 export interface FeedPost {
   id: string
-  playerId: string
+  authorId: string
   author: string
   handle: string | null
   tier: string | null
@@ -65,14 +65,14 @@ export interface CreatePostPayload {
   category?: string
 }
 
-/** Fallback fixtures (`mocks/feed.ts`) predate this store and don't carry `playerId`/`liked`/
+/** Fallback fixtures (`mocks/feed.ts`) predate this store and don't carry `authorId`/`liked`/
  * `createdAt` (the mocks use a display-only `timeAgo` string) - these fill in reasonable
  * stand-ins rather than reshaping the mock file itself, same "adapt at the boundary" approach
  * `stores/players.ts`'s `playerProfileFromDetail` uses in the other direction. */
 function feedPostFromMock(post: MockFeedPost): FeedPost {
   return {
     id: post.id,
-    playerId: post.id,
+    authorId: post.id,
     author: post.author,
     handle: post.handle,
     tier: post.tier,
@@ -162,13 +162,13 @@ export const useFeedStore = defineStore('feed', () => {
     if (current.value?.id === updated.id) current.value = updated
   }
 
-  function applyFollow(playerId: string, isFollowing: boolean) {
+  function applyFollow(authorId: string, isFollowing: boolean) {
     for (const list of [posts.value, following.value]) {
       for (const post of list) {
-        if (post.playerId === playerId) post.following = isFollowing
+        if (post.authorId === authorId) post.following = isFollowing
       }
     }
-    if (current.value?.playerId === playerId) current.value.following = isFollowing
+    if (current.value?.authorId === authorId) current.value.following = isFollowing
   }
 
   function bumpCommentCount(postId: string, delta: number) {
@@ -247,15 +247,15 @@ export const useFeedStore = defineStore('feed', () => {
     return updated
   }
 
-  async function toggleFollow(playerId: string, currentlyFollowing: boolean) {
+  async function toggleFollow(authorId: string, currentlyFollowing: boolean) {
     const result = currentlyFollowing
-      ? await api.delete<{ playerId: string; following: boolean; followersCount: number }>(
-          `/feed/follows/${playerId}`,
+      ? await api.delete<{ followedId: string; following: boolean; followersCount: number }>(
+          `/feed/follows/${authorId}`,
         )
-      : await api.post<{ playerId: string; following: boolean; followersCount: number }>(
-          `/feed/follows/${playerId}`,
+      : await api.post<{ followedId: string; following: boolean; followersCount: number }>(
+          `/feed/follows/${authorId}`,
         )
-    applyFollow(playerId, result.following)
+    applyFollow(authorId, result.following)
     return result
   }
 

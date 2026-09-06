@@ -1,18 +1,43 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { PhBookmarkSimple, PhCompass, PhHouse, PhPlus, PhUserCircle, PhUsersThree } from '@phosphor-icons/vue'
 import { mockCurrentUser } from '@/mocks/users'
-import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+import { useAuthStore } from '@/stores/auth'
+import { usePlayersStore } from '@/stores/players'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 defineProps<{
   active: 'feed' | 'following' | 'explore' | 'saved'
   showCreatePost?: boolean
 }>()
 
-const myPlayerProfile = computed(() =>
-  mockCurrentUser.playerId ? (mockPlayerProfiles[mockCurrentUser.playerId] ?? null) : null,
+const authStore = useAuthStore()
+const playersStore = usePlayersStore()
+
+onMounted(() => {
+  playersStore.fetchMine()
+})
+
+const displayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
+const email = computed(() => authStore.user?.email ?? mockCurrentUser.email)
+const myPlayerProfile = computed(() => playersStore.mine)
+const avatarUrl = computed(() =>
+  resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, myPlayerProfile.value?.avatarUrl),
 )
+
+/** Posts/Followers/Following (3.18): a Pal's counts come from `myPlayerProfile`, a plain buyer's
+ * from their own `users` row via `authStore` - either way every signed-in account has real
+ * counts now, not just a Pal. */
+const stats = computed(() => {
+  if (myPlayerProfile.value) return myPlayerProfile.value
+  if (!authStore.user) return null
+  return {
+    postsCount: authStore.user.postsCount,
+    followersCount: authStore.user.followersCount,
+    followingCount: authStore.user.followingCount,
+  }
+})
 
 const navItems = [
   { key: 'feed', label: 'Feed', to: '/feed', icon: PhHouse },
@@ -33,32 +58,32 @@ function formatCount(count: number) {
 <template>
   <aside class="flex flex-col gap-5 rounded-xl bg-gray-800/70 p-5">
     <div class="flex flex-col items-center text-center">
-      <UAvatar size="3xl" class="bg-white/10 text-slate-300">
+      <UAvatar :src="avatarUrl" size="3xl" class="bg-white/10 text-slate-300">
         <PhUserCircle :size="40" />
       </UAvatar>
-      <p class="mt-3 text-lg font-semibold text-white">{{ mockCurrentUser.displayName }}</p>
+      <p class="mt-3 text-lg font-semibold text-white">{{ displayName }}</p>
       <template v-if="myPlayerProfile">
         <p class="text-sm text-slate-400">{{ myPlayerProfile.handle }}</p>
         <UBadge color="primary" variant="soft" size="sm" class="mt-2 rounded-full text-xs text-brand-500">
           {{ myPlayerProfile.tier }}
         </UBadge>
-
-        <div class="mt-4 grid w-full grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4">
-          <div>
-            <p class="font-semibold text-white">{{ formatCount(myPlayerProfile.postsCount) }}</p>
-            <p class="text-xs text-slate-400">Posts</p>
-          </div>
-          <div>
-            <p class="font-semibold text-white">{{ formatCount(myPlayerProfile.followersCount) }}</p>
-            <p class="text-xs text-slate-400">Followers</p>
-          </div>
-          <div>
-            <p class="font-semibold text-white">{{ formatCount(myPlayerProfile.followingCount) }}</p>
-            <p class="text-xs text-slate-400">Following</p>
-          </div>
-        </div>
       </template>
-      <p v-else class="text-sm text-slate-400">{{ mockCurrentUser.email }}</p>
+      <p v-else class="text-sm text-slate-400">{{ email }}</p>
+
+      <div v-if="stats" class="mt-4 grid w-full grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4">
+        <div>
+          <p class="font-semibold text-white">{{ formatCount(stats.postsCount) }}</p>
+          <p class="text-xs text-slate-400">Posts</p>
+        </div>
+        <div>
+          <p class="font-semibold text-white">{{ formatCount(stats.followersCount) }}</p>
+          <p class="text-xs text-slate-400">Followers</p>
+        </div>
+        <div>
+          <p class="font-semibold text-white">{{ formatCount(stats.followingCount) }}</p>
+          <p class="text-xs text-slate-400">Following</p>
+        </div>
+      </div>
     </div>
 
     <nav class="flex flex-col gap-1">

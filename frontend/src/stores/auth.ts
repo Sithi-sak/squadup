@@ -9,11 +9,18 @@ export interface AuthUser {
   id: string
   email: string
   displayName: string | null
+  phone: string | null
+  country: string | null
   role: 'user' | 'admin'
   /** Links to a `PlayerProfile` when this account also has a Pal profile (additive, not exclusive). */
   playerId: string | null
   onboardingComplete: boolean
   coinBalance: number
+  /** Feed sidebar stats (3.18) - live on `users` now so a plain buyer has real counts too, not
+   * just a Pal (`MyPlayerProfile`'s own copies, sourced the same way via `players.py`). */
+  postsCount: number
+  followersCount: number
+  followingCount: number
 }
 
 /** Loads the `public.users` row a signed-in Supabase user is backed by (populated by the
@@ -23,7 +30,9 @@ async function loadAuthUser(supabaseUser: User): Promise<AuthUser> {
   const [{ data }, { data: player }] = await Promise.all([
     supabase
       .from('users')
-      .select('display_name, role, onboarding_complete, coin_balance')
+      .select(
+        'display_name, phone, country, role, onboarding_complete, coin_balance, posts_count, followers_count, following_count',
+      )
       .eq('id', supabaseUser.id)
       .maybeSingle(),
     supabase.from('players').select('id').eq('user_id', supabaseUser.id).maybeSingle(),
@@ -33,10 +42,15 @@ async function loadAuthUser(supabaseUser: User): Promise<AuthUser> {
     id: supabaseUser.id,
     email: supabaseUser.email ?? '',
     displayName: data?.display_name ?? null,
+    phone: data?.phone ?? null,
+    country: data?.country ?? null,
     role: (data?.role as AuthUser['role']) ?? 'user',
     playerId: player?.id ?? null,
     onboardingComplete: data?.onboarding_complete ?? false,
     coinBalance: data?.coin_balance ?? 0,
+    postsCount: data?.posts_count ?? 0,
+    followersCount: data?.followers_count ?? 0,
+    followingCount: data?.following_count ?? 0,
   }
 }
 
@@ -91,6 +105,19 @@ export const useAuthStore = defineStore('auth', () => {
     reset()
   }
 
+  /** Patches the caller's own account row (`PATCH /users/me`) - shared by Settings' Account tab
+   * and Become a Pal's step 1, both of which edit the same `displayName`/`phone`/`country`
+   * fields on `public.users` rather than keeping their own copies. Email isn't included: it's
+   * Supabase-auth-backed and only changeable through Settings' own dedicated flow. */
+  async function updateAccount(updates: { displayName?: string; phone?: string; country?: string }) {
+    if (!user.value) return
+    const updated = await api.patch<{ displayName: string | null; phone: string | null; country: string | null }>(
+      '/users/me',
+      updates,
+    )
+    user.value = { ...user.value, ...updated }
+  }
+
   /** Settings' "Delete account" flow: `DELETE /users/me` cascades the whole account graph
    * server-side (3.13c), then clears the local Supabase session same as `signOut()` since the
    * account (and its refresh token) no longer exists. */
@@ -109,6 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
     init,
     signInWithGoogle,
     signOut,
+    updateAccount,
     deleteAccount,
   }
 })

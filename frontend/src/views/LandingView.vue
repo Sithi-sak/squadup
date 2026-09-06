@@ -1,34 +1,36 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PhMagnifyingGlass,
-  PhImage,
   PhUserCircle,
   PhCheckCircle,
   PhStar,
   PhCaretLeft,
   PhCaretRight,
 } from '@phosphor-icons/vue'
-import { mockPlayers } from '@/mocks/players'
+import { usePlayersStore } from '@/stores/players'
 import coinIcon from '@/assets/squadup-coin.svg'
+import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
+import { featuredGames } from '@/data/games'
 
 const router = useRouter()
+const playersStore = usePlayersStore()
 
 const searchQuery = ref('')
 
 const quickGames = ['Valorant', 'League of Legends', 'Fortnite', 'Apex Legends', 'Overwatch 2']
 
-const services = [
-  { name: 'Valorant', pals: 145 },
-  { name: 'CS2', pals: 214 },
-  { name: 'Apex Legends', pals: 3533 },
-  { name: 'Overwatch 2', pals: 3533 },
-  { name: 'Fortnite', pals: 6230 },
-  { name: 'League of Legends', pals: 812 },
-]
+const coverFilenames = useCoverManifest()
 
-const topPlayers = mockPlayers
+function coverSrc(slug: string): string | undefined {
+  const filename = coverFilenames.value.get(slug)
+  return filename ? gameCoverUrl(slug, filename) : undefined
+}
+
+const topPlayers = computed(() =>
+  [...playersStore.list].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 8),
+)
 
 const servicesRail = ref<HTMLElement | null>(null)
 const canScrollServicesLeft = ref(false)
@@ -61,6 +63,8 @@ function goToPlayers(game?: string) {
 
 onMounted(() => {
   updateServicesScrollState()
+  if (!playersStore.list.length) playersStore.fetchList({ limit: 8 })
+  playersStore.fetchGameCounts()
 })
 
 function handleSearch() {
@@ -127,7 +131,7 @@ function handleSearch() {
 
     <!-- All Services -->
     <section class="px-4 py-10 md:px-6 md:py-14">
-      <div class="mx-auto max-w-(--content-max-width)">
+      <div class="mx-auto max-w-4/5">
         <div class="mb-5 flex items-center justify-between">
           <h2 class="text-2xl font-bold text-white">All Services</h2>
           <div class="hidden items-center gap-2 md:flex">
@@ -153,21 +157,30 @@ function handleSearch() {
         </div>
         <div
           ref="servicesRail"
-          class="scrollbar-none grid auto-cols-[200px] grid-flow-col gap-4 overflow-x-auto"
+          class="scrollbar-none grid auto-cols-50 grid-flow-col gap-4 overflow-x-auto"
           @scroll="updateServicesScrollState"
         >
           <router-link
-            v-for="game in services"
-            :key="game.name"
+            v-for="game in featuredGames"
+            :key="game.id"
             :to="{ path: '/players', query: { game: game.name } }"
-            class="flex flex-col overflow-hidden rounded-xl bg-white/5"
+            class="relative flex aspect-10/16 flex-col justify-end overflow-hidden rounded-xl"
           >
-            <div class="flex aspect-[4/5] items-center justify-center bg-white/5 text-slate-500">
-              <PhImage :size="28" />
-            </div>
-            <div class="flex flex-col gap-0.5 px-3 pt-2.5 pb-3">
-              <span class="text-sm font-semibold text-white">{{ game.name }}</span>
-              <span class="text-xs text-slate-400">{{ game.pals.toLocaleString() }} Pals</span>
+            <img
+              v-if="coverSrc(game.id)"
+              :src="coverSrc(game.id)"
+              :alt="game.name"
+              class="absolute inset-0 h-full w-full object-cover"
+              loading="lazy"
+            />
+            <div
+              class="absolute inset-0 bg-linear-to-t from-squadup-dark via-squadup-dark/15 to-transparent"
+            />
+            <div class="relative flex flex-col gap-0.5 px-3 pb-3">
+              <span class="text-md font-semibold text-white">{{ game.name }}</span>
+              <span class="text-sm text-slate-300">
+                {{ (playersStore.gameCounts[game.id] ?? 0).toLocaleString() }} Pals
+              </span>
             </div>
           </router-link>
         </div>
@@ -175,8 +188,8 @@ function handleSearch() {
     </section>
 
     <!-- Top Pal -->
-    <section class="px-4 py-10 md:px-6 md:py-14">
-      <div class="mx-auto max-w-(--content-max-width)">
+    <section v-if="topPlayers.length" class="px-4 py-10 md:px-6 md:py-14">
+      <div class="mx-auto max-w-4/5">
         <h2 class="mb-5 text-2xl font-bold text-white">Top Pal</h2>
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <article
@@ -252,7 +265,7 @@ function handleSearch() {
         </div>
         <div class="mt-10 flex flex-wrap justify-center gap-x-12 gap-y-8">
           <div v-for="stat in stats" :key="stat.label" class="flex flex-col gap-1">
-            <span class="text-[22px] font-extrabold text-white">{{ stat.value }}</span>
+            <span class="text-[22px] font-bold text-white">{{ stat.value }}</span>
             <span class="text-xs text-slate-400">{{ stat.label }}</span>
           </div>
         </div>

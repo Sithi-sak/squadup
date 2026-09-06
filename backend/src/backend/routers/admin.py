@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from fastapi import APIRouter, HTTPException, status
 
 from ..core.schema import CamelModel
+from ..core.storage import create_signed_url
 from ..core.supabase import get_supabase_client
 from ..core.wallet import adjust_coin_balance
 
@@ -23,6 +24,33 @@ class AdminFlaggedPlayerOut(CamelModel):
     reported_by: str
     report_count: int
     reported_at: str
+    status: str
+    is_banned: bool
+
+
+class AdminBanIn(CamelModel):
+    is_banned: bool
+
+
+class AdminPalApplicationOut(CamelModel):
+    id: str
+    display_name: str
+    avatar_url: str | None
+    email: str
+    tagline: str | None
+    timezone: str | None
+    games: list[str]
+    rank: str | None
+    role: str | None
+    languages: list[str]
+    payout_schedule: str
+    id_front_url: str | None
+    id_back_url: str | None
+    submitted_at: str
+    status: str
+
+
+class AdminPalApplicationStatusIn(CamelModel):
     status: str
 
 
@@ -65,7 +93,9 @@ class AdminOverviewOut(CamelModel):
 _ESCROW_STATUSES = ("pending", "accepted")
 _WEEKDAY_LABELS = ("M", "T", "W", "T", "F", "S", "S")
 
-_FLAG_SELECT = "*, players(display_name, avatar_url), users(display_name)"
+_FLAG_SELECT = "*, players(display_name, avatar_url, is_banned), users(display_name)"
+
+_PAL_APPLICATION_SELECT = "*, users(email)"
 
 _DISPUTE_SELECT = (
     "*, bookings(order_number, total_coins, quantity, service_type_label, "
@@ -82,6 +112,18 @@ def _flag_out(row: dict) -> dict:
         "avatar_url": player.get("avatar_url"),
         "reported_by": reporter.get("display_name") or "A user",
         "reported_at": row["created_at"],
+        "is_banned": bool(player.get("is_banned")),
+    }
+
+
+def _pal_application_out(row: dict) -> dict:
+    user = row.get("users") or {}
+    return {
+        **row,
+        "email": user.get("email") or "",
+        "id_front_url": create_signed_url("id-documents", row["id_front_url"]) if row.get("id_front_url") else None,
+        "id_back_url": create_signed_url("id-documents", row["id_back_url"]) if row.get("id_back_url") else None,
+        "submitted_at": row["created_at"],
     }
 
 
@@ -104,9 +146,71 @@ def _dispute_out(row: dict) -> dict:
     }
 
 
+# Pal applications ------------------------------------------------------------------------
+# Same no-auth posture as the rest of this router - see the note on the Flagged players
+# section below.
+
+
+@router.get("/pal-applications", response_model=list[AdminPalApplicationOut])
+def list_pal_applications() -> list[dict]:
+    rows = (
+        get_supabase_client()
+        .table("players")
+        .select(_PAL_APPLICATION_SELECT)
+        .eq("status", "pending_review")
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    return [_pal_application_out(row) for row in rows]
+
+
+@router.patch("/pal-applications/{player_id}/status", response_model=AdminPalApplicationOut)
+def update_pal_application_status(player_id: str, payload: AdminPalApplicationStatusIn) -> dict:
+    client = get_supabase_client()
+    existing = client.table("players").select("id").eq("id", player_id).maybe_single().execute()
+    if not existing or not existing.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Application not found")
+
+    client.table("players").update({"status": payload.status}).eq("id", player_id).execute()
+    result = (
+        client.table("players").select(_PAL_APPLICATION_SELECT).eq("id", player_id).single().execute()
+    )
+    return _pal_application_out(result.data)
+
+
 # Flagged players ------------------------------------------------------------------------
 # No auth dependency: `stores/admin.ts`'s mock-credential gate (`admin@squadup.gg`,
 # session-only) is the only guard until real admin auth ships (per the 1.15 checkpoint note).
+
+
+@router.patch("/players/{player_id}/ban", response_model=AdminFlaggedPlayerOut | None)
+def set_player_banned(player_id: str, payload: AdminBanIn) -> dict | None:
+    """Ban/unban toggle from the Flagged Players review modal (3.19) - a flag stays a
+    moderation-queue label on its own (`update_flagged_player_status` above), this is the
+    action that actually hides a Pal from Browse Players / their public profile
+    (`routers/players.py`'s `is_banned` filters)."""
+    client = get_supabase_client()
+    existing = client.table("players").select("id").eq("id", player_id).maybe_single().execute()
+    if not existing or not existing.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
+
+    client.table("players").update({"is_banned": payload.is_banned}).eq("id", player_id).execute()
+
+    # Return the caller's own flag row (if any) re-joined, so the Flagged Players panel can patch
+    # its list in place the same way a status update does - a player can be banned with no flag
+    # on file at all, in which case there's nothing to patch and the frontend just re-fetches.
+    flag = (
+        client.table("admin_flags")
+        .select(_FLAG_SELECT)
+        .eq("player_id", player_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .maybe_single()
+        .execute()
+    )
+    return _flag_out(flag.data) if flag and flag.data else None
 
 
 @router.get("/flagged-players", response_model=list[AdminFlaggedPlayerOut])

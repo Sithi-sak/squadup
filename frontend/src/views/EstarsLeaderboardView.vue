@@ -12,6 +12,7 @@ import {
 import coinIcon from '@/assets/squadup-coin.svg'
 import { estarsCategories } from '@/mocks/estars'
 import { useEstarsStore, type EstarPeriod } from '@/stores/estars'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const estarsStore = useEstarsStore()
 
@@ -78,7 +79,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] px-4 py-14 md:px-6">
-    <div class="mx-auto max-w-(--content-max-width)">
+    <div class="mx-auto max-w-4/5">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 class="flex items-center gap-2 text-3xl font-bold text-white md:text-4xl">
@@ -111,12 +112,37 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
         </UButton>
       </div>
 
-      <div
-        v-if="estarsStore.loading"
-        class="flex min-h-[40vh] items-center justify-center text-sm text-slate-400"
-      >
-        Loading leaderboard...
-      </div>
+      <template v-if="estarsStore.loading">
+        <div class="mt-8 grid grid-cols-1 items-center gap-4 md:grid-cols-3">
+          <div
+            v-for="(order, n) in ['md:order-2', 'md:order-1', 'md:order-3']"
+            :key="n"
+            :class="order"
+            class="flex flex-col items-center gap-3 rounded-3xl border-white/10 bg-gray-800/70 p-6 text-center"
+          >
+            <USkeleton class="h-11 w-11 rounded-full" />
+            <USkeleton class="h-3 w-16" />
+            <USkeleton class="h-16 w-16 rounded-full" />
+            <USkeleton class="h-5 w-24" />
+            <USkeleton class="h-5 w-20 rounded-full" />
+            <USkeleton class="h-4 w-12" />
+            <USkeleton class="h-6 w-16" />
+          </div>
+        </div>
+
+        <div class="mt-8 divide-y divide-white/10 border-t border-white/10">
+          <div v-for="n in 6" :key="n" class="flex items-center gap-4 py-4">
+            <USkeleton class="h-4 w-6 shrink-0" />
+            <USkeleton class="h-9 w-9 shrink-0 rounded-full" />
+            <div class="min-w-0 flex-1 space-y-1.5">
+              <USkeleton class="h-4 w-28" />
+              <USkeleton class="h-3 w-20" />
+            </div>
+            <USkeleton class="hidden h-4 w-10 shrink-0 sm:block" />
+            <USkeleton class="h-4 w-14 shrink-0" />
+          </div>
+        </div>
+      </template>
 
       <template v-else>
         <div class="mt-8 grid grid-cols-1 items-center gap-4 md:grid-cols-3">
@@ -140,7 +166,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
             </p>
 
             <UAvatar
-              :src="entry.avatarUrl ?? undefined"
+              :src="resolveAvatarUrl(entry.id, entry.avatarUrl)"
               :size="tierMeta[entry.rank as 1 | 2 | 3].avatarSize"
               class="bg-white/10 text-slate-300"
             >
@@ -148,7 +174,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
             </UAvatar>
 
             <div>
-              <p :class="tierMeta[entry.rank as 1 | 2 | 3].nameClass" class="font-bold text-white">
+              <p :class="tierMeta[entry.rank as 1 | 2 | 3].nameClass" class="font-semibold text-white">
                 {{ entry.displayName }}
               </p>
               <UBadge color="neutral" variant="soft" size="sm" class="mt-1.5 rounded-full text-xs">
@@ -179,12 +205,12 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
           >
             <span class="w-8 shrink-0 font-semibold text-slate-400">#{{ entry.rank }}</span>
 
-            <UAvatar :src="entry.avatarUrl ?? undefined" size="md" class="shrink-0 bg-white/10 text-slate-300">
+            <UAvatar :src="resolveAvatarUrl(entry.id, entry.avatarUrl)" size="md" class="shrink-0 bg-white/10 text-slate-300">
               <PhUserCircle :size="20" />
             </UAvatar>
 
             <div class="min-w-0 flex-1">
-              <p class="truncate font-semibold text-white">{{ entry.displayName }}</p>
+              <p class="truncate font-medium text-white">{{ entry.displayName }}</p>
               <p class="truncate text-sm text-slate-400">{{ entry.category ?? '—' }}</p>
             </div>
 

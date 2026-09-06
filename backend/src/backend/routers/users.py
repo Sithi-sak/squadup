@@ -11,6 +11,8 @@ class UserOut(CamelModel):
     id: str
     email: str
     display_name: str | None
+    phone: str | None
+    country: str | None
     role: str
     onboarding_complete: bool
     coin_balance: int
@@ -18,6 +20,8 @@ class UserOut(CamelModel):
 
 class UserUpdateIn(CamelModel):
     display_name: str | None = None
+    phone: str | None = None
+    country: str | None = None
 
 
 def _fetch_user(user_id: str) -> dict:

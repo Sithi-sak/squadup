@@ -1,18 +1,46 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { PhStar } from '@phosphor-icons/vue'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import type { PlayerReview, PlayerServiceDetail } from '@/stores/players'
+import { useMessagesStore } from '@/stores/messages'
+import { useAuthStore } from '@/stores/auth'
 import ServiceReviewsPanel from '@/components/players/ServiceReviewsPanel.vue'
 
-defineProps<{
+const props = defineProps<{
   playerId: string
+  playerUserId?: string | null
   serviceId: string
   detail: PlayerServiceDetail
   reviews: PlayerReview[]
 }>()
 
 const router = useRouter()
+const messagesStore = useMessagesStore()
+const authStore = useAuthStore()
+const toast = useToast()
+
+async function handleMessage() {
+  if (!authStore.isAuthenticated) {
+    router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
+    return
+  }
+  if (!props.playerUserId) {
+    toast.add({ title: "Can't message this Pal yet", color: 'error' })
+    return
+  }
+  try {
+    await messagesStore.startThread(props.playerUserId)
+    router.push('/messages')
+  } catch (err) {
+    toast.add({
+      title: "Couldn't start chat",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
 </script>
 
 <template>
@@ -74,7 +102,7 @@ const router = useRouter()
           block
           size="lg"
           class="rounded-full"
-          @click="router.push('/messages')"
+          @click="handleMessage"
         >
           Chat
         </UButton>

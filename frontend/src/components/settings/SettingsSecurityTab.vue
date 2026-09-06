@@ -135,7 +135,7 @@ async function confirmDeleteAccount() {
               <p class="text-sm text-slate-400">{{ session.location }} · {{ session.lastActive }}</p>
             </div>
           </div>
-          <UBadge v-if="session.current" color="primary" variant="soft" size="sm" class="rounded-full">
+          <UBadge v-if="session.current" color="primary" variant="soft" size="sm" class="rounded-full text-xs">
             This device
           </UBadge>
           <UButton

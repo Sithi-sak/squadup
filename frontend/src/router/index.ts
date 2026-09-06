@@ -11,6 +11,10 @@ declare module 'vue-router' {
      * Browsing (players, profiles, feed, services) stays public; only account-bound pages are
      * gated. See CHECKPOINT.md 2.5. */
     requiresAuth?: boolean
+    /** Redirects to `/home` when someone's already signed in — a live session can't land back
+     * on the marketing/landing or auth pages (via link, browser back, or bookmark) until they
+     * sign out. */
+    guestOnly?: boolean
   }
 }
 
@@ -21,18 +25,23 @@ const router = createRouter({
     return { top: 0 }
   },
   routes: [
-    { path: '/', name: 'landing', component: () => import('@/views/LandingView.vue') },
+    {
+      path: '/',
+      name: 'landing',
+      component: () => import('@/views/LandingView.vue'),
+      meta: { guestOnly: true },
+    },
     {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { hideChrome: true },
+      meta: { hideChrome: true, guestOnly: true },
     },
     {
       path: '/signup',
       name: 'signup',
       component: () => import('@/views/SignupView.vue'),
-      meta: { hideChrome: true },
+      meta: { hideChrome: true, guestOnly: true },
     },
     {
       path: '/forgot-password',
@@ -250,11 +259,17 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  if (!to.meta.requiresAuth) return true
+  if (!to.meta.requiresAuth && !to.meta.guestOnly) return true
   const auth = useAuthStore()
   await auth.init()
-  if (auth.isAuthenticated) return true
-  return { path: '/login', query: { redirect: to.fullPath } }
+
+  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.guestOnly && auth.isAuthenticated) {
+    return { path: '/home' }
+  }
+  return true
 })
 
 export default router

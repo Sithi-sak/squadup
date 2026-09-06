@@ -2,9 +2,10 @@
 import { computed } from 'vue'
 import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import MessagesPanel from '@/components/messages/MessagesPanel.vue'
-import { mockCurrentUser } from '@/mocks/users'
+import { useAuthStore } from '@/stores/auth'
 
-const isPal = computed(() => Boolean(mockCurrentUser.playerId))
+const authStore = useAuthStore()
+const isPal = computed(() => Boolean(authStore.user?.playerId))
 </script>
 
 <template>

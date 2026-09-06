@@ -59,7 +59,7 @@ function submit() {
               v-for="option in reasons"
               :key="option"
               type="button"
-              class="flex w-full items-center gap-3 rounded-full px-4 py-3.5 text-left text-sm font-regular ring-1 ring-inset transition-colors"
+              class="flex w-full items-center gap-3 rounded-2xl  px-4 py-3.5 text-left text-sm font-regular ring-1 ring-inset transition-colors"
               :class="
                 reason === option
                   ? 'bg-brand-900/20 ring-brand-500'

@@ -1,30 +1,50 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import type { Stripe, StripeCardElement, StripeElements } from '@stripe/stripe-js'
-import { PhArrowUp, PhArrowDown, PhHourglass, PhArrowCounterClockwise, PhProhibit } from '@phosphor-icons/vue'
+import {
+  PhArrowUp,
+  PhArrowDown,
+  PhHourglass,
+  PhArrowCounterClockwise,
+  PhProhibit,
+  PhCreditCard,
+  PhCaretDown,
+} from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import EmptyState from '@/components/common/EmptyState.vue'
 import { stripePromise } from '@/lib/stripe'
+import { useAuthStore } from '@/stores/auth'
 import { useWalletStore, type WalletActivity } from '@/stores/wallet'
 
 /** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
 const COINS_PER_USD = 99
 
 const walletStore = useWalletStore()
+const authStore = useAuthStore()
 const toast = useToast()
 const route = useRoute()
+
+const isPal = computed(() => Boolean(authStore.user?.playerId))
 
 onMounted(() => {
   walletStore.fetchWallet()
   walletStore.fetchTopupPackages()
-  mountCardElement()
+  loadStripe()
 })
 onBeforeUnmount(() => cardElement?.unmount())
 
 const balance = computed(() => walletStore.balance)
 const usdBalance = computed(() => (balance.value / COINS_PER_USD).toFixed(2))
+
+const paymentSectionRef = ref<HTMLDivElement | null>(null)
+function scrollToPayment() {
+  paymentSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+// Only 'card' actually charges anything right now - the dropdown exists so a future QR/PromptPay
+// method can slot in next to it without reworking this row.
+const paymentMethodItems = [[{ label: 'Card' }, { label: 'QR Scan', disabled: true }]]
 
 const selectedPackageId = ref<string | null>(null)
 const basePackageId = computed(
@@ -57,13 +77,24 @@ function formatDateTime(iso: string) {
 const cardElementRef = ref<HTMLDivElement | null>(null)
 const cardError = ref<string | null>(null)
 const cardComplete = ref(false)
+const stripeLoadFailed = ref(false)
 let stripe: Stripe | null = null
 let elements: StripeElements | null = null
 let cardElement: StripeCardElement | null = null
 
-async function mountCardElement() {
-  stripe ??= await stripePromise
-  if (!stripe || !cardElementRef.value) return
+async function loadStripe() {
+  stripe = await stripePromise
+  stripeLoadFailed.value = !stripe
+  mountCardElementIfReady()
+}
+
+// `cardElementRef` and `stripe` become ready independently and in either order - the wallet's
+// own `/wallet/me` fetch (toggling `walletStore.loading`, which the card form's `v-else` is
+// gated on) races the Stripe.js script load, so a one-shot mount attempt right after `onMounted`
+// can run while the div hasn't rendered yet and silently never retry. Re-running this on both
+// triggers (below) makes the mount order-independent.
+function mountCardElementIfReady() {
+  if (cardElement || !stripe || !cardElementRef.value) return
 
   elements ??= stripe.elements()
   cardElement = elements.create('card', {
@@ -78,6 +109,8 @@ async function mountCardElement() {
   })
   cardElement.mount(cardElementRef.value)
 }
+
+watch(cardElementRef, mountCardElementIfReady)
 
 const toppingUp = ref(false)
 
@@ -131,32 +164,49 @@ if (route.query.topup === 'cancelled') {
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] px-4 py-14 md:px-6">
-    <div v-if="walletStore.loading" class="flex min-h-[60vh] items-center justify-center text-sm text-slate-400">
-      Loading wallet...
+    <div v-if="walletStore.loading" class="mx-auto flex max-w-4/5 flex-col gap-6">
+      <USkeleton class="h-8 w-56" />
+
+      <div class="flex flex-wrap items-center justify-between gap-6 rounded-xl bg-gray-800/70 p-6 sm:p-8">
+        <div class="flex flex-col gap-2">
+          <USkeleton class="h-4 w-20" />
+          <USkeleton class="h-9 w-32" />
+          <USkeleton class="h-3 w-16" />
+        </div>
+        <div class="flex items-center gap-2">
+          <USkeleton class="h-9 w-24 rounded-full" />
+          <USkeleton class="h-9 w-24 rounded-full" />
+        </div>
+      </div>
+
+      <div>
+        <USkeleton class="h-5 w-40" />
+        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <USkeleton v-for="n in 4" :key="n" class="h-20 rounded-xl" />
+        </div>
+      </div>
+
+      <USkeleton class="h-16 rounded-xl" />
+
+      <div class="rounded-xl bg-gray-800/70 p-5">
+        <USkeleton class="h-5 w-32" />
+        <div class="mt-3 flex flex-col divide-y divide-white/5">
+          <div v-for="n in 3" :key="n" class="flex items-center gap-3 py-3.5">
+            <USkeleton class="h-5 w-5 shrink-0 rounded-full" />
+            <div class="flex-1 space-y-1.5">
+              <USkeleton class="h-4 w-32" />
+              <USkeleton class="h-3 w-20" />
+            </div>
+            <USkeleton class="h-4 w-12" />
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-else class="mx-auto flex max-w-4/5 flex-col gap-6">
       <h1 class="text-2xl font-bold text-white sm:text-3xl">Squadcoin Wallet</h1>
 
-      <div v-if="balance === 0" class="flex justify-center rounded-xl bg-gray-800/70 p-6 sm:p-8">
-        <EmptyState
-          tone="gold"
-          badge="0 SC"
-          title="Your wallet is empty"
-          description="Top up Squad Coin to book Pals, tip, and send gifts. $10 = 990 SC."
-        >
-          <template #icon>
-            <img :src="coinIcon" alt="" class="h-9 w-9" />
-          </template>
-          <template #actions>
-            <UButton color="neutral" variant="soft" class="rounded-full px-6" to="/settings">
-              How it works
-            </UButton>
-          </template>
-        </EmptyState>
-      </div>
-
-      <div v-else class="flex flex-wrap items-center justify-between gap-6 rounded-xl bg-gray-800/70 p-6 sm:p-8">
+      <div class="flex flex-wrap items-center justify-between gap-6 rounded-xl bg-gray-800/70 p-6 sm:p-8">
         <div>
           <p class="text-sm text-slate-400">Your balance</p>
           <p class="mt-2 inline-flex items-center gap-2 text-4xl font-bold text-white">
@@ -166,7 +216,8 @@ if (route.query.topup === 'cancelled') {
           <p class="mt-1 text-sm text-slate-400">≈ ${{ usdBalance }} USD</p>
         </div>
         <div class="flex items-center gap-2">
-          <UButton to="/wallet/withdraw" color="neutral" variant="soft" class="rounded-full px-6">
+          <UButton color="primary" class="rounded-full px-6" @click="scrollToPayment"> Top Up </UButton>
+          <UButton v-if="isPal" to="/wallet/withdraw" color="neutral" variant="soft" class="rounded-full px-6">
             Withdraw
           </UButton>
         </div>
@@ -202,15 +253,29 @@ if (route.query.topup === 'cancelled') {
         </div>
       </div>
 
-      <div class="rounded-xl bg-gray-800/70 p-5">
-        <p class="text-sm font-medium text-white">Card details</p>
-        <div ref="cardElementRef" class="mt-2 rounded-lg bg-white/5 px-3.5 py-3 ring-1 ring-inset ring-white/10" />
-        <p v-if="cardError" class="mt-2 text-xs text-red-400">{{ cardError }}</p>
+      <div ref="paymentSectionRef" class="rounded-xl bg-gray-800/70 p-5">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="text-sm text-slate-400">Pay with</span>
 
-        <div class="mt-4 flex flex-wrap items-center justify-end gap-4">
+          <UDropdownMenu :items="paymentMethodItems">
+            <button
+              type="button"
+              class="flex items-center gap-1.5 rounded-full bg-white/5 px-3.5 py-1.5 text-sm font-medium text-white ring-1 ring-inset ring-white/10 hover:bg-white/10"
+            >
+              <PhCreditCard :size="16" />
+              Card
+              <PhCaretDown :size="12" class="text-slate-400" />
+            </button>
+          </UDropdownMenu>
+
+          <p v-if="stripeLoadFailed" class="text-xs text-red-400">
+            Couldn't load the payment form. Check your connection and reload the page.
+          </p>
+          <div v-else ref="cardElementRef" class="min-w-56 flex-1 rounded-full bg-white/5 px-4 py-2 ring-1 ring-inset ring-white/10" />
+
           <UButton
             color="primary"
-            class="rounded-full px-6"
+            class="ml-auto rounded-full px-6"
             :loading="toppingUp"
             :disabled="!selectedPackageId && !basePackageId"
             @click="confirmTopUp"
@@ -218,6 +283,7 @@ if (route.query.topup === 'cancelled') {
             Confirm Top-Up
           </UButton>
         </div>
+        <p v-if="cardError" class="mt-2 text-xs text-red-400">{{ cardError }}</p>
       </div>
 
       <div class="rounded-xl bg-gray-800/70 p-5">

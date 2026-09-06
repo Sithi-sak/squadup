@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { PhStar, PhUserCircle } from '@phosphor-icons/vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
-defineProps<{
+const props = defineProps<{
   palName: string
   meta: string
 }>()
@@ -75,7 +76,7 @@ function submit() {
     <template #body>
       <div class="flex flex-col gap-5">
         <div class="flex items-center gap-3">
-          <UAvatar size="lg" class="bg-white/10 text-slate-300">
+          <UAvatar :src="resolveAvatarUrl(props.palName)" size="lg" class="bg-white/10 text-slate-300">
             <PhUserCircle :size="26" />
           </UAvatar>
           <div class="min-w-0 flex-1">

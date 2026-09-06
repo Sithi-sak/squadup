@@ -8,11 +8,20 @@ import FeedCommentItem from '@/components/feed/FeedCommentItem.vue'
 import { useFeedStore, type FeedComment, type FeedPost } from '@/stores/feed'
 import { findFeedPost, type FeedPostDetail } from '@/mocks/feed'
 import { formatTimeAgo } from '@/utils/timeAgo'
+import { mockCurrentUser } from '@/mocks/users'
+import { useAuthStore } from '@/stores/auth'
+import { usePlayersStore } from '@/stores/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const route = useRoute()
 const router = useRouter()
 const feedStore = useFeedStore()
+const authStore = useAuthStore()
+const playersStore = usePlayersStore()
 const toast = useToast()
+const composerAvatarUrl = computed(() =>
+  resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, playersStore.mine?.avatarUrl),
+)
 
 const postId = computed(() => String(route.params.postId))
 const post = ref<FeedPost | null>(null)
@@ -22,7 +31,7 @@ const post = ref<FeedPost | null>(null)
 function postFromMockDetail(detail: FeedPostDetail): FeedPost {
   return {
     id: detail.id,
-    playerId: detail.id,
+    authorId: detail.id,
     author: detail.author,
     handle: detail.handle,
     tier: detail.tier,
@@ -112,7 +121,7 @@ async function toggleCommentLike(comment: FeedComment) {
 async function toggleFollow() {
   if (!post.value) return
   try {
-    const result = await feedStore.toggleFollow(post.value.playerId, post.value.following)
+    const result = await feedStore.toggleFollow(post.value.authorId, post.value.following)
     post.value.following = result.following
   } catch (err) {
     toast.add({
@@ -153,7 +162,7 @@ async function toggleLike() {
         <FeedPostCard
           :id="post.id"
           :author="post.author"
-          :handle="post.handle ?? ''"
+          :handle="post.handle"
           :tier="post.tier"
           :time-ago="formatTimeAgo(post.createdAt)"
           :text="post.text ?? ''"
@@ -187,7 +196,7 @@ async function toggleLike() {
         </div>
 
         <div class="flex items-center gap-3">
-          <UAvatar size="md" class="shrink-0 bg-white/10 text-slate-300">
+          <UAvatar :src="composerAvatarUrl" size="md" class="shrink-0 bg-white/10 text-slate-300">
             <PhUserCircle :size="20" />
           </UAvatar>
           <UInput

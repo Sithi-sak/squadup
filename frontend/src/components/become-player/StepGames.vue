@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { PhPlus, PhX } from '@phosphor-icons/vue'
+import { games } from '@/data/games'
 import type { GamesStepData } from './types'
 
 const data = defineModel<GamesStepData>({ required: true })
@@ -30,6 +31,16 @@ const remainingLanguages = computed(() =>
 const gameMenuItems = computed(() =>
   remainingGames.value.map((game) => ({ label: game, onSelect: () => addGame(game) })),
 )
+
+// Drive the "Highest rank" field off the first selected game with a known rank ladder,
+// since the form only tracks a single rank across all of a Pal's games.
+const rankOptions = computed(() => {
+  for (const game of data.value.games) {
+    const ranks = games.find((g) => g.name === game)?.ranks
+    if (ranks) return ranks
+  }
+  return null
+})
 const languageMenuItems = computed(() =>
   remainingLanguages.value.map((lang) => ({ label: lang, onSelect: () => addLanguage(lang) })),
 )
@@ -102,7 +113,19 @@ const pillButtonClass = 'gap-2 rounded-full bg-gray-800 text-white hover:bg-gray
 
     <div class="flex flex-col gap-2">
       <label for="highestRank" class="text-sm font-medium text-white">Highest rank</label>
+      <USelect
+        v-if="rankOptions"
+        id="highestRank"
+        v-model="data.highestRank"
+        :items="rankOptions"
+        placeholder="Select your rank"
+        variant="subtle"
+        size="md"
+        class="w-full"
+        :ui="fieldUi"
+      />
       <UInput
+        v-else
         id="highestRank"
         v-model="data.highestRank"
         placeholder="Immortal 3"

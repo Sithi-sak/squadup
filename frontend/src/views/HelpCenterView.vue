@@ -153,11 +153,13 @@ function goToTopic(category: string) {
             class="cursor-pointer rounded-2xl bg-white/5 p-6 text-left transition-colors hover:bg-white/10"
             @click="goToTopic(topic.category)"
           >
-            <div class="flex size-11 items-center justify-center rounded-xl bg-brand-900/60">
-              <img v-if="topic.icon === 'coin'" :src="coinIcon" alt="" class="h-5.5 w-5.5" />
-              <component :is="topic.icon" v-else :size="22" class="text-brand-300" />
+            <div class="flex gap-2 mb-4">
+              <div class="flex items-center">
+                <img v-if="topic.icon === 'coin'" :src="coinIcon" alt="" class="h-5.5 w-5.5" />
+                <component :is="topic.icon" v-else :size="24" weight="fill" class="text-brand-300" />
+              </div>
+              <h3 class="text-md font-medium text-white">{{ topic.title }}</h3>
             </div>
-            <h3 class="mt-4 text-[15px] font-semibold text-white">{{ topic.title }}</h3>
             <p class="mt-1 text-sm leading-relaxed text-slate-400">{{ topic.description }}</p>
             <span class="mt-3 inline-block text-sm font-medium text-brand-400">
               {{ topic.articles }} articles

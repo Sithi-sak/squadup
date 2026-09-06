@@ -9,23 +9,32 @@ import {
   PhCaretLeft,
   PhCaretRight,
 } from '@phosphor-icons/vue'
-import { mockPlayers } from '@/mocks/players'
+import { usePlayersStore } from '@/stores/players'
+import { useEstarsStore } from '@/stores/estars'
 import coinIcon from '@/assets/squadup-coin.svg'
 import homeSpotlightImage from '@/assets/home-rec.jpg'
 import gamesTileImage from '@/assets/game.jpg'
 import chillingTileImage from '@/assets/chilling.jpg'
 import allServiceTileImage from '@/assets/all_service.jpg'
 import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
+import { featuredGames } from '@/data/games'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const router = useRouter()
 const coverFilenames = useCoverManifest()
+const playersStore = usePlayersStore()
+const estarsStore = useEstarsStore()
 
 function coverSrc(slug: string): string | undefined {
   const filename = coverFilenames.value.get(slug)
   return filename ? gameCoverUrl(slug, filename) : undefined
 }
 
-const spotlight = [...mockPlayers].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0]!
+const allPlayers = computed(() => playersStore.list)
+
+const spotlight = computed(
+  () => [...estarsStore.leaderboard].sort((a, b) => a.rank - b.rank)[0],
+)
 
 const tiles = [
   { label: 'Games', to: '/players', image: gamesTileImage },
@@ -33,21 +42,11 @@ const tiles = [
   { label: 'All Services', to: '/services', image: allServiceTileImage },
 ]
 
-const games = [
-  { name: 'Valorant', pals: 145, slug: 'valorant' },
-  { name: 'CS2', pals: 214, slug: 'counter-strike-2' },
-  { name: 'Apex Legends', pals: 3533, slug: 'apex-legends' },
-  { name: 'Overwatch 2', pals: 3533, slug: 'overwatch-2' },
-  { name: 'Fortnite', pals: 6230, slug: 'fortnite' },
-  { name: 'League of Legends', pals: 812, slug: 'league-of-legends' },
-  { name: 'Genshin Impact', pals: 1112, slug: 'genshin-impact' },
-]
-
 const eStars = computed(() =>
-  [...mockPlayers].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 4),
+  [...allPlayers.value].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 4),
 )
 
-const morePals = mockPlayers
+const morePals = computed(() => allPlayers.value.slice(0, 20))
 
 const gamesRail = ref<HTMLElement | null>(null)
 const canScrollGamesLeft = ref(false)
@@ -69,6 +68,9 @@ function scrollGames(direction: 'left' | 'right') {
 
 onMounted(() => {
   updateGamesScrollState()
+  if (!playersStore.list.length) playersStore.fetchList({ limit: 24 })
+  if (!estarsStore.leaderboard.length) estarsStore.fetchLeaderboard('week')
+  playersStore.fetchGameCounts()
 })
 
 function goToProfile(id: string) {
@@ -79,14 +81,14 @@ function goToProfile(id: string) {
 <template>
   <div class="flex flex-col">
     <!-- eStar of the Week spotlight -->
-    <section class="px-4 pt-8 md:px-6">
+    <section v-if="spotlight" class="px-4 pt-8 md:px-6">
       <div class="mx-auto max-w-4/5">
         <div
-          class="grid overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900/50 to-squadup-bg ring-1 ring-inset ring-white/10 md:grid-cols-2"
+          class="grid overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900/50 to-squadup-bg ring-0 ring-inset ring-white/10 md:grid-cols-2"
         >
           <div class="flex flex-col justify-center gap-4 p-8 md:p-10">
             <span
-              class="inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-xs font-medium text-brand-300 ring-1 ring-inset ring-brand-700"
+              class="inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-xs font-medium text-brand-300"
             >
               <PhStar :size="14" weight="fill" />
               eStar of the Week
@@ -95,7 +97,7 @@ function goToProfile(id: string) {
               {{ spotlight.displayName }}
             </h1>
             <p class="max-w-100 text-sm leading-relaxed text-slate-300">
-              Top-rated {{ spotlight.games[0] }} Pal this week, {{ spotlight.rating }} rating and
+              Top-rated {{ spotlight.category }} Pal this week, {{ spotlight.rating }} rating and
               glowing reviews. Book a session before the spot is gone.
             </p>
             <UButton
@@ -166,14 +168,14 @@ function goToProfile(id: string) {
           @scroll="updateGamesScrollState"
         >
           <router-link
-            v-for="game in games"
-            :key="game.name"
+            v-for="game in featuredGames"
+            :key="game.id"
             :to="{ path: '/players', query: { game: game.name } }"
             class="relative flex aspect-10/16 flex-col justify-end overflow-hidden rounded-xl"
           >
             <img
-              v-if="coverSrc(game.slug)"
-              :src="coverSrc(game.slug)"
+              v-if="coverSrc(game.id)"
+              :src="coverSrc(game.id)"
               :alt="game.name"
               class="absolute inset-0 h-full w-full object-cover"
             />
@@ -182,7 +184,9 @@ function goToProfile(id: string) {
             />
             <div class="relative flex flex-col gap-0.5 px-3 pb-3">
               <span class="text-md font-semibold text-white">{{ game.name }}</span>
-              <span class="text-sm text-slate-300">{{ game.pals.toLocaleString() }} Pals</span>
+              <span class="text-sm text-slate-300">
+                {{ (playersStore.gameCounts[game.id] ?? 0).toLocaleString() }} Pals
+              </span>
             </div>
           </router-link>
         </div>
@@ -198,15 +202,30 @@ function goToProfile(id: string) {
             More ›
           </router-link>
         </div>
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div v-if="playersStore.loading && !eStars.length" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div
+            v-for="n in 4"
+            :key="n"
+            class="flex flex-col items-center gap-3 rounded-2xl bg-gray-800/70 p-5 text-center"
+          >
+            <USkeleton class="h-16 w-16 rounded-full" />
+            <USkeleton class="h-4 w-20" />
+            <USkeleton class="h-3 w-14" />
+          </div>
+        </div>
+        <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <button
             v-for="player in eStars"
             :key="player.id"
             type="button"
-            class="flex cursor-pointer flex-col items-center gap-3 rounded-xl bg-gray-800/70 p-5 text-center hover:bg-gray-800 transition-colors"
+            class="flex cursor-pointer flex-col items-center gap-3 rounded-2xl bg-gray-800/70 p-5 text-center hover:bg-gray-800 transition-colors"
             @click="goToProfile(player.id)"
           >
-            <UAvatar size="2xl" class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60">
+            <UAvatar
+              :src="resolveAvatarUrl(player.id, player.avatarUrl)"
+              size="2xl"
+              class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60"
+            >
               <PhUserCircle :size="32" />
             </UAvatar>
             <div>
@@ -227,14 +246,33 @@ function goToProfile(id: string) {
             More ›
           </router-link>
         </div>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          v-if="playersStore.loading && !morePals.length"
+          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <div v-for="n in 8" :key="n" class="flex flex-col gap-3 rounded-2xl bg-gray-800/70 p-4">
+            <div class="flex items-center gap-2.5">
+              <USkeleton class="h-12 w-12 rounded-full" />
+              <div class="min-w-0 flex-1 space-y-1.5">
+                <USkeleton class="h-4 w-24" />
+                <USkeleton class="h-3 w-14" />
+              </div>
+            </div>
+            <USkeleton class="h-3 w-32" />
+            <div class="mt-auto flex items-center justify-between pt-1">
+              <USkeleton class="h-4 w-14" />
+              <USkeleton class="h-8 w-16 rounded-full" />
+            </div>
+          </div>
+        </div>
+        <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <article
             v-for="player in morePals"
             :key="player.id"
-            class="flex flex-col gap-3 rounded-xl bg-gray-800/70 p-4"
+            class="flex flex-col gap-3 rounded-2xl bg-gray-800/70 p-4"
           >
             <div class="flex items-center gap-2.5">
-              <UAvatar size="md" class="bg-white/10 text-slate-300">
+              <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="xl" class="bg-white/10 text-slate-300">
                 <PhUserCircle :size="22" />
               </UAvatar>
               <div class="min-w-0">

@@ -4,36 +4,36 @@ import { PhShieldCheck, PhSignOut } from '@phosphor-icons/vue'
 import brandLogo from '@/assets/brand.svg'
 import SettingsNav from '@/components/settings/SettingsNav.vue'
 import AdminOverviewPanel from '@/components/admin/AdminOverviewPanel.vue'
+import AdminPalApplicationsPanel from '@/components/admin/AdminPalApplicationsPanel.vue'
 import AdminFlaggedPlayersPanel from '@/components/admin/AdminFlaggedPlayersPanel.vue'
 import AdminDisputesPanel from '@/components/admin/AdminDisputesPanel.vue'
 import { useAdminStore } from '@/stores/admin'
 
 const admin = useAdminStore()
 
-const email = ref('')
-const password = ref('')
+const code = ref('')
 const loading = ref(false)
 
 const fieldUi = {
-  base: 'bg-white/5 px-5 py-3.5 text-sm ring-1 ring-inset ring-white/10 focus-visible:ring-2 focus-visible:ring-brand-600',
+  base: 'bg-white/5 px-5 py-3.5 text-center text-lg tracking-[0.5em] ring-1 ring-inset ring-white/10 focus-visible:ring-2 focus-visible:ring-brand-600',
 }
 
 function handleLogin() {
   loading.value = true
   setTimeout(() => {
-    admin.login(email.value, password.value)
+    admin.login(code.value)
     loading.value = false
   }, 400)
 }
 
 function handleLogout() {
   admin.logout()
-  email.value = ''
-  password.value = ''
+  code.value = ''
 }
 
 const tabs = [
   { key: 'overview', label: 'Overview' },
+  { key: 'applications', label: 'Pal applications' },
   { key: 'flagged', label: 'Flagged players' },
   { key: 'disputes', label: 'Disputes' },
 ] as const
@@ -47,24 +47,17 @@ const activeTab = ref<(typeof tabs)[number]['key']>('overview')
       <div class="flex flex-col items-center gap-2 text-center">
         <img :src="brandLogo" alt="SquadUp" class="h-8" />
         <h1 class="mt-2 text-xl font-bold text-white">Admin access</h1>
-        <p class="text-sm text-slate-400">Restricted. Sign in with your admin credentials.</p>
+        <p class="text-sm text-slate-400">Restricted. Enter the admin access code.</p>
       </div>
 
       <form class="mt-6 flex flex-col gap-4" @submit.prevent="handleLogin">
         <UInput
-          v-model="email"
-          type="email"
-          placeholder="Admin email"
-          autocomplete="username"
-          variant="subtle"
-          size="xl"
-          :ui="fieldUi"
-        />
-        <UInput
-          v-model="password"
+          v-model="code"
           type="password"
-          placeholder="Password"
-          autocomplete="current-password"
+          inputmode="numeric"
+          maxlength="4"
+          placeholder="····"
+          autocomplete="off"
           variant="subtle"
           size="xl"
           :ui="fieldUi"
@@ -100,7 +93,7 @@ const activeTab = ref<(typeof tabs)[number]['key']>('overview')
           </UAvatar>
           <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-white">Admin</p>
-            <p class="truncate text-xs text-slate-400">admin@squadup.gg</p>
+            <p class="truncate text-xs text-slate-400">SquadUp moderation</p>
           </div>
         </div>
         <UButton color="neutral" variant="soft" block class="justify-center gap-2 rounded-full" @click="handleLogout">
@@ -130,6 +123,7 @@ const activeTab = ref<(typeof tabs)[number]['key']>('overview')
 
       <div class="mx-auto w-full max-w-5xl flex-1 p-6 md:p-8">
         <AdminOverviewPanel v-if="activeTab === 'overview'" @view-all="activeTab = $event" />
+        <AdminPalApplicationsPanel v-else-if="activeTab === 'applications'" />
         <AdminFlaggedPlayersPanel v-else-if="activeTab === 'flagged'" />
         <AdminDisputesPanel v-else />
       </div>

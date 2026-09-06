@@ -8,9 +8,10 @@ import SettingsNotificationsTab from '@/components/settings/SettingsNotification
 import SettingsPaymentsTab from '@/components/settings/SettingsPaymentsTab.vue'
 import SettingsPrivacyTab from '@/components/settings/SettingsPrivacyTab.vue'
 import SettingsSecurityTab from '@/components/settings/SettingsSecurityTab.vue'
-import { mockCurrentUser } from '@/mocks/users'
+import { useAuthStore } from '@/stores/auth'
 
-const isPal = computed(() => Boolean(mockCurrentUser.playerId))
+const authStore = useAuthStore()
+const isPal = computed(() => Boolean(authStore.user?.playerId))
 
 const tabs = computed(() => [
   ...(isPal.value ? [{ key: 'profile', label: 'Profile' }] : []),

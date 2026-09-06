@@ -6,6 +6,7 @@ import { PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import CancelSubscriptionModal from '@/components/modals/CancelSubscriptionModal.vue'
 import { useSubscriptionsStore, type Subscription } from '@/stores/subscriptions'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 /** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
 const COINS_PER_USD = 99
@@ -162,7 +163,11 @@ async function resubscribe(sub: Subscription) {
           class="flex flex-col gap-4 rounded-xl bg-gray-800/70 p-5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div class="flex items-center gap-3">
-            <UAvatar size="lg" class="bg-white/10 text-slate-300 ring-2 ring-brand-500/40">
+            <UAvatar
+              :src="resolveAvatarUrl(sub.playerId)"
+              size="lg"
+              class="bg-white/10 text-slate-300 ring-2 ring-brand-500/40"
+            >
               <PhUserCircle :size="26" />
             </UAvatar>
             <div>

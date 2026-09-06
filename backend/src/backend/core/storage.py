@@ -16,3 +16,10 @@ def upload_file(bucket: str, path: str, file: UploadFile) -> str:
     if bucket in _PUBLIC_BUCKETS:
         return bucket_client.get_public_url(path)
     return path
+
+
+def create_signed_url(bucket: str, path: str, expires_in: int = 3600) -> str:
+    """Signed URL for a private bucket (e.g. `id-documents`), so a bare storage path from
+    `upload_file` can actually be viewed (admin Pal-application review, 3.19)."""
+    signed = get_supabase_client().storage.from_(bucket).create_signed_url(path, expires_in)
+    return signed["signedURL"]

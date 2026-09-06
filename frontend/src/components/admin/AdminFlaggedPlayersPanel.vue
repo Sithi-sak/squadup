@@ -4,6 +4,7 @@ import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhMagnifyingGlass } from '@phosphor-icons/vue'
 import { useAdminStore } from '@/stores/admin'
 import type { AdminFlaggedPlayer, FlaggedPlayerStatus } from '@/mocks/admin'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const adminStore = useAdminStore()
 const toast = useToast()
@@ -15,6 +16,7 @@ onMounted(() => {
 const viewing = ref<AdminFlaggedPlayer | null>(null)
 const search = ref('')
 const statusUpdating = ref(false)
+const banUpdating = ref(false)
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -60,6 +62,24 @@ async function setStatus(status: FlaggedPlayerStatus) {
     })
   } finally {
     statusUpdating.value = false
+  }
+}
+
+async function toggleBan() {
+  if (!viewing.value || banUpdating.value) return
+  const { playerId, isBanned } = viewing.value
+  banUpdating.value = true
+  try {
+    const updated = await adminStore.banPlayer(playerId, !isBanned)
+    viewing.value = updated ?? { ...viewing.value, isBanned: !isBanned }
+  } catch (err) {
+    toast.add({
+      title: "Couldn't update ban status",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    banUpdating.value = false
   }
 }
 </script>
@@ -136,8 +156,13 @@ async function setStatus(status: FlaggedPlayerStatus) {
           <tr v-for="flag in rows" :key="flag.id" class="border-b border-white/5 last:border-0">
             <td class="px-5 py-4">
               <div class="flex items-center gap-3">
-                <UAvatar :src="flag.avatarUrl ?? undefined" size="md" class="bg-white/10" />
-                <p class="font-semibold text-white">{{ flag.displayName }}</p>
+                <UAvatar :src="resolveAvatarUrl(flag.playerId, flag.avatarUrl)" size="md" class="bg-white/10" />
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold text-white">{{ flag.displayName }}</p>
+                  <span v-if="flag.isBanned" class="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400">
+                    Banned
+                  </span>
+                </div>
               </div>
             </td>
             <td class="px-5 py-4 text-slate-300">{{ flag.reason }}</td>
@@ -169,7 +194,7 @@ async function setStatus(status: FlaggedPlayerStatus) {
       <template #body>
         <div v-if="viewing" class="flex flex-col gap-4 text-sm">
           <div class="flex items-center gap-3">
-            <UAvatar :src="viewing.avatarUrl ?? undefined" size="lg" class="bg-white/10" />
+            <UAvatar :src="resolveAvatarUrl(viewing.playerId, viewing.avatarUrl)" size="lg" class="bg-white/10" />
             <div>
               <p class="font-semibold text-white">{{ viewing.displayName }}</p>
               <p class="text-slate-400">{{ viewing.reportCount }} report{{ viewing.reportCount > 1 ? 's' : '' }} · reported by {{ viewing.reportedBy }}</p>
@@ -226,6 +251,24 @@ async function setStatus(status: FlaggedPlayerStatus) {
               @click="setStatus('actioned')"
             >
               Take action
+            </UButton>
+          </div>
+
+          <div class="flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+            <div>
+              <p class="font-medium text-white">{{ viewing.isBanned ? 'Player is banned' : 'Ban this player' }}</p>
+              <p class="text-slate-400">Hides them from Browse Players and their public profile.</p>
+            </div>
+            <UButton
+              :color="viewing.isBanned ? 'neutral' : 'error'"
+              :variant="viewing.isBanned ? 'soft' : 'solid'"
+              size="sm"
+              class="shrink-0 rounded-full"
+              :loading="banUpdating"
+              :disabled="banUpdating"
+              @click="toggleBan"
+            >
+              {{ viewing.isBanned ? 'Unban' : 'Ban' }}
             </UButton>
           </div>
         </div>

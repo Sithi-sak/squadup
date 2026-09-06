@@ -6,6 +6,7 @@ import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
 import type { PlayerSummary } from '@/stores/players'
 import { formatTimeAgo } from '@/utils/timeAgo'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = defineProps<{ player: PlayerSummary; feed: FeedPost[] }>()
 
@@ -41,7 +42,11 @@ async function toggleLike(post: FeedPost) {
   <div class="flex flex-col gap-4">
     <div class="rounded-xl bg-gray-800/70 p-4">
       <div class="flex items-center gap-3">
-        <UAvatar size="md" class="shrink-0 bg-white/10 text-slate-300">
+        <UAvatar
+          :src="resolveAvatarUrl(player.id, player.avatarUrl)"
+          size="md"
+          class="shrink-0 bg-white/10 text-slate-300"
+        >
           <PhUserCircle :size="20" />
         </UAvatar>
         <UInput
@@ -81,7 +86,11 @@ async function toggleLike(post: FeedPost) {
     <div v-for="post in localFeed" :key="post.id" class="rounded-xl bg-gray-800/70 p-4">
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3">
-          <UAvatar size="md" class="shrink-0 bg-white/10 text-slate-300">
+          <UAvatar
+            :src="resolveAvatarUrl(player.id, player.avatarUrl)"
+            size="md"
+            class="shrink-0 bg-white/10 text-slate-300"
+          >
             <PhUserCircle :size="20" />
           </UAvatar>
           <div>

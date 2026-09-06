@@ -9,6 +9,7 @@ import { useBookingsStore, type PaymentMethod } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import { mockCurrentUser } from '@/mocks/users'
+import { isRealId } from '@/utils/id'
 
 const router = useRouter()
 const bookingsStore = useBookingsStore()
@@ -39,6 +40,10 @@ const scheduledDate = computed({
 const remainingBalance = computed(() =>
   draft.value ? mockCurrentUser.coinBalance - draft.value.totalCoins : mockCurrentUser.coinBalance,
 )
+
+/** Seed/demo Pals (`p1`..`p8`) have no real `services` row to book against yet (3.17's seed
+ * script hasn't landed), so "Place order" would just 500 - disable it up front instead. */
+const isDemoBooking = computed(() => Boolean(draft.value && !isRealId(draft.value.serviceId)))
 
 async function placeOrder() {
   if (!draft.value || submitting.value) return
@@ -217,12 +222,16 @@ async function placeOrder() {
           size="lg"
           class="mt-4 rounded-full"
           :loading="submitting"
-          :disabled="submitting"
+          :disabled="submitting || isDemoBooking"
           @click="placeOrder"
         >
           Place order
         </UButton>
-        <p class="mt-3 text-center text-xs text-slate-400">
+        <p v-if="isDemoBooking" class="mt-3 text-center text-xs text-amber-400">
+          This Pal is a demo profile without a real listing yet, so it can't be booked. Try a Pal
+          who has signed up for real from Browse Players.
+        </p>
+        <p v-else class="mt-3 text-center text-xs text-slate-400">
           Coins are deducted when the session starts. By ordering you agree to the Pal Terms.
         </p>
 

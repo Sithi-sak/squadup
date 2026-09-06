@@ -79,3 +79,71 @@ Yakuza 0, Yooka-Laylee, Yakuza: Like a Dragon
 Zelda: Breath of the Wild, Zenless Zone Zero, Zomboid, Zero Escape
 
 Want this turned into a JSON file grouped by letter for your website (e.g. for an A–Z jump nav in the game grid)?
+
+## Games with rank systems
+
+League of Legends — Iron, Bronze, Silver, Gold, Platinum, Emerald, Diamond, Master, Grandmaster, Challenger (each tier I–IV except top three)
+
+Valorant — Iron, Bronze, Silver, Gold, Platinum, Diamond, Ascendant, Immortal, Radiant
+
+Dota 2 — Herald, Guardian, Crusader, Archon, Legend, Ancient, Divine, Immortal
+
+Apex Legends — Rookie, Bronze, Silver, Gold, Platinum, Diamond, Master, Apex Predator
+
+Rocket League — Bronze, Silver, Gold, Platinum, Diamond, Champion, Grand Champion, Supersonic Legend
+
+Counter-Strike 2 — Premier mode uses CS Rating with 7 color tiers from 1,000 to 30,000+; Competitive mode keeps the classic 18 ranks: Silver I–IV, Silver Elite, Silver Elite Master, Gold Nova 1–3, Gold Nova Master, Master Guardian 1–2, Master Guardian Elite, Distinguished Master Guardian, Legendary Eagle, Legendary Eagle Master, Supreme Master First Class, Global Elite
+
+Overwatch 2 — Bronze, Silver, Gold, Platinum, Diamond, Master, Grandmaster, Champion (each split into five divisions), plus Top 500
+
+Rainbow Six Siege — Copper, Bronze, Silver, Gold, Platinum, Emerald, Diamond, Champion
+
+Call of Duty: Warzone (Ranked Play) — Bronze, Silver, Gold, Platinum, Diamond, Crimson, Iridescent, Top 250
+
+Splitgate 2 — ranked system is new/still evolving post-launch; check in-game or official patch notes rather than a fixed list, since it hasn't settled into a stable public rank-tier structure yet
+
+Street Fighter 6 — Rookie, Iron, Bronze, Silver, Gold, Platinum, Diamond, Master (with Master Rating), Grand Master
+
+Guilty Gear Strive — two systems: Duel Tower (casual) runs Floor 1 through Floor 10, plus the elite Celestial Floor above it; the newer Ranked Match ladder has Iron, Bronze, Silver, Gold, Platinum, Diamond (each with sub-ranks 1–3), topped by Vanquisher
+
+Mortal Kombat 1 — Apprentice, Kombatant, Warrior, Champion, Master, Grand Master, Demi God, God, Elder God
+
+Granblue Fantasy Versus Rising — Rank Points / Class system (Beginner through Grand Master classes); exact current tier list unconfirmed, verify in-game before using it
+
+PUBG: Battlegrounds — Bronze, Silver, Gold, Platinum, Diamond, Master, Grandmaster
+
+PUBG Mobile — Bronze, Silver, Gold, Platinum, Diamond, Crown, Ace, Conqueror
+
+Hearthstone — Bronze, Silver, Gold, Platinum, Diamond, Legend
+
+Teamfight Tactics — same structure as League: Iron through Challenger
+
+Legends of Runeterra — Iron, Bronze, Silver, Gold, Platinum, Diamond, Master
+
+Marvel Snap — Recruit, Agent, Iron, Bronze, Silver, Gold, Platinum, Diamond, Vibranium, Omega, Galactic, Infinite
+
+NBA 2K25 — Rookie, Pro, All-Star, Superstar, Elite (varies by mode — Rec vs. Park)
+
+Gran Turismo 7 — Driver Rating (E through S) and Sportsmanship Rating (E through S), tracked separately
+
+iRacing — Rookie, D, C, B, A, Pro, Pro/World Class (license classes), with a separate numeric iRating
+
+StarCraft II — Bronze, Silver, Gold, Platinum, Diamond, Master, Grandmaster
+
+Age of Empires IV — Bronze, Silver, Gold, Platinum, Diamond, Conqueror
+
+Clash Royale — Trophy Road into Arenas, then League tiers: Bronze, Silver, Gold, Legendary (top ranked ladder)
+
+The Finals — Bronze, Silver, Gold, Platinum, Diamond, each with four sub-tiers, then Ruby as the top league for the top 500 players
+
+Mobile Legends: Bang Bang — Warrior, Elite, Master, Grandmaster, Epic, Legend, Mythic, Mythical Glory
+
+Arena of Valor — Bronze, Silver, Gold, Platinum, Diamond, Master, Grandmaster, Challenger
+
+Smite — Bronze, Silver, Gold, Platinum, Diamond, Masters, Grandmaster
+
+Heroes of the Storm — Bronze, Silver, Gold, Platinum, Diamond, Master, Grandmaster
+
+EA Sports FC 24/25 — Rivals: Bronze, Silver, Gold, Platinum, Diamond, Elite
+
+Brawl Stars — Bronze, Silver, Gold, Diamond, Mythic, Legendary, Masters, each with three tiers, then Pro at the very top

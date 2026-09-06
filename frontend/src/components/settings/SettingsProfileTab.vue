@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { PhUserCircle } from '@phosphor-icons/vue'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+import { useAuthStore } from '@/stores/auth'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 import SettingsActionRow from './SettingsActionRow.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
+const authStore = useAuthStore()
 const profile = mockPlayerProfiles.self!
+const avatarUrl = computed(() => resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id))
 
-const displayName = ref(mockCurrentUser.displayName ?? '')
+const accountDisplayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
+const accountEmail = computed(() => authStore.user?.email ?? mockCurrentUser.email)
+const displayName = ref(accountDisplayName.value ?? '')
 const headline = ref('Immortal duo who actually carries, never battle alone')
 const bio = ref(
   'Immortal 3 Duelist main. 300+ carries on SquadUp. I keep it chill, callouts clean, and we win. Available evenings GMT+7.',
@@ -28,11 +34,11 @@ const pushNotifications = ref(true)
 
       <div class="mt-4 flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <UAvatar size="xl" class="bg-white/10 text-slate-300">
+          <UAvatar :src="avatarUrl" size="xl" class="bg-white/10 text-slate-300">
             <PhUserCircle :size="28" />
           </UAvatar>
           <div>
-            <p class="font-semibold text-white">{{ mockCurrentUser.displayName }}</p>
+            <p class="font-semibold text-white">{{ accountDisplayName }}</p>
             <p class="text-sm text-slate-400">{{ profile.tier }} · {{ profile.handle }}</p>
           </div>
         </div>
@@ -105,7 +111,7 @@ const pushNotifications = ref(true)
     <div class="rounded-xl bg-gray-800/70 p-5">
       <h2 class="text-lg font-semibold text-white">Account & security</h2>
       <div class="flex flex-col divide-y divide-white/10">
-        <SettingsActionRow label="Email" :value="mockCurrentUser.email" action-label="Edit" />
+        <SettingsActionRow label="Email" :value="accountEmail" action-label="Edit" />
         <SettingsActionRow label="Region" :value="`Cambodia · ${profile.timezone}`" action-label="Edit" />
         <SettingsActionRow label="Password" value="••••••••••" action-label="Change" />
         <SettingsActionRow

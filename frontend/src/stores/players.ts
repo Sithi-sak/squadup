@@ -6,6 +6,9 @@ import type { FeedPost } from './feed'
 
 export interface PlayerSummary {
   id: string
+  /** Null for a seed Pal with no linked account yet. Present so a browse card can follow a Pal -
+   * `follows` keys on `users.id`, not `players.id` (see `stores/feed.ts`'s `toggleFollow`). */
+  userId: string | null
   displayName: string
   avatarUrl: string | null
   games: string[]
@@ -92,6 +95,9 @@ export interface WishItem {
 /** Full Player Profile page data (`/players/:id`), backing all 4 tabs. */
 export interface PlayerProfile {
   id: string
+  /** The Pal's `users.id` - who a "Message"/"Chat" action starts a thread with (`startThread`
+   * in `stores/messages.ts`). Absent on mock/seed profiles that don't back a real account. */
+  userId?: string | null
   handle: string
   timezone: string
   language: string
@@ -108,6 +114,9 @@ export interface PlayerProfile {
   postsCount: number
   followersCount: number
   followingCount: number
+  /** Whether the signed-in viewer follows this Pal - always false for a mock profile or an
+   * anonymous viewer. Drives the Follow/Following toggle in `ProfileHeader.vue`. */
+  following: boolean
 }
 
 export interface PlayerFilters {
@@ -127,6 +136,9 @@ function emptyFilters(): PlayerFilters {
  * stay mock-backed until 3.6/3.8 land, so this is narrower than `PlayerProfile` above. */
 export interface MyPlayerProfile {
   id: string
+  /** Null for a seed Pal with no linked account yet - `PlayerDetailOut.user_id` in
+   * `backend/src/backend/routers/players.py`. */
+  userId: string | null
   handle: string | null
   displayName: string
   avatarUrl: string | null
@@ -153,6 +165,9 @@ export interface MyPlayerProfile {
   postsCount: number
   followersCount: number
   followingCount: number
+  /** Always false on `/players/me` (can't follow yourself) - carried on this type only because
+   * `GET /players/{id}` reuses the same backend `PlayerDetailOut` shape. */
+  following: boolean
 }
 
 /** `POST /players/me/services` and `PATCH /players/me/services/{id}` response shape
@@ -175,6 +190,7 @@ export type ServiceUpdate = Partial<
 export function playerSummaryFromDetail(p: MyPlayerProfile): PlayerSummary {
   return {
     id: p.id,
+    userId: p.userId,
     displayName: p.displayName,
     avatarUrl: p.avatarUrl,
     games: p.games,
@@ -199,6 +215,7 @@ export function playerSummaryFromDetail(p: MyPlayerProfile): PlayerSummary {
 export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
   return {
     id: p.id,
+    userId: p.userId,
     handle: p.handle ?? `@${p.id.slice(0, 10)}`,
     timezone: p.timezone ?? 'GMT+00:00',
     language: p.language ?? p.languages[0] ?? 'English',
@@ -215,6 +232,7 @@ export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
     postsCount: p.postsCount,
     followersCount: p.followersCount,
     followingCount: p.followingCount,
+    following: p.following,
   }
 }
 
@@ -267,6 +285,11 @@ export const usePlayersStore = defineStore('players', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  const suggested = ref<PlayerSummary[]>([])
+  const suggestedLoading = ref(false)
+
+  const gameCounts = ref<Record<string, number>>({})
+
   const mine = ref<MyPlayerProfile | null>(null)
   const mineLoading = ref(false)
   const mineError = ref<string | null>(null)
@@ -279,16 +302,17 @@ export const usePlayersStore = defineStore('players', () => {
     filters.value = emptyFilters()
   }
 
-  /** Loads the real Browse Players catalog (`GET /players`) into `list`. Seed Pals (`p1`..`p8`
-   * in `mocks/players.ts`) aren't DB rows, so `PlayersView.vue` merges `list` with the mock
-   * catalog rather than replacing it. */
-  async function fetchList(params: { q?: string; game?: string } = {}) {
+  /** Loads the real Browse Players catalog (`GET /players`) into `list`. `limit` takes a fast
+   * top-rated-only path on the backend (see `list_players`) for callers like Home/Landing that
+   * only need a small rail, not the full catalog to filter/search over. */
+  async function fetchList(params: { q?: string; game?: string; limit?: number } = {}) {
     loading.value = true
     error.value = null
     try {
       const query = new URLSearchParams()
       if (params.q) query.set('q', params.q)
       if (params.game) query.set('game', params.game)
+      if (params.limit) query.set('limit', String(params.limit))
       const qs = query.toString()
       list.value = await api.get<PlayerSummary[]>(`/players${qs ? `?${qs}` : ''}`)
     } catch (err) {
@@ -296,6 +320,32 @@ export const usePlayersStore = defineStore('players', () => {
       list.value = []
     } finally {
       loading.value = false
+    }
+  }
+
+  /** Feed's right rail "Suggested Pals" (`GET /players/suggested`). No mock fallback - a Pal
+   * with nothing to suggest yet is a normal empty state, same convention as the profile tabs
+   * below, so `FeedRightRail.vue` just hides the section rather than showing fake names. */
+  async function fetchSuggested() {
+    suggestedLoading.value = true
+    try {
+      suggested.value = await api.get<PlayerSummary[]>('/players/suggested')
+    } catch {
+      suggested.value = []
+    } finally {
+      suggestedLoading.value = false
+    }
+  }
+
+  /** "Browse by game" rails' real Pal-per-game counts (`GET /players/game-counts`), keyed by the
+   * same slug `data/games.ts`'s `slugify()` derives a game's `id` from. Empty on failure - same
+   * "empty is a normal state" convention as `fetchSuggested`, since a 0 count reads the same as
+   * a missing one on the card. */
+  async function fetchGameCounts() {
+    try {
+      gameCounts.value = await api.get<Record<string, number>>('/players/game-counts')
+    } catch {
+      gameCounts.value = {}
     }
   }
 
@@ -418,6 +468,11 @@ export const usePlayersStore = defineStore('players', () => {
     error,
     resetFilters,
     fetchList,
+    suggested,
+    suggestedLoading,
+    fetchSuggested,
+    gameCounts,
+    fetchGameCounts,
     mine,
     mineLoading,
     mineError,

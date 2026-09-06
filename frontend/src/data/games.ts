@@ -1,6 +1,31 @@
 export interface Game {
   id: string
   name: string
+  ranks?: string[]
+  coverUrl?: string
+}
+
+const GAME_COVER_BASE = 'https://cdn.jsdelivr.net/gh/Sithi-sak/game-cover@main/covers'
+
+// Cover art for the games featured on the landing page's "All Services" rail.
+// Filenames come from https://github.com/Sithi-sak/game-cover and aren't predictable
+// from the slug, so each is mapped explicitly.
+const gameCovers: Record<string, string> = {
+  Valorant: `${GAME_COVER_BASE}/valorant/004.webp`,
+  'Counter-Strike 2': `${GAME_COVER_BASE}/counter-strike-2/001.webp`,
+  'Apex Legends': `${GAME_COVER_BASE}/apex-legends/009.webp`,
+  'Overwatch 2': `${GAME_COVER_BASE}/overwatch-2/026.webp`,
+  Fortnite: `${GAME_COVER_BASE}/fortnite/092.webp`,
+  'League of Legends': `${GAME_COVER_BASE}/league-of-legends/073.webp`,
+  'Dota 2': `${GAME_COVER_BASE}/dota-2/004.webp`,
+  'Rocket League': `${GAME_COVER_BASE}/rocket-league/004.webp`,
+  'Rainbow Six Siege': `${GAME_COVER_BASE}/rainbow-six-siege/004.webp`,
+  'Call of Duty: Warzone': `${GAME_COVER_BASE}/call-of-duty-warzone/002.webp`,
+  'PUBG: Battlegrounds': `${GAME_COVER_BASE}/pubg-battlegrounds/001.webp`,
+  'StarCraft II': `${GAME_COVER_BASE}/starcraft-ii/002.webp`,
+  'Mobile Legends: Bang Bang': `${GAME_COVER_BASE}/mobile-legends-bang-bang/002.webp`,
+  'Brawl Stars': `${GAME_COVER_BASE}/brawl-stars/001.webp`,
+  'EA Sports FC 25': `${GAME_COVER_BASE}/ea-sports-fc-25/044.webp`,
 }
 
 function slugify(name: string): string {
@@ -9,6 +34,131 @@ function slugify(name: string): string {
     .replace(/['’]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
+}
+
+export interface FeaturedGame {
+  id: string
+  name: string
+}
+
+// Games shown on the "Browse by game" / "All Services" rails on the landing and home pages.
+// Real Pal-per-game counts come from `GET /players/game-counts` (`playersStore.gameCounts`),
+// keyed by this same `id` slug.
+export const featuredGames: FeaturedGame[] = [
+  { id: slugify('Valorant'), name: 'Valorant' },
+  { id: slugify('Counter-Strike 2'), name: 'CS2' },
+  { id: slugify('Apex Legends'), name: 'Apex Legends' },
+  { id: slugify('Overwatch 2'), name: 'Overwatch 2' },
+  { id: slugify('Fortnite'), name: 'Fortnite' },
+  { id: slugify('League of Legends'), name: 'League of Legends' },
+  { id: slugify('Dota 2'), name: 'Dota 2' },
+  { id: slugify('Rocket League'), name: 'Rocket League' },
+  { id: slugify('Rainbow Six Siege'), name: 'Rainbow Six Siege' },
+  { id: slugify('Call of Duty: Warzone'), name: 'Call of Duty: Warzone' },
+  { id: slugify('PUBG: Battlegrounds'), name: 'PUBG: Battlegrounds' },
+  { id: slugify('StarCraft II'), name: 'StarCraft II' },
+  { id: slugify('Mobile Legends: Bang Bang'), name: 'Mobile Legends: Bang Bang' },
+  { id: slugify('Brawl Stars'), name: 'Brawl Stars' },
+  { id: slugify('EA Sports FC 25'), name: 'EA Sports FC 25' },
+]
+
+// Rank ladders for games with a known competitive rank system, lowest to highest.
+// Games not listed here (single-player titles, games without ranked ladders) get no ranks.
+const gameRanks: Record<string, string[]> = {
+  'League of Legends': [
+    'Iron',
+    'Bronze',
+    'Silver',
+    'Gold',
+    'Platinum',
+    'Emerald',
+    'Diamond',
+    'Master',
+    'Grandmaster',
+    'Challenger',
+  ],
+  Valorant: ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Ascendant', 'Immortal', 'Radiant'],
+  'Dota 2': ['Herald', 'Guardian', 'Crusader', 'Archon', 'Legend', 'Ancient', 'Divine', 'Immortal'],
+  'Apex Legends': ['Rookie', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master', 'Predator'],
+  'Rocket League': [
+    'Bronze',
+    'Silver',
+    'Gold',
+    'Platinum',
+    'Diamond',
+    'Champion',
+    'Grand Champion',
+    'Supersonic Legend',
+  ],
+  'Counter-Strike 2': ['Silver', 'Gold Nova', 'Master Guardian', 'Legendary Eagle', 'Supreme', 'Global Elite'],
+  'Overwatch 2': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master', 'Grandmaster', 'Champion'],
+  'Rainbow Six Siege': ['Copper', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Diamond', 'Champion'],
+  'Call of Duty: Warzone': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crimson', 'Iridescent', 'Top 250'],
+  'Street Fighter 6': ['Rookie', 'Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master', 'Grand Master'],
+  'Guilty Gear Strive': ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Vanquisher'],
+  'Mortal Kombat 1': [
+    'Apprentice',
+    'Kombatant',
+    'Warrior',
+    'Champion',
+    'Master',
+    'Grand Master',
+    'Demi God',
+    'God',
+    'Elder God',
+  ],
+  'PUBG: Battlegrounds': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master', 'Grandmaster'],
+  'PUBG Mobile': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Crown', 'Ace', 'Conqueror'],
+  Hearthstone: ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Legend'],
+  'Teamfight Tactics': [
+    'Iron',
+    'Bronze',
+    'Silver',
+    'Gold',
+    'Platinum',
+    'Emerald',
+    'Diamond',
+    'Master',
+    'Grandmaster',
+    'Challenger',
+  ],
+  'Legends of Runeterra': ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master'],
+  'Marvel Snap': [
+    'Recruit',
+    'Agent',
+    'Iron',
+    'Bronze',
+    'Silver',
+    'Gold',
+    'Platinum',
+    'Diamond',
+    'Vibranium',
+    'Omega',
+    'Galactic',
+    'Infinite',
+  ],
+  'NBA 2K25': ['Rookie', 'Pro', 'All-Star', 'Superstar', 'Elite'],
+  'Gran Turismo 7': ['E', 'D', 'C', 'B', 'A', 'S'],
+  iRacing: ['Rookie', 'D', 'C', 'B', 'A', 'Pro', 'Pro/World Class'],
+  'StarCraft II': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master', 'Grandmaster'],
+  'Age of Empires IV': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Conqueror'],
+  'Clash Royale': ['Bronze', 'Silver', 'Gold', 'Legendary'],
+  'The Finals': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Ruby'],
+  'Mobile Legends: Bang Bang': [
+    'Warrior',
+    'Elite',
+    'Master',
+    'Grandmaster',
+    'Epic',
+    'Legend',
+    'Mythic',
+    'Mythical Glory',
+  ],
+  Smite: ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Masters', 'Grandmaster'],
+  'Heroes of the Storm': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master', 'Grandmaster'],
+  'EA Sports FC 24': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite'],
+  'EA Sports FC 25': ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite'],
+  'Brawl Stars': ['Bronze', 'Silver', 'Gold', 'Diamond', 'Mythic', 'Legendary', 'Masters', 'Pro'],
 }
 
 const gameNames = [
@@ -249,4 +399,9 @@ const gameNames = [
   'Zero Escape',
 ]
 
-export const games: Game[] = gameNames.map((name) => ({ id: slugify(name), name }))
+export const games: Game[] = gameNames.map((name) => ({
+  id: slugify(name),
+  name,
+  ranks: gameRanks[name],
+  coverUrl: gameCovers[name],
+}))

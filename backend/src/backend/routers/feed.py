@@ -21,7 +21,7 @@ class PostCreateIn(CamelModel):
 
 class PostOut(CamelModel):
     id: str
-    player_id: str
+    author_id: str
     author: str
     handle: str | None
     tier: str | None
@@ -57,7 +57,7 @@ class CommentOut(CamelModel):
 
 
 class FollowOut(CamelModel):
-    player_id: str
+    followed_id: str
     following: bool
     followers_count: int
 
@@ -91,10 +91,10 @@ class SavedItemOut(CamelModel):
 
 # Helpers -----------------------------------------------------------------------------------
 
-_POST_SELECT = "*, players(user_id, display_name, handle, tier, avatar_url, online)"
+_POST_SELECT = "*"
 _COMMENT_SELECT = "*, users!comments_author_id_fkey(display_name)"
 _SAVED_SELECT = (
-    "*, posts(*, players!posts_player_id_fkey(display_name, handle, tier)), "
+    "*, posts(*), "
     "services(*, players!services_player_id_fkey(display_name), service_pricing_options(*), service_promotions(*))"
 )
 
@@ -106,40 +106,44 @@ def _get_post(client, post_id: str) -> dict:
     return result.data
 
 
-def _get_player_row(client, player_id: str) -> dict:
-    result = client.table("players").select("id, user_id").eq("id", player_id).maybe_single().execute()
-    if not result or not result.data:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
-    return result.data
-
-
-def _get_my_player_id(client, user_id: str) -> str:
-    result = client.table("players").select("id").eq("user_id", user_id).maybe_single().execute()
-    if not result or not result.data:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
-    return result.data["id"]
-
-
-def _is_following(client, player_id: str, user_id: str | None) -> bool:
-    if not user_id:
-        return False
-    result = (
-        client.table("follows")
-        .select("player_id")
-        .eq("follower_id", user_id)
-        .eq("player_id", player_id)
-        .maybe_single()
+def _resolve_authors(client, author_ids: set[str]) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Batch-resolves post/comment author display info for a set of user ids - same
+    "aggregate in Python" convention `_serialize_posts`'s `liked_ids`/`following_ids` already use.
+    Any signed-in user can be an author now (3.18), so this always looks up `users` for the
+    display name and separately looks up `players` (may be absent - a plain buyer has no Pal
+    profile) for the handle/tier/avatar/online fields."""
+    if not author_ids:
+        return {}, {}
+    ids = list(author_ids)
+    users_by_id = {
+        u["id"]: u for u in client.table("users").select("id, display_name").in_("id", ids).execute().data or []
+    }
+    players_by_user_id = {
+        p["user_id"]: p
+        for p in client.table("players")
+        .select("user_id, handle, tier, avatar_url, online")
+        .in_("user_id", ids)
         .execute()
-    )
-    return bool(result and result.data)
+        .data
+        or []
+    }
+    return users_by_id, players_by_user_id
 
 
-def _post_out(row: dict, *, liked: bool, following: bool) -> dict:
-    player = row.get("players") or {}
+def _resolve_author(client, author_id: str | None) -> tuple[dict | None, dict | None]:
+    if not author_id:
+        return None, None
+    users_by_id, players_by_user_id = _resolve_authors(client, {author_id})
+    return users_by_id.get(author_id), players_by_user_id.get(author_id)
+
+
+def _post_out(row: dict, author: dict | None, player: dict | None, *, liked: bool, following: bool) -> dict:
+    author = author or {}
+    player = player or {}
     return {
         "id": row["id"],
-        "player_id": row["player_id"],
-        "author": player.get("display_name") or "SquadUp Pal",
+        "author_id": row["author_id"],
+        "author": author.get("display_name") or "SquadUp user",
         "handle": player.get("handle"),
         "tier": player.get("tier"),
         "avatar_url": player.get("avatar_url"),
@@ -158,6 +162,9 @@ def _post_out(row: dict, *, liked: bool, following: bool) -> dict:
 def _serialize_posts(client, rows: list[dict], viewer_id: str | None) -> list[dict]:
     if not rows:
         return []
+    author_ids = {r["author_id"] for r in rows}
+    users_by_id, players_by_user_id = _resolve_authors(client, author_ids)
+
     liked_ids: set[str] = set()
     following_ids: set[str] = set()
     if viewer_id:
@@ -172,30 +179,38 @@ def _serialize_posts(client, rows: list[dict], viewer_id: str | None) -> list[di
             .data
             or []
         }
-        player_ids = list({r["player_id"] for r in rows})
         following_ids = {
-            f["player_id"]
+            f["followed_id"]
             for f in client.table("follows")
-            .select("player_id")
+            .select("followed_id")
             .eq("follower_id", viewer_id)
-            .in_("player_id", player_ids)
+            .in_("followed_id", list(author_ids))
             .execute()
             .data
             or []
         }
-    return [_post_out(r, liked=r["id"] in liked_ids, following=r["player_id"] in following_ids) for r in rows]
+    return [
+        _post_out(
+            r,
+            users_by_id.get(r["author_id"]),
+            players_by_user_id.get(r["author_id"]),
+            liked=r["id"] in liked_ids,
+            following=r["author_id"] in following_ids,
+        )
+        for r in rows
+    ]
 
 
-def _refresh_post(client, post_id: str, viewer_id: str, *, liked: bool) -> dict:
+def _refresh_post(client, post_id: str, viewer_id: str) -> dict:
     count = len(client.table("post_likes").select("user_id").eq("post_id", post_id).execute().data or [])
     client.table("posts").update({"likes_count": count}).eq("id", post_id).execute()
     row = _get_post(client, post_id)
-    return _post_out(row, liked=liked, following=_is_following(client, row["player_id"], viewer_id))
+    return _serialize_posts(client, [row], viewer_id)[0]
 
 
-def _refresh_posts_count(client, player_id: str) -> None:
-    count = len(client.table("posts").select("id").eq("player_id", player_id).execute().data or [])
-    client.table("players").update({"posts_count": count}).eq("id", player_id).execute()
+def _refresh_posts_count(client, author_id: str) -> None:
+    count = len(client.table("posts").select("id").eq("author_id", author_id).execute().data or [])
+    client.table("users").update({"posts_count": count}).eq("id", author_id).execute()
 
 
 def _refresh_comments_count(client, post_id: str) -> None:
@@ -238,7 +253,7 @@ def _build_comment_tree(rows: list[dict]) -> list[dict]:
 def _get_comment_with_creator(client, comment_id: str) -> tuple[dict, str | None]:
     result = (
         client.table("comments")
-        .select(f"{_COMMENT_SELECT}, posts(players(user_id))")
+        .select(f"{_COMMENT_SELECT}, posts(author_id)")
         .eq("id", comment_id)
         .maybe_single()
         .execute()
@@ -246,7 +261,7 @@ def _get_comment_with_creator(client, comment_id: str) -> tuple[dict, str | None
     if not result or not result.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Comment not found")
     row = result.data
-    creator_user_id = ((row.get("posts") or {}).get("players") or {}).get("user_id")
+    creator_user_id = (row.get("posts") or {}).get("author_id")
     return row, creator_user_id
 
 
@@ -257,20 +272,18 @@ def _refresh_comment(client, comment_id: str, *, liked: bool) -> dict:
     return _comment_out(row, liked=liked, creator_user_id=creator_user_id)
 
 
-def _refresh_follow(client, player_id: str, follower_id: str, *, following: bool) -> dict:
-    followers_count = len(client.table("follows").select("follower_id").eq("player_id", player_id).execute().data or [])
-    client.table("players").update({"followers_count": followers_count}).eq("id", player_id).execute()
+def _refresh_follow(client, target_id: str, follower_id: str, *, following: bool) -> dict:
+    followers_count = len(
+        client.table("follows").select("follower_id").eq("followed_id", target_id).execute().data or []
+    )
+    client.table("users").update({"followers_count": followers_count}).eq("id", target_id).execute()
 
-    follower_player = client.table("players").select("id").eq("user_id", follower_id).maybe_single().execute()
-    if follower_player and follower_player.data:
-        following_count = len(
-            client.table("follows").select("player_id").eq("follower_id", follower_id).execute().data or []
-        )
-        client.table("players").update({"following_count": following_count}).eq(
-            "id", follower_player.data["id"]
-        ).execute()
+    following_count = len(
+        client.table("follows").select("followed_id").eq("follower_id", follower_id).execute().data or []
+    )
+    client.table("users").update({"following_count": following_count}).eq("id", follower_id).execute()
 
-    return {"player_id": player_id, "following": following, "followers_count": followers_count}
+    return {"followed_id": target_id, "following": following, "followers_count": followers_count}
 
 
 def _service_promo_label(service: dict) -> str | None:
@@ -280,15 +293,16 @@ def _service_promo_label(service: dict) -> str | None:
     return None
 
 
-def _saved_item_out(row: dict) -> dict:
+def _saved_item_out(row: dict, author: dict | None = None, player: dict | None = None) -> dict:
     base = {"id": row["id"], "kind": row["kind"], "created_at": row["created_at"]}
     if row["kind"] == "post":
         post = row.get("posts") or {}
-        player = post.get("players") or {}
+        author = author or {}
+        player = player or {}
         return {
             **base,
             "post_id": row["post_id"],
-            "author": player.get("display_name"),
+            "author": author.get("display_name"),
             "handle": player.get("handle"),
             "tier": player.get("tier"),
             "text": post.get("text"),
@@ -332,14 +346,14 @@ def list_following_feed(user_id: str | None = Depends(get_optional_user_id)) -> 
     if not user_id:
         return []
     client = get_supabase_client()
-    followed = client.table("follows").select("player_id").eq("follower_id", user_id).execute().data or []
-    player_ids = [f["player_id"] for f in followed]
-    if not player_ids:
+    followed = client.table("follows").select("followed_id").eq("follower_id", user_id).execute().data or []
+    author_ids = [f["followed_id"] for f in followed]
+    if not author_ids:
         return []
     rows = (
         client.table("posts")
         .select(_POST_SELECT)
-        .in_("player_id", player_ids)
+        .in_("author_id", author_ids)
         .order("created_at", desc=True)
         .limit(50)
         .execute()
@@ -351,10 +365,9 @@ def list_following_feed(user_id: str | None = Depends(get_optional_user_id)) -> 
 
 @router.post("/posts", response_model=PostOut, status_code=status.HTTP_201_CREATED)
 def create_post(payload: PostCreateIn, user_id: str = Depends(get_current_user_id)) -> dict:
-    """The Feed composer (`CreatePostModal.vue`) - only a Pal has a `players` row to post from,
-    same "requires a player profile" convention as `create_my_service`/`get_my_earnings`."""
+    """The Feed composer (`CreatePostModal.vue`) - any signed-in account can post (3.18), Pal or
+    plain buyer, so this just needs the caller's own user id, no `players` lookup."""
     client = get_supabase_client()
-    player_id = _get_my_player_id(client, user_id)
 
     text = (payload.text or "").strip() or None
     if not text and not payload.image_url:
@@ -364,16 +377,16 @@ def create_post(payload: PostCreateIn, user_id: str = Depends(get_current_user_i
     client.table("posts").insert(
         {
             "id": post_id,
-            "player_id": player_id,
+            "author_id": user_id,
             "text": text,
             "image_url": payload.image_url,
             "category": payload.category,
         }
     ).execute()
-    _refresh_posts_count(client, player_id)
+    _refresh_posts_count(client, user_id)
 
     row = _get_post(client, post_id)
-    return _post_out(row, liked=False, following=False)
+    return _serialize_posts(client, [row], user_id)[0]
 
 
 @router.get("/posts/{post_id}", response_model=PostOut)
@@ -388,7 +401,7 @@ def like_post(post_id: str, user_id: str = Depends(get_current_user_id)) -> dict
     client = get_supabase_client()
     _get_post(client, post_id)
     client.table("post_likes").upsert({"user_id": user_id, "post_id": post_id}).execute()
-    return _refresh_post(client, post_id, user_id, liked=True)
+    return _refresh_post(client, post_id, user_id)
 
 
 @router.delete("/posts/{post_id}/like", response_model=PostOut)
@@ -396,7 +409,7 @@ def unlike_post(post_id: str, user_id: str = Depends(get_current_user_id)) -> di
     client = get_supabase_client()
     _get_post(client, post_id)
     client.table("post_likes").delete().eq("user_id", user_id).eq("post_id", post_id).execute()
-    return _refresh_post(client, post_id, user_id, liked=False)
+    return _refresh_post(client, post_id, user_id)
 
 
 # Comments --------------------------------------------------------------------------------
@@ -406,7 +419,7 @@ def unlike_post(post_id: str, user_id: str = Depends(get_current_user_id)) -> di
 def list_comments(post_id: str, user_id: str | None = Depends(get_optional_user_id)) -> list[dict]:
     client = get_supabase_client()
     post = _get_post(client, post_id)
-    creator_user_id = (post.get("players") or {}).get("user_id")
+    creator_user_id = post["author_id"]
 
     rows = (
         client.table("comments").select(_COMMENT_SELECT).eq("post_id", post_id).order("created_at").execute().data
@@ -463,7 +476,7 @@ def create_comment(post_id: str, payload: CommentCreateIn, user_id: str = Depend
     _refresh_comments_count(client, post_id)
 
     row = client.table("comments").select(_COMMENT_SELECT).eq("id", comment_id).single().execute().data
-    creator_user_id = (post.get("players") or {}).get("user_id")
+    creator_user_id = post["author_id"]
     return _comment_out(row, liked=False, creator_user_id=creator_user_id)
 
 
@@ -486,22 +499,29 @@ def unlike_comment(comment_id: str, user_id: str = Depends(get_current_user_id))
 # Follows -----------------------------------------------------------------------------------
 
 
-@router.post("/follows/{player_id}", response_model=FollowOut)
-def follow_player(player_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
+def _require_user_exists(client, user_id: str) -> None:
+    result = client.table("users").select("id").eq("id", user_id).maybe_single().execute()
+    if not result or not result.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+
+@router.post("/follows/{target_id}", response_model=FollowOut)
+def follow_user(target_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
+    """Any signed-in account can be followed now (3.18), Pal or plain buyer."""
     client = get_supabase_client()
-    player = _get_player_row(client, player_id)
-    if player["user_id"] == user_id:
+    if target_id == user_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot follow yourself")
-    client.table("follows").upsert({"follower_id": user_id, "player_id": player_id}).execute()
-    return _refresh_follow(client, player_id, user_id, following=True)
+    _require_user_exists(client, target_id)
+    client.table("follows").upsert({"follower_id": user_id, "followed_id": target_id}).execute()
+    return _refresh_follow(client, target_id, user_id, following=True)
 
 
-@router.delete("/follows/{player_id}", response_model=FollowOut)
-def unfollow_player(player_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
+@router.delete("/follows/{target_id}", response_model=FollowOut)
+def unfollow_user(target_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
     client = get_supabase_client()
-    _get_player_row(client, player_id)
-    client.table("follows").delete().eq("follower_id", user_id).eq("player_id", player_id).execute()
-    return _refresh_follow(client, player_id, user_id, following=False)
+    _require_user_exists(client, target_id)
+    client.table("follows").delete().eq("follower_id", user_id).eq("followed_id", target_id).execute()
+    return _refresh_follow(client, target_id, user_id, following=False)
 
 
 # Saved items ---------------------------------------------------------------------------------
@@ -519,7 +539,17 @@ def list_saved(user_id: str = Depends(get_current_user_id)) -> list[dict]:
         .data
         or []
     )
-    return [_saved_item_out(r) for r in rows]
+    post_author_ids = {(r.get("posts") or {}).get("author_id") for r in rows if r["kind"] == "post"}
+    post_author_ids.discard(None)
+    users_by_id, players_by_user_id = _resolve_authors(client, post_author_ids)
+    return [
+        _saved_item_out(
+            r,
+            users_by_id.get((r.get("posts") or {}).get("author_id")),
+            players_by_user_id.get((r.get("posts") or {}).get("author_id")),
+        )
+        for r in rows
+    ]
 
 
 @router.post("/saved", response_model=SavedItemOut, status_code=status.HTTP_201_CREATED)
@@ -538,7 +568,8 @@ def save_item(payload: SavedItemIn, user_id: str = Depends(get_current_user_id))
             .execute()
         )
         if existing and existing.data:
-            return _saved_item_out(existing.data)
+            author_id = (existing.data.get("posts") or {}).get("author_id")
+            return _saved_item_out(existing.data, *_resolve_author(client, author_id))
         post = client.table("posts").select("id").eq("id", payload.post_id).maybe_single().execute()
         if not post or not post.data:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
@@ -568,7 +599,8 @@ def save_item(payload: SavedItemIn, user_id: str = Depends(get_current_user_id))
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "kind must be 'post' or 'service'")
 
     row = client.table("saved_items").select(_SAVED_SELECT).eq("id", created.data[0]["id"]).single().execute().data
-    return _saved_item_out(row)
+    author_id = (row.get("posts") or {}).get("author_id") if row["kind"] == "post" else None
+    return _saved_item_out(row, *_resolve_author(client, author_id))
 
 
 @router.delete("/saved/{saved_item_id}", status_code=status.HTTP_204_NO_CONTENT)

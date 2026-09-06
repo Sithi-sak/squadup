@@ -231,7 +231,7 @@ def top_up(payload: TopupIn, user_id: str = Depends(get_current_user_id)) -> dic
             user_id,
             kind="topup",
             label="Top-up",
-            detail="Stripe",
+            detail="Visa",
             coins=coins,
             stripe_payment_intent_id=payload.payment_intent_id,
         )

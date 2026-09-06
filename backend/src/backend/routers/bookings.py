@@ -62,6 +62,7 @@ class BookingOut(CamelModel):
     id: str
     order_number: str
     player_id: str
+    player_user_id: str | None
     player_display_name: str
     player_avatar_url: str | None
     service_id: str
@@ -103,6 +104,7 @@ def _booking_out(row: dict) -> dict:
     buyer = row.get("users") or {}
     return {
         **row,
+        "player_user_id": player.get("user_id"),
         "player_display_name": player.get("display_name") or "Pal",
         "player_avatar_url": player.get("avatar_url"),
         "service_name": service.get("name") or row["service_type_label"],

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { PhCamera, PhFilmSlate, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
@@ -7,9 +7,18 @@ import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
 import { formatTimeAgo } from '@/utils/timeAgo'
+import { mockCurrentUser } from '@/mocks/users'
+import { useAuthStore } from '@/stores/auth'
+import { usePlayersStore } from '@/stores/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const feedStore = useFeedStore()
+const authStore = useAuthStore()
+const playersStore = usePlayersStore()
 const toast = useToast()
+const composerAvatarUrl = computed(() =>
+  resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, playersStore.mine?.avatarUrl),
+)
 
 onMounted(() => {
   feedStore.fetchFeed()
@@ -19,7 +28,7 @@ const createPostOpen = ref(false)
 
 async function toggleFollow(post: FeedPost) {
   try {
-    await feedStore.toggleFollow(post.playerId, post.following)
+    await feedStore.toggleFollow(post.authorId, post.following)
   } catch (err) {
     toast.add({
       title: post.following ? 'Could not unfollow' : 'Could not follow',
@@ -46,7 +55,7 @@ async function toggleLike(post: FeedPost) {
   <FeedLayout active="feed">
     <div class="rounded-xl bg-gray-800/70 p-4">
       <div class="flex items-center gap-3">
-        <UAvatar size="md" class="shrink-0 bg-white/10 text-slate-300">
+        <UAvatar :src="composerAvatarUrl" size="md" class="shrink-0 bg-white/10 text-slate-300">
           <PhUserCircle :size="20" />
         </UAvatar>
         <UInput
@@ -84,7 +93,7 @@ async function toggleLike(post: FeedPost) {
       :key="post.id"
       :id="post.id"
       :author="post.author"
-      :handle="post.handle ?? ''"
+      :handle="post.handle"
       :tier="post.tier"
       :time-ago="formatTimeAgo(post.createdAt)"
       :text="post.text ?? ''"

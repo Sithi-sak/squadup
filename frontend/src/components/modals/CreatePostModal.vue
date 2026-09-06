@@ -3,16 +3,22 @@ import { computed, ref, watch } from 'vue'
 import { PhCaretDown, PhGlobe, PhImage, PhPencilSimple, PhPlus, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { mockCurrentUser } from '@/mocks/users'
-import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feed'
+import { usePlayersStore } from '@/stores/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const open = defineModel<boolean>('open', { required: true })
 
+const authStore = useAuthStore()
 const feedStore = useFeedStore()
+const playersStore = usePlayersStore()
 const toast = useToast()
 
-const myPlayerProfile = computed(() =>
-  mockCurrentUser.playerId ? (mockPlayerProfiles[mockCurrentUser.playerId] ?? null) : null,
+const displayName = computed(() => authStore.user?.displayName ?? mockCurrentUser.displayName)
+const myPlayerProfile = computed(() => playersStore.mine)
+const avatarUrl = computed(() =>
+  resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, myPlayerProfile.value?.avatarUrl),
 )
 
 const visibilityOptions = ['Public', 'Followers only', 'Only me'] as const
@@ -71,11 +77,11 @@ async function submitPost() {
   >
     <template #body>
       <div class="flex items-center gap-3">
-        <UAvatar size="lg" class="bg-white/10 text-slate-300">
+        <UAvatar :src="avatarUrl" size="lg" class="bg-white/10 text-slate-300">
           <PhUserCircle :size="26" />
         </UAvatar>
         <div>
-          <p class="font-semibold text-white">{{ mockCurrentUser.displayName }}</p>
+          <p class="font-semibold text-white">{{ displayName }}</p>
           <UDropdownMenu :items="visibilityItems">
             <button
               type="button"

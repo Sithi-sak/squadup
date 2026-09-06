@@ -5,18 +5,21 @@ import {
   mockAdminFlaggedPlayers,
   mockAdminDisputes,
   mockAdminOverviewStats,
+  mockAdminPalApplications,
   type AdminFlaggedPlayer,
   type FlaggedPlayerStatus,
   type AdminDispute,
   type DisputeStatus,
   type AdminOverviewStats,
+  type AdminPalApplication,
+  type PalApplicationStatus,
 } from '@/mocks/admin'
 
-/** Mock-only credential, known solely to the admin, standing in until real admin auth ships
- * (Phase 2 Supabase auth + the 3.8 admin endpoints). There is exactly one admin account and no
- * signup flow for it, so `/admin` gates on this instead of the regular `useAuthStore` user. */
-const ADMIN_EMAIL = 'admin@squadup.gg'
-const ADMIN_PASSWORD = 'SquadUp-Admin-26'
+/** Mock-only PIN, known solely to the admin, standing in until real admin auth ships (Phase 2
+ * Supabase auth + real admin roles). There is exactly one admin "account" and no signup flow for
+ * it, so `/admin` gates on this code instead of the regular `useAuthStore` user (3.19: simpler
+ * than 1.15's original email/password gate, same session-only posture). */
+const ADMIN_ACCESS_CODE = '1234'
 
 const SESSION_KEY = 'squadup-admin-session'
 
@@ -24,14 +27,14 @@ export const useAdminStore = defineStore('admin', () => {
   const isAuthenticated = ref(sessionStorage.getItem(SESSION_KEY) === '1')
   const error = ref<string | null>(null)
 
-  function login(email: string, password: string) {
-    const matches = email.trim().toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD
+  function login(code: string) {
+    const matches = code.trim() === ADMIN_ACCESS_CODE
     if (matches) {
       isAuthenticated.value = true
       error.value = null
       sessionStorage.setItem(SESSION_KEY, '1')
     } else {
-      error.value = 'Incorrect email or password.'
+      error.value = 'Incorrect access code.'
     }
     return matches
   }
@@ -52,6 +55,10 @@ export const useAdminStore = defineStore('admin', () => {
   const overview = ref<AdminOverviewStats | null>(null)
   const overviewLoading = ref(false)
   const overviewError = ref<string | null>(null)
+
+  const palApplications = ref<AdminPalApplication[]>([])
+  const palApplicationsLoading = ref(false)
+  const palApplicationsError = ref<string | null>(null)
 
   /** Flagged Players tab (`GET /admin/flagged-players`). Falls back to `mockAdminFlaggedPlayers`
    * on failure, same convention as every other Phase 3 store's list fetch. */
@@ -113,6 +120,42 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  /** Ban/Unban toggle in the Flagged Players review modal (`PATCH /admin/players/{id}/ban`,
+   * 3.19). Patches the caller's own flag row back into `flaggedPlayers` when the response carries
+   * one - a player can be banned with no flag on file, in which case there's nothing to patch. */
+  async function banPlayer(playerId: string, isBanned: boolean) {
+    const updated = await api.patch<AdminFlaggedPlayer | null>(`/admin/players/${playerId}/ban`, { isBanned })
+    if (updated) {
+      const index = flaggedPlayers.value.findIndex((flag) => flag.id === updated.id)
+      if (index !== -1) flaggedPlayers.value[index] = updated
+    }
+    return updated
+  }
+
+  /** Pal applications tab (`GET /admin/pal-applications`). Same fallback convention as the two
+   * lists above. */
+  async function fetchPalApplications() {
+    palApplicationsLoading.value = true
+    palApplicationsError.value = null
+    try {
+      palApplications.value = await api.get<AdminPalApplication[]>('/admin/pal-applications')
+    } catch (err) {
+      palApplicationsError.value = err instanceof Error ? err.message : 'Failed to load pal applications'
+      palApplications.value = [...mockAdminPalApplications]
+    } finally {
+      palApplicationsLoading.value = false
+    }
+  }
+
+  /** Approve/Reject buttons (`PATCH /admin/pal-applications/{id}/status`). An approved/rejected
+   * application no longer shows up in a refetch of this list, so it's simply removed in place
+   * rather than patched. */
+  async function updatePalApplicationStatus(id: string, status: PalApplicationStatus) {
+    const updated = await api.patch<AdminPalApplication>(`/admin/pal-applications/${id}/status`, { status })
+    palApplications.value = palApplications.value.filter((application) => application.id !== id)
+    return updated
+  }
+
   return {
     isAuthenticated,
     error,
@@ -123,6 +166,7 @@ export const useAdminStore = defineStore('admin', () => {
     flaggedPlayersError,
     fetchFlaggedPlayers,
     updateFlaggedPlayerStatus,
+    banPlayer,
     disputes,
     disputesLoading,
     disputesError,
@@ -132,5 +176,10 @@ export const useAdminStore = defineStore('admin', () => {
     overviewLoading,
     overviewError,
     fetchOverview,
+    palApplications,
+    palApplicationsLoading,
+    palApplicationsError,
+    fetchPalApplications,
+    updatePalApplicationStatus,
   }
 })

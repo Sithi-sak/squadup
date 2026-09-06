@@ -7,6 +7,7 @@ import coinIcon from '@/assets/squadup-coin.svg'
 import { getBuyer } from '@/mocks/buyers'
 import { orderStatusMeta } from '@/utils/orderStatus'
 import { useBookingsStore, type Booking, type BookingStatus } from '@/stores/bookings'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const bookingsStore = useBookingsStore()
 const toast = useToast()
@@ -20,6 +21,10 @@ const actingOn = ref<string | null>(null)
 
 function buyerName(booking: Booking) {
   return booking.buyerDisplayName ?? getBuyer(booking.userId)?.displayName ?? 'Buyer'
+}
+
+function buyerAvatarUrl(booking: Booking) {
+  return resolveAvatarUrl(booking.userId)
 }
 
 async function respond(booking: Booking, action: 'accept' | 'decline' | 'complete') {
@@ -138,7 +143,7 @@ const rows = computed(() => {
             <tr v-for="booking in rows" :key="booking.id" class="border-b border-white/5 last:border-0">
               <td class="px-5 py-4">
                 <div class="flex items-center gap-3">
-                  <UAvatar size="md" class="bg-white/10 text-slate-300">
+                  <UAvatar :src="buyerAvatarUrl(booking)" size="md" class="bg-white/10 text-slate-300">
                     <PhUserCircle :size="22" />
                   </UAvatar>
                   <div>

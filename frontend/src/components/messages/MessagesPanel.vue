@@ -14,6 +14,7 @@ import { useMessagesStore } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayers } from '@/mocks/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 defineProps<{
   title: string
@@ -156,7 +157,11 @@ async function handleSend() {
               @click="store.selectThread(thread.id)"
             >
               <div class="relative shrink-0">
-                <UAvatar size="md" class="bg-white/10 text-slate-300">
+                <UAvatar
+                  :src="resolveAvatarUrl(thread.participantId, participant(thread.participantId)?.avatarUrl)"
+                  size="md"
+                  class="bg-white/10 text-slate-300"
+                >
                   <PhUserCircle :size="22" />
                 </UAvatar>
                 <span
@@ -193,7 +198,11 @@ async function handleSend() {
       <div v-if="store.activeThread" class="flex min-h-0 min-w-0 flex-col">
         <div class="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
           <div class="flex items-center gap-3">
-            <UAvatar size="md" class="bg-white/10 text-slate-300">
+            <UAvatar
+              :src="resolveAvatarUrl(store.activeThread.participantId, activeParticipant?.avatarUrl)"
+              size="md"
+              class="bg-white/10 text-slate-300"
+            >
               <PhUserCircle :size="22" />
             </UAvatar>
             <div>

@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhAppleLogo, PhDotsThree } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import visaIcon from '@/assets/visa.svg'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import SettingsSelectRow from './SettingsSelectRow.vue'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 
 const profile = mockPlayerProfiles.self!
+const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const toast = useToast()
+
+const isPal = computed(() => Boolean(authStore.user?.playerId))
 
 onMounted(() => {
   settingsStore.fetchPaymentCards()
@@ -67,7 +71,7 @@ async function removeCard(cardId: string) {
 
 <template>
   <div class="flex flex-col gap-5">
-    <div class="rounded-xl bg-gray-800/70 p-5">
+    <div v-if="isPal" class="rounded-xl bg-gray-800/70 p-5">
       <h2 class="text-lg font-semibold text-white">Payout method</h2>
 
       <div class="mt-3 flex items-center justify-between gap-3 rounded-xl bg-gray-700/50 px-4 py-3">

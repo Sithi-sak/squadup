@@ -1,10 +1,12 @@
 import type { PlayerSummary } from '@/stores/players'
+import { generatedAvatarUrl } from '@/utils/avatar'
 
 export const mockPlayers: PlayerSummary[] = [
   {
     id: 'p1',
+    userId: null,
     displayName: 'ShadowStrike',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p1',
+    avatarUrl: generatedAvatarUrl('p1'),
     games: ['League of Legends'],
     rank: 'Challenger',
     role: 'Mid',
@@ -20,8 +22,9 @@ export const mockPlayers: PlayerSummary[] = [
   },
   {
     id: 'p2',
+    userId: null,
     displayName: 'VelvetAce',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p2',
+    avatarUrl: generatedAvatarUrl('p2'),
     games: ['Valorant'],
     rank: 'Immortal 2',
     role: 'Duelist',
@@ -37,13 +40,14 @@ export const mockPlayers: PlayerSummary[] = [
   },
   {
     id: 'p3',
+    userId: null,
     displayName: 'MythicRoamer',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p3',
+    avatarUrl: generatedAvatarUrl('p3'),
     games: ['Mobile Legends: Bang Bang'],
     rank: 'Mythical Glory',
     role: 'Roamer',
     pricePerHour: 4,
-    languages: ['Khmer', 'Thai'],
+    languages: ['Khmer'],
     rating: 4.8,
     reviewCount: 94,
     tagline: "Don't be shy, let's play!",
@@ -54,8 +58,9 @@ export const mockPlayers: PlayerSummary[] = [
   },
   {
     id: 'p4',
+    userId: null,
     displayName: 'FrostJungler',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p4',
+    avatarUrl: generatedAvatarUrl('p4'),
     games: ['League of Legends', 'Valorant'],
     rank: 'Diamond II',
     role: 'Jungle',
@@ -71,8 +76,9 @@ export const mockPlayers: PlayerSummary[] = [
   },
   {
     id: 'p5',
+    userId: null,
     displayName: 'GoldLaneQueen',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p5',
+    avatarUrl: generatedAvatarUrl('p5'),
     games: ['Mobile Legends: Bang Bang'],
     rank: 'Legend',
     role: 'Gold Laner',
@@ -88,8 +94,9 @@ export const mockPlayers: PlayerSummary[] = [
   },
   {
     id: 'p6',
+    userId: null,
     displayName: 'SentinelBlade',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p6',
+    avatarUrl: generatedAvatarUrl('p6'),
     games: ['Valorant'],
     rank: 'Radiant',
     role: 'Sentinel',
@@ -105,8 +112,9 @@ export const mockPlayers: PlayerSummary[] = [
   },
   {
     id: 'p7',
+    userId: null,
     displayName: 'TopLaneTitan',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p7',
+    avatarUrl: generatedAvatarUrl('p7'),
     games: ['League of Legends'],
     rank: 'Master',
     role: 'Top',
@@ -122,8 +130,9 @@ export const mockPlayers: PlayerSummary[] = [
   },
   {
     id: 'p8',
+    userId: null,
     displayName: 'EXPLaneRookie',
-    avatarUrl: 'https://i.pravatar.cc/150?u=p8',
+    avatarUrl: generatedAvatarUrl('p8'),
     games: ['Mobile Legends: Bang Bang'],
     rank: 'Epic',
     role: 'EXP Laner',

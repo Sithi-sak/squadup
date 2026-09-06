@@ -4,9 +4,13 @@ import { useRouter } from 'vue-router'
 import { PhCaretLeft, PhLightning, PhPlus, PhStar, PhTrophy, PhUserCircle, PhX } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { usePlayersStore } from '@/stores/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const router = useRouter()
 const playersStore = usePlayersStore()
+const previewAvatarUrl = computed(() =>
+  resolveAvatarUrl(playersStore.mine?.id ?? 'you', playersStore.mine?.avatarUrl),
+)
 
 onMounted(() => {
   if (!playersStore.mine) playersStore.fetchMine()
@@ -364,7 +368,7 @@ async function publish() {
           <div class="rounded-2xl bg-gray-800/70 p-5">
             <div class="flex items-start justify-between gap-3">
               <div class="relative shrink-0">
-                <UAvatar size="lg" class="bg-white/10 text-slate-300">
+                <UAvatar :src="previewAvatarUrl" size="lg" class="bg-white/10 text-slate-300">
                   <PhUserCircle :size="26" />
                 </UAvatar>
                 <span class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800" />

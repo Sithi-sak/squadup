@@ -4,6 +4,7 @@ import { PhCoins, PhFlag, PhGameController, PhScales, PhUsersThree } from '@phos
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useAdminStore } from '@/stores/admin'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 defineEmits<{ 'view-all': ['flagged' | 'disputes'] }>()
 
@@ -102,7 +103,7 @@ const openDisputeCount = computed(
             <p v-if="recentFlagged.length === 0" class="py-3 text-sm text-slate-400">No flagged players yet.</p>
             <div v-for="flag in recentFlagged" :key="flag.id" class="flex items-center justify-between gap-3 py-3">
               <div class="flex items-center gap-3">
-                <UAvatar :src="flag.avatarUrl ?? undefined" size="md" class="bg-white/10" />
+                <UAvatar :src="resolveAvatarUrl(flag.playerId, flag.avatarUrl)" size="md" class="bg-white/10" />
                 <div>
                   <p class="font-semibold text-white">{{ flag.displayName }}</p>
                   <p class="text-sm text-slate-400">{{ flag.reason }}</p>

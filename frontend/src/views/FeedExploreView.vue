@@ -1,17 +1,35 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { PhHeart, PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
-import { exploreCategories, mockExplorePosts } from '@/mocks/feed'
+import { exploreCategories } from '@/mocks/feed'
+import { useFeedStore } from '@/stores/feed'
+import { resolveAvatarUrl } from '@/utils/avatar'
+
+const route = useRoute()
+const feedStore = useFeedStore()
+
+onMounted(() => {
+  feedStore.fetchFeed()
+})
 
 const search = ref('')
-const activeCategory = ref('Trending')
+// Deep-linkable from `FeedRightRail.vue`'s "Trending now" (`?category=`), e.g. clicking a real
+// post category there. Falls back to the "Trending" (unfiltered) tab otherwise.
+const activeCategory = ref(typeof route.query.category === 'string' ? route.query.category : 'Trending')
+watch(
+  () => route.query.category,
+  (category) => {
+    if (typeof category === 'string') activeCategory.value = category
+  },
+)
 
 const visiblePosts = computed(() => {
   const filtered =
     activeCategory.value === 'Trending'
-      ? mockExplorePosts
-      : mockExplorePosts.filter((p) => p.category === activeCategory.value)
+      ? feedStore.posts
+      : feedStore.posts.filter((p) => p.category.toLowerCase() === activeCategory.value.toLowerCase())
 
   if (!search.value) return filtered
   const q = search.value.toLowerCase()
@@ -19,6 +37,12 @@ const visiblePosts = computed(() => {
     (p) => p.category.toLowerCase().includes(q) || p.author.toLowerCase().includes(q),
   )
 })
+
+function formatCount(count: number) {
+  if (count < 1000) return String(count)
+  const thousands = count / 1000
+  return `${thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1)}k`
+}
 </script>
 
 <template>
@@ -59,28 +83,29 @@ const visiblePosts = computed(() => {
       No posts match this search.
     </p>
 
-    <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      <div
+    <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <router-link
         v-for="post in visiblePosts"
         :key="post.id"
-        class="relative aspect-square overflow-hidden rounded-lg bg-white/5 ring-1 ring-inset ring-white/10"
+        :to="`/feed/${post.id}`"
+        class="relative aspect-square overflow-hidden rounded-lg bg-white/5"
       >
         <UBadge color="neutral" variant="solid" size="sm" class="absolute top-2 left-2 rounded-full bg-black/50 text-xs">
           {{ post.category }}
         </UBadge>
         <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-black/70 to-transparent p-2.5">
           <div class="flex min-w-0 items-center gap-1.5">
-            <UAvatar size="sm" class="shrink-0 bg-white/10 text-slate-300">
+            <UAvatar :src="resolveAvatarUrl(post.authorId, post.avatarUrl)" size="sm" class="shrink-0 bg-white/10 text-slate-300">
               <PhUserCircle :size="20" />
             </UAvatar>
             <span class="truncate text-sm font-medium text-white">{{ post.author }}</span>
           </div>
           <span class="flex shrink-0 items-center gap-1 text-sm text-white">
             <PhHeart :size="14" weight="fill" class="text-red-400" />
-            {{ post.likes }}
+            {{ formatCount(post.likes) }}
           </span>
         </div>
-      </div>
+      </router-link>
     </div>
   </FeedLayout>
 </template>

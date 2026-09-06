@@ -2,6 +2,7 @@
 import { PhStar, PhTrophy, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import type { PlayerSummary } from '@/stores/players'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 defineProps<{ player: PlayerSummary }>()
 
@@ -19,7 +20,7 @@ function formatCount(count: number) {
   >
     <div class="flex items-center gap-2.5">
       <div class="relative shrink-0">
-        <UAvatar size="lg" class="bg-white/10 text-slate-300">
+        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="lg" class="bg-white/10 text-slate-300">
           <PhUserCircle :size="26" />
         </UAvatar>
         <span

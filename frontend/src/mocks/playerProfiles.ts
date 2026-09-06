@@ -215,6 +215,7 @@ export const mockPlayerProfiles: Record<string, MockPlayerProfile> = {
     postsCount: 42,
     followersCount: 1200,
     followingCount: 30,
+    following: false,
   },
   /** The current mock account's own Pal profile, linked via `AuthUser.playerId`. Authored with an
    * active roster of services (per `squadup_ui/DASHBOARD/MY SERVICES.jpg`) so the Pal Dashboard
@@ -285,9 +286,10 @@ export const mockPlayerProfiles: Record<string, MockPlayerProfile> = {
     feed: [],
     album: [],
     wish: [],
-    postsCount: 128,
-    followersCount: 3400,
-    followingCount: 86,
+    postsCount: 0,
+    followersCount: 0,
+    followingCount: 0,
+    following: false,
   },
 }
 
@@ -349,6 +351,7 @@ function buildGenericProfile(player: PlayerSummary): MockPlayerProfile {
     postsCount: 0,
     followersCount: 0,
     followingCount: 0,
+    following: false,
   }
 }
 
@@ -363,7 +366,7 @@ function timeAgoToIso(timeAgo: string): string {
 function feedPostFromMockEntry(profile: MockPlayerProfile, player: PlayerSummary, entry: MockProfilePost): FeedPost {
   return {
     id: entry.id,
-    playerId: player.id,
+    authorId: player.id,
     author: player.displayName,
     handle: profile.handle,
     tier: profile.tier,

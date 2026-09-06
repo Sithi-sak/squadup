@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { PhInfo, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = defineProps<{
   orderNumber: string
@@ -66,7 +67,7 @@ function confirm() {
     <template #body>
       <div class="flex flex-col gap-5">
         <div class="flex items-center gap-3 rounded-2xl bg-gray-800/70 p-4">
-          <UAvatar size="lg" class="bg-white/10 text-slate-300">
+          <UAvatar :src="resolveAvatarUrl(props.palName)" size="lg" class="bg-white/10 text-slate-300">
             <PhUserCircle :size="26" />
           </UAvatar>
           <div class="min-w-0 flex-1">

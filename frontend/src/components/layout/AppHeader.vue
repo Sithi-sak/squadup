@@ -15,10 +15,13 @@ import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
+import { useWalletStore } from '@/stores/wallet'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const notificationsStore = useNotificationsStore()
 const authStore = useAuthStore()
+const walletStore = useWalletStore()
 
 const router = useRouter()
 
@@ -27,30 +30,37 @@ const searchQuery = ref('')
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
-/** Bell badge needs to be populated across every authenticated page, not just `/notifications`,
- * so it's fetched here rather than per-view - re-fires whenever a session is (re)established
- * (initial mount once `authStore.init()` resolves, or a fresh login). */
+/** Bell badge and coin balance need to be populated across every authenticated page, not just
+ * `/notifications`/`/wallet`, so they're fetched here rather than per-view - re-fires whenever a
+ * session is (re)established (initial mount once `authStore.init()` resolves, or a fresh login).
+ * `walletStore` is the same Pinia instance `WalletView` uses, so a top-up there updates this
+ * balance too without an extra fetch. */
 watch(
   () => authStore.user,
   (user) => {
-    if (user) notificationsStore.fetchNotifications()
+    if (!user) return
+    notificationsStore.fetchNotifications()
+    walletStore.fetchWallet()
   },
   { immediate: true },
 )
 
-const navLinks = [
+const isPal = computed(() => !!authStore.user?.playerId)
+
+const navLinks = computed(() => [
   { label: 'Discover', to: '/home' },
   { label: 'Feed', to: '/feed' },
   { label: 'Games', to: '/services' },
   { label: 'eStars', to: '/estars' },
-  { label: 'Become a Pal', to: '/become-a-pal' },
+  ...(isPal.value ? [] : [{ label: 'Become a Pal', to: '/become-a-pal' }]),
   { label: 'Help', to: '/help' },
-]
+])
 
-const dashboardPath = computed(() =>
-  mockCurrentUser.playerId ? '/dashboard/player' : '/dashboard/user',
+const dashboardPath = computed(() => (isPal.value ? '/dashboard/player' : '/dashboard/user'))
+const firstName = computed(
+  () => (authStore.user?.displayName ?? mockCurrentUser.displayName)?.split(' ')[0] ?? 'Account',
 )
-const firstName = computed(() => mockCurrentUser.displayName?.split(' ')[0] ?? 'Account')
+const avatarUrl = computed(() => resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id))
 
 const accountMenuItems = [
   [
@@ -118,7 +128,7 @@ function handleSearch() {
             <template #leading>
               <img :src="coinIcon" alt="" class="h-4.5 w-4.5" />
             </template>
-            {{ mockCurrentUser.coinBalance.toLocaleString() }}
+            {{ walletStore.balance.toLocaleString() }}
           </UButton>
           <UButton
             to="/wallet"
@@ -165,7 +175,7 @@ function handleSearch() {
             type="button"
             class="flex cursor-pointer items-center gap-1.5 rounded-full py-1 pr-1.5 pl-1 hover:bg-white/5"
           >
-            <UAvatar size="sm" class="bg-white/10 text-slate-300">
+            <UAvatar :src="avatarUrl" size="sm" class="bg-white/10 text-slate-300">
               <PhUserCircle :size="20" />
             </UAvatar>
             <span class="text-sm text-white">{{ firstName }}</span>
@@ -222,10 +232,12 @@ function handleSearch() {
             <router-link to="/subscriptions" class="text-base text-white">Subscriptions</router-link>
             <router-link :to="dashboardPath" class="text-base text-white">Dashboard</router-link>
             <router-link to="/settings" class="text-base text-white">Settings</router-link>
-            <USeparator />
-            <router-link to="/become-a-pal" class="text-base text-white">
-              Become a Pal
-            </router-link>
+            <template v-if="!isPal">
+              <USeparator />
+              <router-link to="/become-a-pal" class="text-base text-white">
+                Become a Pal
+              </router-link>
+            </template>
           </nav>
         </template>
         <nav v-else class="flex flex-col gap-4" @click="mobileMenuOpen = false">

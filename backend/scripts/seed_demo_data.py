@@ -396,9 +396,9 @@ REVIEW_TEXTS = [
 # Companion services a Pal can offer alongside their main game - same archetypes as the
 # authored `p1`/`self` mock profiles (`frontend/src/mocks/playerProfiles.ts`).
 COMPANION_SERVICES = [
-    {"name": "Coaching Session", "unit": "/hour", "price_range": (250, 450), "styles": ["Fundamentals", "Macro Play"]},
-    {"name": "Voice Call", "unit": "/session", "price_range": (80, 200), "styles": ["Laid Back"]},
-    {"name": "Watch Together", "unit": "/session", "price_range": (80, 220), "styles": ["Laid Back"]},
+    {"name": "Coaching Session", "unit": "/hour", "price_range": (700, 1300), "styles": ["Fundamentals", "Macro Play"]},
+    {"name": "Voice Call", "unit": "/session", "price_range": (200, 450), "styles": ["Laid Back"]},
+    {"name": "Watch Together", "unit": "/session", "price_range": (200, 500), "styles": ["Laid Back"]},
     {"name": "E-Chat", "unit": "/15min", "price_range": (0, 0), "styles": ["Laid Back"]},
 ]
 
@@ -529,8 +529,8 @@ def _game_price(game: str, rank: str | None) -> int:
     if rank is not None:
         ranks = RANKED_GAMES[game][0]
         rank_index = ranks.index(rank)
-        return max(60, 80 + rank_index * 28 + random.randint(-15, 30))
-    return random.randint(70, 260)
+        return max(150, 250 + rank_index * 80 + random.randint(-40, 90))
+    return random.randint(200, 700)
 
 
 def _seed_game_service(client, player_id: str, game: str, rank: str | None, role: str | None) -> tuple[str, int]:
@@ -630,13 +630,13 @@ def _seed_pal(client, email_local: str, game: str, used_handles: set[str]) -> di
     display_name, handle_local = _gen_identity(used_handles)
     email = f"{email_local}@{SEED_EMAIL_DOMAIN}"
     user_id = _create_seed_user(client, email, display_name)
+    client.table("users").update({"handle": f"@{handle_local}"}).eq("id", user_id).execute()
 
     player_id = str(uuid4())
     client.table("players").insert(
         {
             "id": player_id,
             "user_id": user_id,
-            "handle": f"@{handle_local}",
             "display_name": display_name,
             "tagline": random.choice(TAGLINES),
             "timezone": random.choice(TIMEZONES),
@@ -654,7 +654,7 @@ def _seed_pal(client, email_local: str, game: str, used_handles: set[str]) -> di
     ).execute()
 
     service_id, price = _seed_game_service(client, player_id, game, rank, role)
-    client.table("players").update({"highlighted_service_id": service_id, "price_per_hour": round(price / 50, 2)}).eq(
+    client.table("players").update({"highlighted_service_id": service_id, "price_per_hour": round(price / 2, 2)}).eq(
         "id", player_id
     ).execute()
 
@@ -677,13 +677,13 @@ def _seed_cluster_pal(client, email_local: str, games: list[str], used_handles: 
     display_name, handle_local = _gen_identity(used_handles)
     email = f"{email_local}@{SEED_EMAIL_DOMAIN}"
     user_id = _create_seed_user(client, email, display_name)
+    client.table("users").update({"handle": f"@{handle_local}"}).eq("id", user_id).execute()
 
     player_id = str(uuid4())
     client.table("players").insert(
         {
             "id": player_id,
             "user_id": user_id,
-            "handle": f"@{handle_local}",
             "display_name": display_name,
             "tagline": random.choice(CLUSTER_TAGLINES),
             "timezone": random.choice(TIMEZONES),
@@ -703,7 +703,7 @@ def _seed_cluster_pal(client, email_local: str, games: list[str], used_handles: 
     highlighted_service_id = None
     last_price = 0
     for game in games:
-        price = random.randint(60, 200)
+        price = random.randint(150, 500)
         service_id = _insert_service(
             client,
             player_id,
@@ -720,7 +720,7 @@ def _seed_cluster_pal(client, email_local: str, games: list[str], used_handles: 
         last_price = price
 
     client.table("players").update(
-        {"highlighted_service_id": highlighted_service_id, "price_per_hour": round(last_price / 50, 2)}
+        {"highlighted_service_id": highlighted_service_id, "price_per_hour": round(last_price / 2, 2)}
     ).eq("id", player_id).execute()
 
 
@@ -882,7 +882,7 @@ def expand(client) -> None:
         sys.exit(1)
 
     used_handles = {
-        p["handle"].lstrip("@") for p in client.table("players").select("handle").execute().data if p["handle"]
+        u["handle"].lstrip("@") for u in client.table("users").select("handle").execute().data if u["handle"]
     }
 
     counts = Counter(s["name"] for s in client.table("services").select("name").execute().data)

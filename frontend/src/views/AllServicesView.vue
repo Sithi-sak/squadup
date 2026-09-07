@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { PhArrowRight, PhArrowLeft, PhMagnifyingGlass } from '@phosphor-icons/vue'
 import gamesTileImage from '@/assets/game.jpg'
 import chillingTileImage from '@/assets/chilling.jpg'
@@ -52,6 +53,15 @@ function openDrawer(tab: CategoryTab) {
   gameFilter.value = 'all'
   drawerOpen.value = true
 }
+
+const route = useRoute()
+
+onMounted(() => {
+  const tab = route.query.tab
+  if (tab === 'games' || tab === 'chilling') {
+    openDrawer(tab)
+  }
+})
 
 const gameGroups = computed(() => {
   const query = search.value.trim().toLowerCase()

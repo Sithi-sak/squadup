@@ -281,10 +281,11 @@ unaffected. This surfaced 3.17 (seed script) being pulled forward — see below.
   direct user request, and is now done (3.19a-i). **4.6 (DiceBear avatars everywhere)**, **4.7
   (Suggested Pals/Explore/Trending de-mocking)**, **4.8 (eStars avatar fix)**, **4.9 (Become a Pal
   prefill)**, **4.10 (auto-generated status posts on the Feed)**, and **4.11 (Feed composer image
-  upload)** were all pulled forward on 2026-09-06 per direct user request and are now done. Next
-  up is 4.4 (Bakong KHQR integration, scope TBD) then 4.5 (final-report escrow note), after which
-  3.16 resumes.
-- **Last updated:** 2026-09-06
+  upload)** were all pulled forward on 2026-09-06 per direct user request and are now done. **4.4
+  (Bakong KHQR integration) is now done on 2026-09-07**, descoped to a simulated "Scan to Pay" demo
+  flow (4.4a-f) rather than a real Bakong integration. Next up is 4.5 (final-report escrow note),
+  after which 3.16 resumes.
+- **Last updated:** 2026-09-07
 
 ---
 
@@ -1707,9 +1708,36 @@ kind of Stripe id.
   - [x] 4.3e Verification: `ruff check` clean, `vue-tsc --build` clean, `eslint` clean apart from
         the same two pre-existing unrelated errors noted since 3.1k/4.1k
         (`StepRates.vue`/`RefundModal.vue`, untouched by this task).
-- [ ] 4.4 Bakong KHQR integration (do last — scope/complexity TBD when we get there, including
-      whether it plugs in at Wallet Top-up like Stripe or stays a Checkout-time payment method)
-      — generate QR, MVP manual payment verification
+- [x] 4.4 Bakong KHQR integration - descoped to a simulated "Scan to Pay" demo flow instead of a
+      real Bakong integration (registering for real KHQR API access wasn't worth it for a
+      classroom demo; the judge/teacher explicitly OK'd faking the automation to look like a real
+      KHQR scan-and-confirm). Plugs into Wallet Top-up next to the existing card flow.
+  - [x] 4.4a Frontend: `qrcode` + `@types/qrcode` added (`bun add`) - renders the QR entirely
+        client-side (no third-party QR image API), so nothing about the demo depends on network
+        access to an external service.
+  - [x] 4.4b Backend: `POST /wallet/topup/khqr` (`routers/wallet.py`) - creates an in-memory
+        session (not a table; only needs to survive one demo run) for the chosen package's dollar
+        amount, keyed by a UUID, holding a fake `KHQR|MERCHANT:...|AMOUNT:...|REF:...` payload.
+  - [x] 4.4c Backend: `GET /wallet/topup/khqr/{id}/status` - the session flips `pending` ->
+        `confirmed` on its own `KHQR_AUTO_CONFIRM_SECONDS` (5s) after creation, standing in for the
+        real bank webhook a live KHQR integration would wait on; `-> expired` past
+        `KHQR_SESSION_TTL_SECONDS` (120s) if the modal is left open.
+  - [x] 4.4d Backend: `POST /wallet/topup/khqr/{id}/complete` - the actual credit, only once the
+        session has reached `confirmed`, same verify-before-credit shape as 4.1d's Stripe
+        re-check. Reuses `wallet_transactions.stripe_payment_intent_id` as the idempotency key
+        (`khqr_<session_id>`) rather than adding a KHQR-specific column.
+  - [x] 4.4e Frontend: `stores/wallet.ts` gains `createKhqrSession`/`getKhqrStatus`/
+        `completeKhqrTopup`. `WalletView.vue`'s "QR Scan" dropdown item (previously a disabled
+        stub) now switches the payment method and opens a "Scan to Pay" modal showing the QR,
+        polling status every second, then auto-crediting and closing on `confirmed`.
+  - [x] 4.4f Verification: `vue-tsc --build`, `eslint`, `ruff check` all clean (the same two
+        pre-existing unrelated errors noted since 3.1k/4.1k, untouched by this task).
+  - [x] 4.4g Polish requested after seeing the plain QR-on-white-square version: new
+        `components/wallet/KhqrCard.vue` redraws `assets/KHQR_card.svg`'s card artwork (red
+        header, dashed divider, rounded body) inline as SVG - rather than laying HTML text/an
+        `<img>` over the flat asset - so the merchant name, amount, and generated QR `<image>`
+        share the same 442x622 coordinate space as the original paths and stay pixel-aligned with
+        it. Swapped in for the plain white QR box in `WalletView.vue`'s modal.
 - [ ] 4.5 Note in final report: proper escrow (user → platform → player) is a post-launch
       enhancement, not built for submission
 - [x] 4.6 DiceBear avatar integration across the app (ad-hoc UI polish, requested directly by the

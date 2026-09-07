@@ -199,6 +199,35 @@ export const useWalletStore = defineStore('wallet', () => {
     return result
   }
 
+  /** 4.4b: starts a fake KHQR "Scan to Pay" session for the chosen package - no mock fallback,
+   * same convention as `createTopupPaymentIntent`. */
+  async function createKhqrSession(packageId: string) {
+    return api.post<{ sessionId: string; qrPayload: string; amountUsd: number; expiresInSeconds: number }>(
+      '/wallet/topup/khqr',
+      { packageId },
+    )
+  }
+
+  /** 4.4c: polled while the QR modal is open until it flips to `confirmed` (or `expired`). */
+  async function getKhqrStatus(sessionId: string) {
+    return api.get<{ status: 'pending' | 'confirmed' | 'completed' | 'expired' }>(
+      `/wallet/topup/khqr/${sessionId}/status`,
+    )
+  }
+
+  /** 4.4d: the actual credit, called once `getKhqrStatus` reports `confirmed`. */
+  async function completeKhqrTopup(sessionId: string) {
+    const result = await api.post<{
+      balanceCoins: number
+      pendingClearanceCoins: number
+      activity: WalletActivity[]
+    }>(`/wallet/topup/khqr/${sessionId}/complete`)
+    balance.value = result.balanceCoins
+    pendingClearanceCoins.value = result.pendingClearanceCoins
+    activity.value = result.activity
+    return result
+  }
+
   /** Payout methods (`/wallet/payout-methods`, Pal only). Falls back to `mockPayoutMethods`. */
   async function fetchPayoutMethods() {
     payoutMethodsLoading.value = true
@@ -256,6 +285,9 @@ export const useWalletStore = defineStore('wallet', () => {
     fetchTopupPackages,
     createTopupPaymentIntent,
     confirmTopup,
+    createKhqrSession,
+    getKhqrStatus,
+    completeKhqrTopup,
     fetchPayoutMethods,
     fetchWithdrawals,
     requestWithdrawal,

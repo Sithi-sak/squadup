@@ -38,7 +38,7 @@ const spotlight = computed(
 
 const tiles = [
   { label: 'Games', to: '/players', image: gamesTileImage },
-  { label: 'Chilling', to: '/players', image: chillingTileImage },
+  { label: 'Chilling', to: { path: '/services', query: { tab: 'chilling' } }, image: chillingTileImage },
   { label: 'All Services', to: '/services', image: allServiceTileImage },
 ]
 

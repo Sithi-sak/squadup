@@ -5,6 +5,7 @@ import { PhCaretLeft, PhLightning, PhPlus, PhStar, PhTrophy, PhUserCircle, PhX }
 import coinIcon from '@/assets/squadup-coin.svg'
 import { usePlayersStore } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { games } from '@/data/games'
 
 const router = useRouter()
 const playersStore = usePlayersStore()
@@ -17,18 +18,7 @@ onMounted(() => {
 })
 
 const categoryOptions = ['Game', 'Coaching', 'Chat', 'Watch Party']
-const gameOptions = [
-  'Valorant',
-  'League of Legends',
-  'Mobile Legends: Bang Bang',
-  'Dota 2',
-  'Counter-Strike 2',
-  'Overwatch 2',
-  'Apex Legends',
-  'PUBG Mobile',
-  'Free Fire',
-  'Honor of Kings',
-]
+const gameOptions = games.map((g) => g.name)
 const unitOptions = ['/game', '/hour', '/session', '/15min']
 
 const category = ref(categoryOptions[0]!)
@@ -191,7 +181,7 @@ async function publish() {
             <div class="mt-5 grid gap-5 sm:grid-cols-2">
               <div class="flex flex-col gap-2">
                 <label for="service-category" class="text-sm font-medium text-slate-300">Category</label>
-                <USelect
+                <USelectMenu
                   id="service-category"
                   v-model="category"
                   :items="categoryOptions"
@@ -203,10 +193,11 @@ async function publish() {
               </div>
               <div class="flex flex-col gap-2">
                 <label for="service-game" class="text-sm font-medium text-slate-300">Game</label>
-                <USelect
+                <USelectMenu
                   id="service-game"
                   v-model="game"
                   :items="gameOptions"
+                  :search-input="{ placeholder: 'Search games...' }"
                   variant="subtle"
                   size="md"
                   class="w-full sm:w-auto"
@@ -288,7 +279,7 @@ async function publish() {
                   class="min-w-0 flex-1"
                   :ui="{ base: 'bg-transparent px-1 text-md font-medium text-white ring-0 focus-visible:ring-0' }"
                 />
-                <div class="flex shrink-0 items-center gap-1.5">
+                <div class="flex shrink-0 items-center gap-2">
                   <img :src="coinIcon" alt="" class="h-4 w-4" />
                   <UInputNumber
                     v-model="row.priceCoins"
@@ -296,8 +287,8 @@ async function publish() {
                     placeholder="0"
                     variant="subtle"
                     size="md"
-                    class="w-20"
-                    :ui="{ base: 'bg-transparent px-1 text-right text-sm ring-0 focus-visible:ring-0' }"
+                    class="w-36"
+                    :ui="{ base: 'bg-transparent text-center text-sm ring-0 focus-visible:ring-0' }"
                   />
                 </div>
                 <USelect
@@ -352,8 +343,8 @@ async function publish() {
                     :max="90"
                     size="sm"
                     variant="subtle"
-                    class="w-16"
-                    :ui="{ base: 'bg-gray-800/70 px-2 text-right text-sm ring-0' }"
+                    class="w-28"
+                    :ui="{ base: 'bg-gray-800/70 text-center text-sm ring-0' }"
                   />
                   <USwitch v-model="percentageDiscount" color="primary" />
                 </div>

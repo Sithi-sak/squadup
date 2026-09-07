@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import stripe
@@ -14,6 +15,14 @@ router = APIRouter(prefix="/wallet", tags=["wallet"])
 # Matches `mocks/wallet.ts`'s `mockWithdrawalPlatformFeePct`, applied on the backend side too
 # since the frontend's fee preview must match what a real withdrawal actually charges.
 WITHDRAWAL_FEE_PCT = 10
+
+# 4.4: registering for real Bakong KHQR access is out of scope for this project, so "QR Scan"
+# simulates the KHQR UX instead - a session auto-confirms itself after KHQR_AUTO_CONFIRM_SECONDS
+# rather than waiting on a real bank webhook, standing in for the judge/phone "scanning" it. State
+# only needs to survive one demo session, so an in-memory dict (not a table) is enough.
+KHQR_AUTO_CONFIRM_SECONDS = 5
+KHQR_SESSION_TTL_SECONDS = 120
+_khqr_sessions: dict[str, dict] = {}
 
 
 # Schemas ---------------------------------------------------------------------------------
@@ -55,6 +64,17 @@ class TopupPaymentIntentOut(CamelModel):
 class TopupIn(CamelModel):
     package_id: str
     payment_intent_id: str
+
+
+class KhqrSessionOut(CamelModel):
+    session_id: str
+    qr_payload: str
+    amount_usd: float
+    expires_in_seconds: int
+
+
+class KhqrStatusOut(CamelModel):
+    status: str
 
 
 class PayoutMethodOut(CamelModel):
@@ -239,6 +259,93 @@ def top_up(payload: TopupIn, user_id: str = Depends(get_current_user_id)) -> dic
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This payment has already been used") from exc
 
     client.table("users").update({"coin_balance": user.data["coin_balance"] + coins}).eq("id", user_id).execute()
+
+    return _get_wallet(user_id)
+
+
+@router.post("/topup/khqr", response_model=KhqrSessionOut, status_code=status.HTTP_201_CREATED)
+def create_khqr_session(payload: TopupPaymentIntentIn, user_id: str = Depends(get_current_user_id)) -> dict:
+    """4.4b: fake KHQR "Scan to Pay" session for the chosen package - no Stripe/Bakong call at
+    all, just a timer the frontend polls via `GET /topup/khqr/{id}/status`."""
+    client = get_supabase_client()
+    package = client.table("topup_packages").select("*").eq("id", payload.package_id).maybe_single().execute()
+    if not package or not package.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Top-up package not found")
+
+    now = datetime.now(UTC)
+    session_id = str(uuid4())
+    _khqr_sessions[session_id] = {
+        "user_id": user_id,
+        "amount_usd": package.data["price_usd"],
+        "coins": package.data["coins"] + package.data["bonus_coins"],
+        "status": "pending",
+        "confirm_at": now + timedelta(seconds=KHQR_AUTO_CONFIRM_SECONDS),
+        "expires_at": now + timedelta(seconds=KHQR_SESSION_TTL_SECONDS),
+    }
+    # Short and low-entropy on purpose - `session_id` already carries the real reference for the
+    # status/complete calls, this string only needs to look plausible in the rendered QR. A long
+    # payload (e.g. a full UUID) forces a higher QR version, i.e. a denser grid of small modules;
+    # keeping this short lets the frontend pin a low version for a bigger-block look.
+    qr_payload = f"KHQR|SquadUp|{package.data['price_usd']:.2f}|{session_id[:8]}"
+    return {
+        "session_id": session_id,
+        "qr_payload": qr_payload,
+        "amount_usd": package.data["price_usd"],
+        "expires_in_seconds": KHQR_SESSION_TTL_SECONDS,
+    }
+
+
+@router.get("/topup/khqr/{session_id}/status", response_model=KhqrStatusOut)
+def get_khqr_status(session_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
+    """4.4c: the frontend polls this while the QR modal is open. Flips `pending` -> `confirmed`
+    once `confirm_at` has passed - standing in for the bank webhook a real KHQR integration would
+    wait on - or -> `expired` if nobody "scanned" it in time."""
+    session = _khqr_sessions.get(session_id)
+    if not session or session["user_id"] != user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "KHQR session not found")
+
+    now = datetime.now(UTC)
+    if session["status"] == "pending" and now >= session["expires_at"]:
+        session["status"] = "expired"
+    elif session["status"] == "pending" and now >= session["confirm_at"]:
+        session["status"] = "confirmed"
+    return {"status": session["status"]}
+
+
+@router.post("/topup/khqr/{session_id}/complete", response_model=WalletOut, status_code=status.HTTP_201_CREATED)
+def complete_khqr_topup(session_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
+    """4.4d: the actual credit, only once the session has reached `confirmed` - same
+    verify-before-credit shape as `top_up`'s Stripe re-check, just against our own fake session
+    state instead of Stripe's API. `stripe_payment_intent_id` doubles as the idempotency key here
+    too (`khqr_<session_id>`, still unique) rather than adding a KHQR-specific column."""
+    session = _khqr_sessions.get(session_id)
+    if not session or session["user_id"] != user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "KHQR session not found")
+    if session["status"] != "confirmed":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment has not been confirmed yet")
+
+    client = get_supabase_client()
+    user = client.table("users").select("coin_balance").eq("id", user_id).maybe_single().execute()
+    if not user or not user.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    try:
+        _record_transaction(
+            client,
+            user_id,
+            kind="topup",
+            label="Top-up",
+            detail="KHQR",
+            coins=session["coins"],
+            stripe_payment_intent_id=f"khqr_{session_id}",
+        )
+    except Exception as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This payment has already been used") from exc
+
+    client.table("users").update({"coin_balance": user.data["coin_balance"] + session["coins"]}).eq(
+        "id", user_id
+    ).execute()
+    del _khqr_sessions[session_id]
 
     return _get_wallet(user_id)
 

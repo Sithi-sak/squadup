@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import type { Stripe, StripeCardElement, StripeElements } from '@stripe/stripe-js'
+import QRCode from 'qrcode'
 import {
   PhArrowUp,
   PhArrowDown,
@@ -11,8 +12,12 @@ import {
   PhProhibit,
   PhCreditCard,
   PhCaretDown,
+  PhQrCode,
+  PhSpinnerGap,
+  PhCheckCircle,
 } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
+import KhqrCard from '@/components/wallet/KhqrCard.vue'
 import { stripePromise } from '@/lib/stripe'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore, type WalletActivity } from '@/stores/wallet'
@@ -32,7 +37,10 @@ onMounted(() => {
   walletStore.fetchTopupPackages()
   loadStripe()
 })
-onBeforeUnmount(() => cardElement?.unmount())
+onBeforeUnmount(() => {
+  cardElement?.unmount()
+  stopKhqrPolling()
+})
 
 const balance = computed(() => walletStore.balance)
 const usdBalance = computed(() => (balance.value / COINS_PER_USD).toFixed(2))
@@ -42,9 +50,17 @@ function scrollToPayment() {
   paymentSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-// Only 'card' actually charges anything right now - the dropdown exists so a future QR/PromptPay
-// method can slot in next to it without reworking this row.
-const paymentMethodItems = [[{ label: 'Card' }, { label: 'QR Scan', disabled: true }]]
+// 4.4a: "QR Scan" simulates a KHQR-style "Scan to Pay" flow (see `startKhqrTopup` below) rather
+// than a real Bakong integration, which is out of scope for this project.
+const paymentMethod = ref<'card' | 'khqr'>('card')
+const paymentMethodItems = [
+  [
+    { label: 'Card', onSelect: () => (paymentMethod.value = 'card') },
+    { label: 'QR Scan', onSelect: () => (paymentMethod.value = 'khqr') },
+  ],
+]
+const paymentMethodLabel = computed(() => (paymentMethod.value === 'card' ? 'Card' : 'QR Scan'))
+const paymentMethodIcon = computed(() => (paymentMethod.value === 'card' ? PhCreditCard : PhQrCode))
 
 const selectedPackageId = ref<string | null>(null)
 const basePackageId = computed(
@@ -150,8 +166,87 @@ async function topUp(packageId: string | null) {
   }
 }
 
+// 4.4: simulated KHQR "Scan to Pay" - the QR encodes a fake session reference (no real Bakong
+// call), and the backend auto-confirms it a few seconds after creation, standing in for a judge
+// actually scanning it with a banking app. Polling (not a websocket) matches how a real KHQR
+// checkout waits on a bank webhook, just against our own fake session status instead.
+const khqrModalOpen = ref(false)
+const khqrQrDataUrl = ref<string | null>(null)
+const khqrAmount = ref(0)
+const khqrStatus = ref<'pending' | 'confirmed' | 'completed' | 'expired'>('pending')
+let khqrSessionId: string | null = null
+let khqrPollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopKhqrPolling() {
+  if (khqrPollTimer) {
+    clearInterval(khqrPollTimer)
+    khqrPollTimer = null
+  }
+}
+
+async function pollKhqrStatus() {
+  if (!khqrSessionId) return
+  const { status: s } = await walletStore.getKhqrStatus(khqrSessionId)
+  khqrStatus.value = s
+
+  if (s === 'confirmed') {
+    stopKhqrPolling()
+    try {
+      await walletStore.completeKhqrTopup(khqrSessionId)
+      khqrStatus.value = 'completed'
+      toast.add({ title: 'Top-up successful', description: 'Squad Coin added to your wallet.', color: 'success' })
+      setTimeout(() => (khqrModalOpen.value = false), 1200)
+    } catch (err) {
+      toast.add({
+        title: "Couldn't complete top-up",
+        description: err instanceof Error ? err.message : 'Please try again.',
+        color: 'error',
+      })
+      khqrModalOpen.value = false
+    }
+  } else if (s === 'expired') {
+    stopKhqrPolling()
+    toast.add({ title: 'QR code expired', description: 'Please try again.', color: 'error' })
+    khqrModalOpen.value = false
+  }
+}
+
+async function startKhqrTopup(packageId: string | null) {
+  if (!packageId || toppingUp.value) return
+
+  toppingUp.value = true
+  try {
+    const session = await walletStore.createKhqrSession(packageId)
+    khqrSessionId = session.sessionId
+    khqrAmount.value = session.amountUsd
+    khqrStatus.value = 'pending'
+    // `errorCorrectionLevel: 'L'` (least redundancy) plus the backend's short payload keep this
+    // at the QR spec's lowest version - fewer, bigger modules ("blockier") rather than the dense
+    // fine-grained grid a longer/higher-redundancy payload would force at the same pixel size.
+    khqrQrDataUrl.value = await QRCode.toDataURL(session.qrPayload, {
+      margin: 1,
+      width: 300,
+      errorCorrectionLevel: 'L',
+    })
+    khqrModalOpen.value = true
+
+    stopKhqrPolling()
+    khqrPollTimer = setInterval(pollKhqrStatus, 1000)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't start QR payment",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    toppingUp.value = false
+  }
+}
+
 function confirmTopUp() {
-  topUp(selectedPackageId.value ?? basePackageId.value)
+  const packageId = selectedPackageId.value ?? basePackageId.value
+  if (paymentMethod.value === 'khqr') startKhqrTopup(packageId)
+  else topUp(packageId)
 }
 
 // `?topup=cancelled` isn't a real routable state here (there's no redirect anymore, the card
@@ -262,16 +357,21 @@ if (route.query.topup === 'cancelled') {
               type="button"
               class="flex items-center gap-1.5 rounded-full bg-white/5 px-3.5 py-1.5 text-sm font-medium text-white ring-1 ring-inset ring-white/10 hover:bg-white/10"
             >
-              <PhCreditCard :size="16" />
-              Card
+              <component :is="paymentMethodIcon" :size="16" />
+              {{ paymentMethodLabel }}
               <PhCaretDown :size="12" class="text-slate-400" />
             </button>
           </UDropdownMenu>
 
-          <p v-if="stripeLoadFailed" class="text-xs text-red-400">
-            Couldn't load the payment form. Check your connection and reload the page.
+          <template v-if="paymentMethod === 'card'">
+            <p v-if="stripeLoadFailed" class="text-xs text-red-400">
+              Couldn't load the payment form. Check your connection and reload the page.
+            </p>
+            <div v-else ref="cardElementRef" class="min-w-56 flex-1 rounded-full bg-white/5 px-4 py-2 ring-1 ring-inset ring-white/10" />
+          </template>
+          <p v-else class="min-w-56 flex-1 text-sm text-slate-400">
+            You'll scan a QR code to confirm this payment on the next step.
           </p>
-          <div v-else ref="cardElementRef" class="min-w-56 flex-1 rounded-full bg-white/5 px-4 py-2 ring-1 ring-inset ring-white/10" />
 
           <UButton
             color="primary"
@@ -283,8 +383,26 @@ if (route.query.topup === 'cancelled') {
             Confirm Top-Up
           </UButton>
         </div>
-        <p v-if="cardError" class="mt-2 text-xs text-red-400">{{ cardError }}</p>
+        <p v-if="paymentMethod === 'card' && cardError" class="mt-2 text-xs text-red-400">{{ cardError }}</p>
       </div>
+
+      <UModal v-model:open="khqrModalOpen" title="Scan to Pay" description="KHQR" :ui="{ content: 'max-w-sm rounded-3xl' }">
+        <template #body>
+          <div class="flex flex-col items-center gap-4 py-2">
+            <KhqrCard :amount-usd="khqrAmount" :qr-data-url="khqrQrDataUrl" />
+            <div class="flex items-center gap-2 text-sm text-slate-400">
+              <template v-if="khqrStatus === 'completed'">
+                <PhCheckCircle :size="18" weight="fill" class="text-brand-400" />
+                Payment successful
+              </template>
+              <template v-else>
+                <PhSpinnerGap :size="18" class="animate-spin" />
+                {{ khqrStatus === 'confirmed' ? 'Confirming payment…' : 'Waiting for confirmation on your banking app…' }}
+              </template>
+            </div>
+          </div>
+        </template>
+      </UModal>
 
       <div class="rounded-xl bg-gray-800/70 p-5">
         <h2 class="text-lg font-semibold text-white">Recent activity</h2>

@@ -9,20 +9,18 @@ const emit = defineEmits<{ continue: []; back: [] }>()
 
 const frontFileInput = ref<HTMLInputElement | null>(null)
 const backFileInput = ref<HTMLInputElement | null>(null)
+const selfieFileInput = ref<HTMLInputElement | null>(null)
 
-function openFilePicker(side: 'front' | 'back') {
-  ;(side === 'front' ? frontFileInput : backFileInput).value?.click()
+function openFilePicker(side: 'front' | 'back' | 'selfie') {
+  ;(side === 'front' ? frontFileInput : side === 'back' ? backFileInput : selfieFileInput).value?.click()
 }
 
-function onFileSelected(event: Event, side: 'front' | 'back') {
+function onFileSelected(event: Event, side: 'front' | 'back' | 'selfie') {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
   if (side === 'front') data.value.idFrontFile = file
-  else data.value.idBackFile = file
-}
-
-function toggleSelfie() {
-  data.value.selfieVerified = !data.value.selfieVerified
+  else if (side === 'back') data.value.idBackFile = file
+  else data.value.selfieFile = file
 }
 
 const payoutScheduleOptions: { label: string; value: PayoutSchedule }[] = [
@@ -125,16 +123,37 @@ const canSubmit = computed(() => data.value.idFrontFile !== null)
       <button
         type="button"
         class="flex cursor-pointer items-center justify-between gap-4 rounded-xl bg-gray-800/70 px-6 py-4 text-left"
-        @click="toggleSelfie"
+        @click="openFilePicker('selfie')"
       >
         <div>
           <p class="text-sm font-medium text-white">Take a selfie holding your ID</p>
-          <p class="text-sm text-slate-400">Used only to confirm it is really you.</p>
+          <p class="text-sm text-slate-400">
+            {{ data.selfieFile?.name ?? 'Used only to confirm it is really you.' }}
+          </p>
         </div>
-        <UBadge :color="data.selfieVerified ? 'success' : 'warning'" variant="subtle" class="rounded-full">
-          {{ data.selfieVerified ? 'Verified' : 'Pending' }}
+        <UBadge v-if="data.selfieFile" color="success" variant="subtle" class="shrink-0 rounded-full">
+          <PhCheck :size="14" weight="bold" />
+          Uploaded
         </UBadge>
+        <UButton
+          v-else
+          color="primary"
+          variant="soft"
+          size="sm"
+          class="shrink-0 rounded-full"
+          @click.stop="openFilePicker('selfie')"
+        >
+          <PhArrowUp :size="14" weight="bold" />
+          Upload
+        </UButton>
       </button>
+      <input
+        ref="selfieFileInput"
+        type="file"
+        accept="image/png,image/jpeg"
+        class="hidden"
+        @change="onFileSelected($event, 'selfie')"
+      />
     </div>
 
     <div class="flex flex-col gap-3">

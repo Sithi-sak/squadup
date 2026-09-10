@@ -101,7 +101,7 @@ export type PayoutSchedule = 'weekly' | 'bi-weekly' | 'monthly'
 export interface VerifyStepData {
   idFrontFile: File | null
   idBackFile: File | null
-  selfieVerified: boolean
+  selfieFile: File | null
   payoutSchedule: PayoutSchedule
 }
 
@@ -109,7 +109,7 @@ export function createVerifyStepData(): VerifyStepData {
   return {
     idFrontFile: null,
     idBackFile: null,
-    selfieVerified: false,
+    selfieFile: null,
     payoutSchedule: 'weekly',
   }
 }

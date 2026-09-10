@@ -82,7 +82,7 @@ function toggleLike() {
       >
         <UAvatar
           :src="resolveAvatarUrl(props.authorId ?? props.author, props.avatarUrl)"
-          :size="isStatus ? 'sm' : 'md'"
+          :size="isStatus ? 'lg' : 'xl'"
           class="shrink-0 bg-white/10 text-slate-300"
         >
           <PhUserCircle :size="isStatus ? 16 : 20" />
@@ -94,40 +94,40 @@ function toggleLike() {
               :class="[isStatus && 'text-sm', profileRoute && 'hover:underline']"
               >{{ author }}</span
             >
-            <UBadge v-if="tier" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">{{ tier }}</UBadge>
+            <UBadge v-if="tier" color="neutral" variant="soft" size="sm" class="rounded-full text-sm">{{ tier }}</UBadge>
           </div>
-          <p class="text-xs text-slate-400">{{ handle ? `${handle} · ` : '' }}{{ timeAgo }}</p>
+          <p class="text-sm text-slate-400">{{ handle ? `${handle} · ` : '' }}{{ timeAgo }}</p>
         </div>
       </component>
       <slot name="action" />
     </div>
 
-    <p class="mt-3 text-sm leading-relaxed" :class="isStatus ? 'text-slate-300' : 'text-slate-200'">{{ text }}</p>
+    <p class="mt-3 text-md leading-relaxed" :class="isStatus ? 'text-slate-300' : 'text-slate-200'">{{ text }}</p>
 
     <img
       v-if="imageUrl"
       :src="imageUrl"
       alt=""
-      class="mt-3 aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
+      class="mt-3 aspect-video w-full rounded-lg object-contain ring-1 ring-inset ring-white/10"
     />
     <div v-else-if="hasImage" class="mt-3 aspect-video w-full rounded-lg bg-white/5 ring-1 ring-inset ring-white/10" />
 
-    <div v-if="!isStatus" class="mt-3 flex items-center gap-4 text-sm text-slate-400">
+    <div v-if="!isStatus" class="mt-3 flex items-center gap-4 text-md text-slate-400">
       <button
         type="button"
         class="flex items-center gap-1.5 transition-colors hover:text-white"
         :class="isLiked && 'text-brand-400'"
         @click="toggleLike"
       >
-        <PhHeart :size="18" :weight="isLiked ? 'fill' : 'regular'" />
+        <PhHeart :size="24" :weight="isLiked ? 'fill' : 'regular'" />
         {{ displayLikes }}
       </button>
       <button type="button" class="flex items-center gap-1.5 transition-colors hover:text-white" @click="emit('open-comments')">
-        <PhChatCircle :size="18" />
+        <PhChatCircle :size="24" />
         {{ comments }}
       </button>
       <button type="button" class="ml-auto text-slate-400 transition-colors hover:text-white" aria-label="Share">
-        <PhShareFat :size="18" />
+        <PhShareFat :size="24" />
       </button>
     </div>
     <div v-else class="mt-2 flex items-center gap-4 text-sm text-slate-400">

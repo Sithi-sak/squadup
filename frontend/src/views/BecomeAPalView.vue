@@ -72,7 +72,7 @@ function goToApplication() {
       <p class="mt-3 text-sm font-medium text-white/90 md:text-base">
         High income · Flexible · Make Friends
       </p>
-      <UButton color="neutral" variant="solid"
+      <UButton color="neutral" variant="solid" size="xl"
         class="mt-6 rounded-full bg-squadup-dark px-6 text-white hover:bg-squadup-dark/80" @click="goToApplication">
         Apply for Free
       </UButton>

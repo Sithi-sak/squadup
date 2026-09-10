@@ -124,13 +124,12 @@ const filteredChillingSections = computed(() => {
             v-for="tile in categoryTiles"
             :key="tile.label"
             type="button"
-            class="relative flex h-28 items-center justify-between overflow-hidden rounded-xl bg-cover bg-center px-6 py-4 text-left md:h-36"
+            class="relative flex h-28 items-center justify-center overflow-hidden rounded-xl bg-cover bg-center px-6 py-4 text-center md:h-36"
             :style="{ backgroundImage: `url(${tile.image})` }"
             @click="openDrawer(tile.tab)"
           >
             <div class="absolute inset-0 bg-squadup-dark/60 transition-colors hover:bg-squadup-dark/20" />
             <span class="relative text-lg font-semibold text-white">{{ tile.label }}</span>
-            <PhArrowRight :size="20" class="relative text-white" weight="bold" />
           </button>
         </div>
 

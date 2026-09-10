@@ -18,9 +18,9 @@ function formatCount(count: number) {
     :to="`/players/${player.id}`"
     class="flex flex-col gap-3 rounded-xl bg-gray-800/70 p-4 transition-colors hover:bg-gray-800"
   >
-    <div class="flex items-center gap-2.5">
+    <div class="flex items-center gap-4">
       <div class="relative shrink-0">
-        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="lg" class="bg-white/10 text-slate-300">
+        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="3xl" class="bg-white/10 text-slate-300">
           <PhUserCircle :size="26" />
         </UAvatar>
         <span
@@ -50,10 +50,10 @@ function formatCount(count: number) {
     </div>
 
     <div class="flex flex-wrap gap-1.5">
-      <UBadge v-if="player.rank" color="neutral" variant="soft" size="sm" class="rounded-full">
+      <UBadge v-if="player.rank" color="neutral" variant="soft" size="md" class="rounded-full">
         {{ player.rank }}
       </UBadge>
-      <UBadge v-if="player.role" color="neutral" variant="soft" size="sm" class="rounded-full">
+      <UBadge v-if="player.role" color="neutral" variant="soft" size="md" class="rounded-full">
         {{ player.role }}
       </UBadge>
     </div>
@@ -65,14 +65,14 @@ function formatCount(count: number) {
         v-if="player.promoBadge"
         color="primary"
         variant="solid"
-        size="sm"
+        size="lg"
         class="rounded-full"
       >
         {{ player.promoBadge }}
       </UBadge>
       <span v-else />
-      <span v-if="player.priceCoins" class="inline-flex items-center gap-1 text-sm font-semibold text-white">
-        <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
+      <span v-if="player.priceCoins" class="inline-flex items-center gap-2 text-sm font-semibold text-white">
+        <img :src="coinIcon" alt="" class="h-6 w-6" />
         {{ player.priceCoins }}/Game
       </span>
     </div>

@@ -97,10 +97,10 @@ async function handleSubmit() {
 <template>
   <div class="min-h-screen bg-squadup-dark">
     <header class="border-b border-gray-800 px-6 py-5">
-      <div class="mx-auto flex max-w-5xl items-center justify-between">
+      <div class="mx-auto flex max-w-(--content-max-width) items-center justify-between">
         <router-link to="/home" class="flex items-center gap-2">
-          <img :src="brandLogo" alt="SquadUp" class="h-6 w-auto" />
-          <span class="text-sm text-slate-400">· Pal Application</span>
+          <img :src="brandLogo" alt="SquadUp" class="h-8 w-auto" />
+          <span class="text-md text-slate-400">· Pal Application</span>
         </router-link>
         <UButton
           v-if="!submitted"
@@ -116,7 +116,7 @@ async function handleSubmit() {
       </div>
     </header>
 
-    <div class="mx-auto max-w-5xl px-6 py-5">
+    <div class="mx-auto max-w-4/5 px-6 py-5">
       <StepSuccess v-if="submitted" :display-name="accountData.displayName" :email="accountData.email" />
 
       <template v-else>

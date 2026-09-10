@@ -126,11 +126,11 @@ function goToProfile(id: string) {
           v-for="tile in tiles"
           :key="tile.label"
           :to="tile.to"
-          class="relative flex h-24 items-center justify-between overflow-hidden rounded-xl bg-cover bg-center px-5 py-4"
+          class="relative flex h-24 items-center justify-center overflow-hidden rounded-xl bg-cover bg-center px-5 py-4"
           :style="{ backgroundImage: `url(${tile.image})` }"
         >
           <div class="absolute inset-0 bg-squadup-dark/60 hover:bg-squadup-dark/20 transition-colors" />
-          <span class="relative font-semibold text-white">{{ tile.label }}</span>
+          <span class="relative text-lg font-semibold text-white">{{ tile.label }}</span>
         </router-link>
       </div>
     </section>
@@ -223,7 +223,7 @@ function goToProfile(id: string) {
             <UAvatar
               :src="resolveAvatarUrl(player.id, player.avatarUrl)"
               size="3xl"
-              class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60 size-14"
+              class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60 size-20"
             >
               <PhUserCircle :size="32" />
             </UAvatar>
@@ -275,16 +275,16 @@ function goToProfile(id: string) {
                 <PhUserCircle :size="22" />
               </UAvatar>
               <div class="min-w-0">
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-2">
                   <span class="truncate font-semibold text-white">{{ player.displayName }}</span>
                   <PhTrophy
                     v-if="(player.rating ?? 0) >= 4.8"
-                    :size="14"
+                    :size="20"
                     weight="fill"
                     class="shrink-0 text-amber-400"
                   />
                 </div>
-                <p class="inline-flex items-center gap-1 text-xs text-slate-400">
+                <p class="inline-flex items-center gap-1 text-sm text-slate-400">
                   <PhStar :size="16" weight="fill" class="text-amber-400" />
                   {{ player.rating ?? '—' }}
                 </p>

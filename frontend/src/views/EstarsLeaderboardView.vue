@@ -103,7 +103,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
           :key="period"
           :color="activePeriod === period ? 'primary' : 'neutral'"
           :variant="activePeriod === period ? 'solid' : 'soft'"
-          size="sm"
+          size="md"
           class="rounded-full"
           @click="activePeriod = period"
         >
@@ -167,7 +167,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
             <UAvatar
               :src="resolveAvatarUrl(entry.id, entry.avatarUrl)"
               :size="tierMeta[entry.rank as 1 | 2 | 3].avatarSize"
-              class="bg-white/10 text-slate-300"
+              class="bg-white/10 text-slate-300 size-20"
             >
               <PhUserCircle :size="36" />
             </UAvatar>

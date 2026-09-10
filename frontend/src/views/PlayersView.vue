@@ -173,7 +173,7 @@ function formatCount(count: number) {
               v-if="chip.predicate"
               :color="activeChips.has(chip.key) ? 'primary' : 'neutral'"
               :variant="activeChips.has(chip.key) ? 'solid' : 'soft'"
-              size="sm"
+              size="md"
               class="rounded-full"
               @click="toggleChip(chip)"
             >
@@ -189,7 +189,7 @@ function formatCount(count: number) {
           <USelect
             v-model="sortBy"
             :items="sortOptions"
-            size="sm"
+            size="md"
             variant="subtle"
             class="w-44"
             :ui="{ base: 'rounded-full' }"

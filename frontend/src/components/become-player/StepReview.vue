@@ -100,7 +100,7 @@ const reviewSections = computed(() => [
   {
     stepId: 4,
     title: 'Verify & payout',
-    line1: `ID ${props.verifyData.idFrontFile ? 'verified' : 'not uploaded'} · Selfie ${props.verifyData.selfieVerified ? 'verified' : 'pending review'}`,
+    line1: `ID ${props.verifyData.idFrontFile ? 'verified' : 'not uploaded'} · Selfie ${props.verifyData.selfieFile ? 'uploaded' : 'not uploaded'}`,
     line2: `${payoutScheduleLabel.value} payout · connect a payout method after approval`,
   },
 ])

@@ -131,7 +131,6 @@ function goToProfile(id: string) {
         >
           <div class="absolute inset-0 bg-squadup-dark/60 hover:bg-squadup-dark/20 transition-colors" />
           <span class="relative font-semibold text-white">{{ tile.label }}</span>
-          <PhArrowRight :size="18" class="relative text-white" weight="bold" />
         </router-link>
       </div>
     </section>
@@ -223,14 +222,14 @@ function goToProfile(id: string) {
           >
             <UAvatar
               :src="resolveAvatarUrl(player.id, player.avatarUrl)"
-              size="2xl"
-              class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60"
+              size="3xl"
+              class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60 size-14"
             >
               <PhUserCircle :size="32" />
             </UAvatar>
             <div>
               <p class="font-semibold text-white">{{ player.displayName }}</p>
-              <p class="text-xs text-slate-400">{{ player.games[0] }} · {{ player.rating ?? '—' }}</p>
+              <p class="text-sm text-slate-400">{{ player.games[0] }} · {{ player.rating ?? '—' }}</p>
             </div>
           </button>
         </div>
@@ -286,26 +285,26 @@ function goToProfile(id: string) {
                   />
                 </div>
                 <p class="inline-flex items-center gap-1 text-xs text-slate-400">
-                  <PhStar :size="12" weight="fill" class="text-amber-400" />
+                  <PhStar :size="16" weight="fill" class="text-amber-400" />
                   {{ player.rating ?? '—' }}
                 </p>
               </div>
             </div>
             <div class="flex flex-wrap gap-1.5">
-              <UBadge v-if="player.rank" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">
+              <UBadge v-if="player.rank" color="neutral" variant="soft" size="md" class="rounded-full text-xs">
                 {{ player.rank }}
               </UBadge>
-              <UBadge v-if="player.role" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">
+              <UBadge v-if="player.role" color="neutral" variant="soft" size="md" class="rounded-full text-xs">
                 {{ player.role }}
               </UBadge>
             </div>
             <div class="mt-auto flex items-center justify-between pt-1">
-              <span class="inline-flex items-center gap-1 text-sm font-semibold text-white">
-                <img :src="coinIcon" alt="" class="h-3.5 w-3.5" />
+              <span class="inline-flex items-center gap-2 text-md font-semibold text-white">
+                <img :src="coinIcon" alt="" class="h-6 w-6" />
                 {{ player.pricePerHour ?? '—' }}/hr
               </span>
               <UButton
-                size="sm"
+                size="md"
                 variant="solid"
                 class="rounded-full"
                 @click="router.push(`/players/${player.id}`)"

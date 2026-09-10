@@ -52,7 +52,7 @@ const bottomLinks: FooterLink[] = [
           <img :src="brandLogo" alt="SquadUp" class="h-[26px] w-auto" />
         </router-link>
         <p class="mt-3 max-w-80 text-sm leading-relaxed">
-          Team up, make friends, and have fun. A gateway to gamers everywhere — never battle
+          Team up, make friends, and have fun. A gateway to gamers everywhere, never battle
           alone.
         </p>
       </div>

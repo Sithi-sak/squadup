@@ -15,11 +15,11 @@ const router = useRouter()
       style="background: linear-gradient(160deg, #10b981 0%, #047857 100%)"
     >
       <router-link to="/" class="relative z-10 flex items-center">
-        <img :src="brandLogo" alt="SquadUp" class="h-[26px] w-auto" />
+        <img :src="brandLogo" alt="SquadUp" class="h-8 w-auto" />
       </router-link>
 
       <h1
-        class="relative z-10 mt-16 max-w-lg text-4xl leading-[1.1] font-extrabold text-white italic lg:text-5xl"
+        class="relative z-10 mt-16 max-w-lg text-3xl leading-[1.1] font-extrabold text-white italic lg:text-4xl"
       >
         Never Walk Alone
       </h1>

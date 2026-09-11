@@ -70,7 +70,7 @@ function toggleLike() {
 <template>
   <article
     class="rounded-xl p-4"
-    :class="isStatus ? 'bg-gray-800/40 ring-1 ring-inset ring-white/5' : 'bg-gray-800/70'"
+    :class="isStatus ? 'bg-gray-800/40 ring-1 ring-inset ring-white/5' : 'bg-gray-800/50'"
   >
     <div class="flex items-start justify-between gap-3">
       <component
@@ -108,7 +108,7 @@ function toggleLike() {
       v-if="imageUrl"
       :src="imageUrl"
       alt=""
-      class="mt-3 aspect-video w-full rounded-lg object-contain ring-1 ring-inset ring-white/10"
+      class="mt-3 aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
     />
     <div v-else-if="hasImage" class="mt-3 aspect-video w-full rounded-lg bg-white/5 ring-1 ring-inset ring-white/10" />
 

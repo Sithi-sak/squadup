@@ -72,7 +72,7 @@ function formatCount(count: number) {
       </UBadge>
       <span v-else />
       <span v-if="player.priceCoins" class="inline-flex items-center gap-2 text-sm font-semibold text-white">
-        <img :src="coinIcon" alt="" class="h-6 w-6" />
+        <img :src="coinIcon" alt="" class="h-5 w-5" />
         {{ player.priceCoins }}/Game
       </span>
     </div>

@@ -81,7 +81,7 @@ function confirmBlock() {
   <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="flex items-start gap-4">
       <div class="relative shrink-0">
-        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="3xl" class="bg-white/10 text-slate-300">
+        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="3xl" class="bg-white/10 text-slate-300 size-24">
           <PhUserCircle :size="40" />
         </UAvatar>
         <span
@@ -95,11 +95,11 @@ function confirmBlock() {
           {{ profile.handle }} · {{ profile.timezone }} · {{ profile.language }}
         </p>
         <div class="mt-3 flex flex-wrap items-center gap-2">
-          <UBadge v-if="player.online" color="primary" variant="primary" size="sm" class="rounded-full text-xs">
+          <UBadge v-if="player.online" color="primary" variant="primary" size="md" class="rounded-full text-sm">
             <span class="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-brand-400" />
             Online
           </UBadge>
-          <UBadge color="neutral" variant="soft" size="sm" class="rounded-full text-xs">{{ profile.tier }}</UBadge>
+          <UBadge color="neutral" variant="soft" size="md" class="rounded-full text-sm">{{ profile.tier }}</UBadge>
           <UBadge
             v-if="profile.highlightBadge"
             color="neutral"
@@ -122,7 +122,7 @@ function confirmBlock() {
           :ui="{ base: 'rounded-full' }"
           aria-label="More options"
         >
-          <PhDotsThree :size="18" weight="bold" />
+          <PhDotsThree :size="24" weight="regular" />
         </UButton>
       </UDropdownMenu>
       <UButton
@@ -133,7 +133,7 @@ function confirmBlock() {
         aria-label="Copy username"
         @click="copyUsername"
       >
-        <PhCopy :size="18" weight="bold" />
+        <PhCopy :size="24" weight="regular" />
       </UButton>
       <UButton
         v-if="profile.userId ?? player.userId"

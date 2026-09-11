@@ -59,7 +59,7 @@ async function toggleLike(post: FeedPost) {
           :key="filter.key"
           :color="activeFilter === filter.key ? 'primary' : 'neutral'"
           :variant="activeFilter === filter.key ? 'solid' : 'soft'"
-          size="sm"
+          size="md"
           class="rounded-full"
           @click="activeFilter = filter.key"
         >

@@ -93,7 +93,7 @@ async function handleMessage() {
     </div>
 
     <div class="flex flex-col gap-4">
-      <div class="aspect-video w-full rounded-xl bg-white/5 ring-1 ring-inset ring-white/10" />
+      <div class="aspect-video w-full rounded-xl bg-white/5" />
 
       <div class="rounded-xl bg-gray-800/70 p-4">
         <UButton

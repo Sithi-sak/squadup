@@ -222,7 +222,6 @@ function goToProfile(id: string) {
           >
             <UAvatar
               :src="resolveAvatarUrl(player.id, player.avatarUrl)"
-              size="3xl"
               class="bg-squadup-bg text-brand-300 ring-2 ring-brand-300/60 size-20"
             >
               <PhUserCircle :size="32" />

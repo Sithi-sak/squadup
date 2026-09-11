@@ -77,7 +77,7 @@ async function follow(pal: PlayerSummary) {
       </div>
     </div>
 
-    <div v-else-if="playersStore.suggested.length" class="rounded-xl bg-gray-800/70 p-5">
+    <div v-else-if="playersStore.suggested.length" class="rounded-xl bg-gray-800/50 p-5">
       <div class="flex items-center justify-between">
         <h3 class="font-semibold text-white">Suggested Pals</h3>
         <router-link to="/players" class="text-sm text-brand-400 hover:text-brand-300">See all</router-link>
@@ -87,19 +87,19 @@ async function follow(pal: PlayerSummary) {
           <router-link :to="`/players/${pal.id}`" class="flex min-w-0 flex-1 items-center gap-3">
             <UAvatar
               :src="resolveAvatarUrl(pal.id, pal.avatarUrl)"
-              size="md"
+              size="lg"
               class="shrink-0 bg-white/10 text-slate-300"
             >
               <PhUserCircle :size="20" />
             </UAvatar>
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-white">{{ pal.displayName }}</p>
-              <p class="truncate text-xs text-slate-400">{{ subtitleFor(pal) }}</p>
+              <p class="truncate text-md font-medium text-white">{{ pal.displayName }}</p>
+              <p class="truncate text-sm text-slate-400">{{ subtitleFor(pal) }}</p>
             </div>
           </router-link>
           <UButton
             color="primary"
-            size="xs"
+            size="sm"
             class="shrink-0 rounded-full"
             :loading="following.has(pal.id)"
             @click="follow(pal)"
@@ -122,7 +122,7 @@ async function follow(pal: PlayerSummary) {
       </div>
     </div>
 
-    <div v-else-if="trendingTopics.length" class="rounded-xl bg-gray-800/70 p-5">
+    <div v-else-if="trendingTopics.length" class="rounded-xl bg-gray-800/50 p-5">
       <h3 class="font-semibold text-white">Trending now</h3>
       <div class="mt-3 flex flex-col divide-y divide-white/10">
         <button
@@ -133,10 +133,10 @@ async function follow(pal: PlayerSummary) {
           @click="exploreCategory(topic.category)"
         >
           <div>
-            <p class="text-sm text-white">#{{ topic.category }}</p>
-            <p class="text-xs text-slate-400">{{ formatCount(topic.count) }} posts</p>
+            <p class="text-md text-white">#{{ topic.category }}</p>
+            <p class="text-sm text-slate-400">{{ formatCount(topic.count) }} posts</p>
           </div>
-          <PhCaretRight :size="16" class="shrink-0 text-slate-500" />
+          <PhCaretRight :size="20" weight="bold" class="shrink-0 text-slate-500" />
         </button>
       </div>
     </div>

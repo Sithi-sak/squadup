@@ -41,7 +41,7 @@ const visible = computed(() =>
         v-for="service in visible"
         :key="service.id"
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors"
+        class="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors"
         :class="
           service.id === selectedId
             ? 'bg-brand-900/30 ring-1 ring-inset ring-brand-500'
@@ -52,7 +52,7 @@ const visible = computed(() =>
         <div class="h-10 w-10 shrink-0 rounded-full bg-white/10" />
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
-            <span class="truncate text-sm font-medium text-white">{{ service.name }}</span>
+            <span class="truncate text-md font-medium text-white">{{ service.name }}</span>
             <UBadge
               v-if="service.promoBadge"
               color="primary"
@@ -63,8 +63,8 @@ const visible = computed(() =>
               {{ service.promoBadge }}
             </UBadge>
           </div>
-          <p class="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-400">
-            <img :src="coinIcon" alt="" class="h-3 w-3" />
+          <p class="mt-0.5 inline-flex items-center gap-1 text-sm text-slate-400">
+            <img :src="coinIcon" alt="" class="h-4 w-4" />
             {{ service.priceCoins }}{{ service.priceUnit }}
           </p>
         </div>

@@ -56,7 +56,7 @@ function formatCount(count: number) {
 </script>
 
 <template>
-  <aside class="flex flex-col gap-5 rounded-xl bg-gray-800/70 p-5">
+  <aside class="flex flex-col gap-5 rounded-xl bg-gray-800/50 p-5">
     <div class="flex flex-col items-center text-center">
       <UAvatar :src="avatarUrl" size="3xl" class="bg-white/10 text-slate-300">
         <PhUserCircle :size="40" />
@@ -91,7 +91,7 @@ function formatCount(count: number) {
         v-for="item in navItems"
         :key="item.key"
         :to="item.to"
-        class="flex items-center gap-3 rounded-full px-3 py-2.5 text-sm transition-colors"
+        class="flex items-center gap-3 rounded-full px-3 py-2.5 text-sm transition-colors duration-50"
         :class="
           active === item.key
             ? 'bg-brand-600/15 text-brand-400'

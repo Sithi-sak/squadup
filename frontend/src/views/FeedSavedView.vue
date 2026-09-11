@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import { PhBookmarkSimple } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
-import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
 import { useFeedStore, type FeedSavedItem } from '@/stores/feed'
@@ -12,7 +11,7 @@ import { formatTimeAgo } from '@/utils/timeAgo'
 const feedStore = useFeedStore()
 const toast = useToast()
 
-onMounted(() => {
+onActivated(() => {
   feedStore.fetchSaved()
 })
 
@@ -46,7 +45,7 @@ async function unsave(item: FeedSavedItem) {
 </script>
 
 <template>
-  <FeedLayout active="saved" show-create-post>
+  <div class="flex min-w-0 flex-col gap-4">
     <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
     <template v-else>
@@ -129,5 +128,5 @@ async function unsave(item: FeedSavedItem) {
         </div>
       </template>
     </template>
-  </FeedLayout>
+  </div>
 </template>

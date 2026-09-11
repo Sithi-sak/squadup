@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { fallbackServiceDetail } from '@/mocks/playerProfiles'
 import { usePlayerProfileData } from '@/composables/usePlayerProfileData'
+import { useAuthStore } from '@/stores/auth'
 import ProfileHeader from '@/components/players/ProfileHeader.vue'
 import ProfileServiceSidebar from '@/components/players/ProfileServiceSidebar.vue'
 import ProfileServicesTab from '@/components/players/ProfileServicesTab.vue'
@@ -11,9 +12,12 @@ import ProfileAlbumTab from '@/components/players/ProfileAlbumTab.vue'
 import ProfileWishTab from '@/components/players/ProfileWishTab.vue'
 
 const route = useRoute()
+const authStore = useAuthStore()
 
 const playerId = computed(() => String(route.params.id))
 const { loading, player, profile, isMockProfile } = usePlayerProfileData(playerId)
+
+const isOwnProfile = computed(() => !!authStore.user?.playerId && authStore.user.playerId === playerId.value)
 
 const tabItems = [
   { label: 'Services', value: 'services' },
@@ -123,7 +127,7 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
     </div>
 
     <template v-else>
-      <ProfileHeader :player="player" :profile="profile" />
+      <ProfileHeader :player="player" :profile="profile" :is-own-profile="isOwnProfile" />
 
       <UTabs
         v-model="activeTab"
@@ -148,12 +152,14 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
           :service-id="selectedServiceId"
           :detail="selectedDetail"
           :reviews="selectedReviews"
+          :is-own-profile="isOwnProfile"
         />
         <ProfileFeedsTab
           v-else-if="activeTab === 'feeds'"
           :player="player"
           :handle="profile.handle"
           :feed="profile.feed"
+          :is-own-profile="isOwnProfile"
         />
         <ProfileAlbumTab v-else-if="activeTab === 'album'" :album="profile.album" />
         <ProfileWishTab

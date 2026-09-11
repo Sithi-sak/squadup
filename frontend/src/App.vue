@@ -7,10 +7,12 @@ const route = useRoute()
 
 /** Kept alive so revisiting a nav-bar tab reuses its existing instance instead of
  * remounting - instant, no re-fetch, no blank flash. Scoped to the 6 top-nav views
- * (see AppHeader's `navLinks`); every other route mounts/unmounts normally. */
+ * (see AppHeader's `navLinks`); every other route mounts/unmounts normally. The feed's
+ * entry here is its shell, not `FeedView` - the shell owns the sidebar/right rail and
+ * keeps its own tabs alive one level down (4.21). */
 const cachedViewNames = [
   'HomeView',
-  'FeedView',
+  'FeedShellView',
   'AllServicesView',
   'EstarsLeaderboardView',
   'BecomeAPalView',

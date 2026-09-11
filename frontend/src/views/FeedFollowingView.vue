@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
@@ -14,7 +13,7 @@ const router = useRouter()
 const feedStore = useFeedStore()
 const toast = useToast()
 
-onMounted(() => {
+onActivated(() => {
   feedStore.fetchFollowing()
 })
 
@@ -49,7 +48,7 @@ async function toggleLike(post: FeedPost) {
 </script>
 
 <template>
-  <FeedLayout active="following" show-create-post>
+  <div class="flex min-w-0 flex-col gap-4">
     <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
     <template v-else>
@@ -117,5 +116,5 @@ async function toggleLike(post: FeedPost) {
         </FeedPostCard>
       </template>
     </template>
-  </FeedLayout>
+  </div>
 </template>

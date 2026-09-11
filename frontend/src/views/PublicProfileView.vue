@@ -6,7 +6,6 @@ import { PhCloudWarning, PhUserCircle } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
 import { useUsersStore, type PublicProfile } from '@/stores/users'
-import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
@@ -37,10 +36,10 @@ function formatCount(count: number) {
 async function load() {
   const id = userId.value
 
-  // A Pal has their own richer profile page (services, reviews, ...) - bounce there instead of
-  // rendering the plain-buyer layout for them.
+  // Your own account has its own self-view page (no follow button, composer, ...) - which
+  // forwards Pals on to `/players/{id}` in turn.
   if (id === authStore.user?.id) {
-    router.replace({ name: 'feed-profile' })
+    router.replace({ name: 'my-profile' })
     return
   }
 
@@ -105,7 +104,7 @@ const followListTab = ref<'followers' | 'following' | null>(null)
 </script>
 
 <template>
-  <FeedLayout active="feed">
+  <div class="flex min-w-0 flex-col gap-4">
     <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
     <FollowListPanel
@@ -212,5 +211,5 @@ const followListTab = ref<'followers' | 'following' | null>(null)
         @open-comments="activePostId = post.id"
       />
     </template>
-  </FeedLayout>
+  </div>
 </template>

@@ -80,15 +80,22 @@ const avatarUrl = computed(() =>
   resolveAvatarUrl(authStore.user?.id ?? mockCurrentUser.id, playersStore.mine?.avatarUrl),
 )
 
-const accountMenuItems = [
+// A Pal's own profile is the full `/players/:id` page in self-view; everyone else gets the
+// stripped-down `/profile/me` (which redirects to the Pal page too if the account becomes one).
+const myProfilePath = computed(() =>
+  isPal.value && authStore.user?.playerId ? `/players/${authStore.user.playerId}` : '/profile/me',
+)
+
+const accountMenuItems = computed(() => [
   [
+    { label: 'My Profile', to: myProfilePath.value },
     { label: 'My orders', to: '/bookings' },
     { label: 'Wallet', to: '/wallet' },
     { label: 'Subscriptions', to: '/subscriptions' },
     { label: 'Settings', to: '/settings' },
   ],
   [{ label: 'Log out', onSelect: handleLogout }],
-]
+])
 
 async function handleLogout() {
   await authStore.signOut()
@@ -249,6 +256,7 @@ function handleSearch() {
             <router-link to="/estars" class="text-base text-white">eStars</router-link>
             <router-link to="/messages" class="text-base text-white">Messages</router-link>
             <router-link to="/notifications" class="text-base text-white">Notifications</router-link>
+            <router-link :to="myProfilePath" class="text-base text-white">My Profile</router-link>
             <router-link to="/bookings" class="text-base text-white">My Bookings</router-link>
             <router-link to="/wallet" class="text-base text-white">Wallet</router-link>
             <router-link to="/subscriptions" class="text-base text-white">Subscriptions</router-link>

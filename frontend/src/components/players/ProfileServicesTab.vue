@@ -14,6 +14,7 @@ const props = defineProps<{
   serviceId: string
   detail: PlayerServiceDetail
   reviews: PlayerReview[]
+  isOwnProfile?: boolean
 }>()
 
 const router = useRouter()
@@ -95,7 +96,7 @@ async function handleMessage() {
     <div class="flex flex-col gap-4">
       <div class="aspect-video w-full rounded-xl bg-white/5" />
 
-      <div class="rounded-xl bg-gray-800/70 p-4">
+      <div v-if="!isOwnProfile" class="rounded-xl bg-gray-800/70 p-4">
         <UButton
           color="primary"
           variant="outline"

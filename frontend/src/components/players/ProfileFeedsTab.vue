@@ -8,7 +8,18 @@ import type { PlayerSummary } from '@/stores/players'
 import { formatTimeAgo } from '@/utils/timeAgo'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
-const props = defineProps<{ player: PlayerSummary; handle: string | null; feed: FeedPost[] }>()
+/** `player` is narrowed to what this component actually renders so the buyer profile page
+ * (`MyProfileView.vue`), which has no player row to pass, can reuse it. */
+const props = defineProps<{
+  player: Pick<PlayerSummary, 'id' | 'displayName' | 'avatarUrl'>
+  handle: string | null
+  feed: FeedPost[]
+  isOwnProfile?: boolean
+}>()
+
+/** Re-emitted for the own-profile pages that show a post count in their own header
+ * (`MyProfileView`) - the tab owns the composer, but not the header. */
+const emit = defineEmits<{ created: [post: FeedPost] }>()
 
 const feedStore = useFeedStore()
 const toast = useToast()
@@ -22,6 +33,11 @@ watch(
 )
 
 const createPostOpen = ref(false)
+
+function onPostCreated(post: FeedPost) {
+  localFeed.value.unshift(post)
+  emit('created', post)
+}
 
 async function toggleLike(post: FeedPost) {
   try {
@@ -40,7 +56,7 @@ async function toggleLike(post: FeedPost) {
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="rounded-xl bg-gray-800/70 p-4">
+    <div v-if="isOwnProfile" class="rounded-xl bg-gray-800/70 p-4">
       <div class="flex items-center gap-3">
         <UAvatar
           :src="resolveAvatarUrl(player.id, player.avatarUrl)"
@@ -77,10 +93,10 @@ async function toggleLike(post: FeedPost) {
       </div>
     </div>
 
-    <CreatePostModal v-model:open="createPostOpen" />
+    <CreatePostModal v-if="isOwnProfile" v-model:open="createPostOpen" @created="onPostCreated" />
 
     <p v-if="localFeed.length === 0" class="py-10 text-center text-sm text-slate-400">
-      {{ player.displayName }} hasn't posted anything yet.
+      {{ isOwnProfile ? 'You haven\'t' : `${player.displayName} hasn't` }} posted anything yet.
     </p>
 
     <div v-for="post in localFeed" :key="post.id" class="rounded-xl bg-gray-800/70 p-4">

@@ -10,7 +10,11 @@ import ReportProfileModal from '@/components/modals/ReportProfileModal.vue'
 import BlockProfileModal from '@/components/modals/BlockProfileModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
-const props = defineProps<{ player: PlayerSummary; profile: PlayerProfile }>()
+const props = defineProps<{
+  player: PlayerSummary
+  profile: PlayerProfile
+  isOwnProfile?: boolean
+}>()
 
 const feedStore = useFeedStore()
 const toast = useToast()
@@ -114,7 +118,7 @@ function confirmBlock() {
     </div>
 
     <div class="flex items-center gap-2">
-      <UDropdownMenu :items="profileMenuItems">
+      <UDropdownMenu v-if="!isOwnProfile" :items="profileMenuItems">
         <UButton
           color="neutral"
           variant="soft"
@@ -136,7 +140,7 @@ function confirmBlock() {
         <PhCopy :size="24" weight="regular" />
       </UButton>
       <UButton
-        v-if="profile.userId ?? player.userId"
+        v-if="!isOwnProfile && (profile.userId ?? player.userId)"
         :color="following ? 'neutral' : 'primary'"
         :variant="following ? 'soft' : 'solid'"
         class="rounded-full"
@@ -146,7 +150,7 @@ function confirmBlock() {
         {{ following ? 'Following' : 'Follow' }}
       </UButton>
       <UButton
-        v-if="profile.subscribeLabel"
+        v-if="!isOwnProfile && profile.subscribeLabel"
         color="primary"
         :variant="subscribed ? 'soft' : 'outline'"
         class="rounded-full"

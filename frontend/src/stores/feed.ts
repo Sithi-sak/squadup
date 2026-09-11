@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
+import { usePlayersStore } from '@/stores/players'
 import type { FeedComment as MockFeedComment, FeedPost as MockFeedPost, SavedItem as MockSavedItem } from '@/mocks/feed'
 import { mockFeedPosts, mockFollowingPosts, mockPostComments, mockSavedItems } from '@/mocks/feed'
 
@@ -190,6 +192,24 @@ export const useFeedStore = defineStore('feed', () => {
     if (current.value?.id === updated.id) current.value = updated
   }
 
+  /** The signed-in account's own Posts/Following tallies (4.22). The API only ever reports
+   * these on a fresh load - `GET /players/me` for a Pal, the auth bootstrap for everyone - so
+   * posting or following used to leave the number behind until something happened to refetch.
+   * Both copies live here because every surface that shows them reads one or the other:
+   * `FeedSidebar` prefers `players.mine` and falls back to `auth.user`, `/feed/me` reads
+   * `auth.user`. `followersCount` is deliberately not bumped - it only moves when *someone
+   * else* follows you, which no action on this client can know about. Stores are resolved
+   * lazily, inside the call, so this module doesn't need them at import time. */
+  function bumpMyCounts(delta: { posts?: number; following?: number }) {
+    const authStore = useAuthStore()
+    const playersStore = usePlayersStore()
+    for (const stats of [authStore.user, playersStore.mine]) {
+      if (!stats) continue
+      if (delta.posts) stats.postsCount = Math.max(0, stats.postsCount + delta.posts)
+      if (delta.following) stats.followingCount = Math.max(0, stats.followingCount + delta.following)
+    }
+  }
+
   function applyFollow(authorId: string, isFollowing: boolean) {
     for (const list of [posts.value, following.value]) {
       for (const post of list) {
@@ -280,6 +300,7 @@ export const useFeedStore = defineStore('feed', () => {
 
     const post = await api.post<FeedPost>('/feed/posts', formData)
     posts.value.unshift(post)
+    bumpMyCounts({ posts: 1 })
     return post
   }
 
@@ -336,6 +357,7 @@ export const useFeedStore = defineStore('feed', () => {
           `/feed/follows/${authorId}`,
         )
     applyFollow(authorId, result.following)
+    bumpMyCounts({ following: result.following ? 1 : -1 })
     return result
   }
 

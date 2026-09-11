@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onActivated, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { PhHeart, PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
-import FeedLayout from '@/components/feed/FeedLayout.vue'
 import { exploreCategories } from '@/mocks/feed'
 import { useFeedStore } from '@/stores/feed'
 import { resolveAvatarUrl } from '@/utils/avatar'
@@ -10,7 +9,7 @@ import { resolveAvatarUrl } from '@/utils/avatar'
 const route = useRoute()
 const feedStore = useFeedStore()
 
-onMounted(() => {
+onActivated(() => {
   feedStore.fetchFeed()
 })
 
@@ -46,7 +45,7 @@ function formatCount(count: number) {
 </script>
 
 <template>
-  <FeedLayout active="explore" show-create-post>
+  <div class="flex min-w-0 flex-col gap-4">
     <div>
       <h1 class="text-2xl font-bold text-white">Explore</h1>
       <p class="mt-1 text-sm text-slate-400">Discover trending posts, clips and creators across SquadUp</p>
@@ -107,5 +106,5 @@ function formatCount(count: number) {
         </div>
       </router-link>
     </div>
-  </FeedLayout>
+  </div>
 </template>

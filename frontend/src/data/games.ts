@@ -39,6 +39,9 @@ function slugify(name: string): string {
 
 export interface FeaturedGame {
   id: string
+  /** Canonical game name, matching the values stored in `players.games`. Rails link to
+   * `/players?game=<name>` and PlayersView filters on an exact name match, so this has to be
+   * the full name, not a shorthand. */
   name: string
 }
 
@@ -47,7 +50,7 @@ export interface FeaturedGame {
 // keyed by this same `id` slug.
 export const featuredGames: FeaturedGame[] = [
   { id: slugify('Valorant'), name: 'Valorant' },
-  { id: slugify('Counter-Strike 2'), name: 'CS2' },
+  { id: slugify('Counter-Strike 2'), name: 'Counter-Strike 2' },
   { id: slugify('Apex Legends'), name: 'Apex Legends' },
   { id: slugify('Overwatch 2'), name: 'Overwatch 2' },
   { id: slugify('Fortnite'), name: 'Fortnite' },

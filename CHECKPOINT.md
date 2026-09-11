@@ -2171,10 +2171,139 @@ kind of Stripe id.
         a nav link and watch Network tab, then bounce between tabs) left to the user per
         [[feedback_no_build_or_run_skill]].
 
+- [x] 4.20 "My Profile" nav item (requested 2026-09-11 by the user off the account dropdown
+      screenshot) plus a self-view mode wherever it can land, so viewing your own profile never
+      offers follow/chat/book/report against yourself.
+  - [x] 4.20a `AppHeader.vue`: added "My Profile" as the first item in the account dropdown and
+        the mobile slide-over menu. Pals go to `/players/{playerId}` (their full profile, in the
+        4.20b self-view); everyone else to the new `/profile/me`.
+  - [x] 4.20b `PlayerProfileView.vue` / `ProfileHeader.vue` / `ProfileServicesTab.vue`: added an
+        `isOwnProfile` computed (route `id` === `authStore.user.playerId`) and threaded it down
+        as a prop - hides Follow, Subscribe, and the Report/Block menu in the header, and the
+        whole Chat/Book card in the Services tab, when a Pal is looking at their own profile.
+  - [x] 4.20c New `MyProfileView.vue` at `/profile/me` - the non-Pal half of "My Profile", laid
+        out like the Pal profile page rather than like the feed (same `max-w-4/5` shell, 24-unit
+        avatar header, `UTabs variant="link"` row) since that layout was the actual ask. Header
+        carries name/handle/post+follower+following counts, Copy username, and Edit profile (no
+        Follow/Subscribe/Chat/Book - it's you). Tabs are Feeds (real posts via
+        `feedStore.fetchAuthorPosts`) plus Album/Wish as `EmptyState` placeholders per 4.20e.
+        Redirects to `/players/{playerId}` if the account is a Pal, so there's one canonical
+        own-profile page per user.
+        - First attempt reused `PublicProfileView.vue` instead of building this, which the user
+          rejected on sight: that view renders inside `FeedLayout` (the 3-column feed shell with
+          sidebar + right rail), so it read as "still the feed page" and looked nothing like the
+          referenced Pal profile screenshot. Reusing a page for its data while ignoring that its
+          *chrome* is the thing being asked about is the mistake to avoid repeating.
+  - [x] 4.20d `PublicProfileView.vue` (`/feed/u/:id`) still redirects your own id away, but now
+        to `my-profile` instead of the `/feed/me` dashboard. `/feed/me` is untouched and still
+        reachable as its own sidebar-nav dashboard, per the user's call not to merge the two.
+        `ProfileFeedsTab.vue`'s `player` prop narrowed to
+        `Pick<PlayerSummary, 'id' | 'displayName' | 'avatarUrl'>` (the only fields it renders) so
+        the buyer page, which has no player row, can reuse it; added an `isOwnProfile` prop for
+        the "You haven't posted anything yet" empty copy. `CreatePostModal.vue` now also emits
+        `created` (it only emitted `updated`, on edits), so a post made from the composer on
+        either profile page appears immediately instead of after a reload.
+  - [x] 4.20e Scoped out of this pass: giving the buyer profile real Album/Wish tabs like a Pal's.
+        Investigated first - `album_items`/`wish_items` are `player_id`-scoped with **no**
+        create/update/delete endpoint at all today, for Pals or buyers (seed-data only), so this
+        isn't a quick re-scope to `user_id`, it's building Album/Wish CRUD from scratch. Logged
+        in the cut list as its own item; the tabs ship as empty-state placeholders meanwhile.
+  - [x] 4.20f `ProfileFeedsTab.vue`'s "Share something with your squad..." composer (and its
+        `CreatePostModal`) now render only when `isOwnProfile` - it used to show to every viewer,
+        so you could compose from someone else's Pal profile and have the post land on your own
+        feed. Surfaced as a finding during 4.20d, fixed on the user's go-ahead.
+  - [x] 4.20g Verification: `vue-tsc --noEmit` and `eslint` clean on all 7 touched/added files.
+        Manual browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+
+- [x] 4.21 Feed navigation re-rendered the whole page (reported 2026-09-11 by the user with a
+      screenshot of the feed): 4.19's transitions/KeepAlive/prefetch made the *top* nav smooth,
+      but moving between feed tabs still faded and remounted the left sidebar and right rail
+      along with the posts. The user asked for the Next.js app-router shape instead — a layout
+      that stays mounted, with only the centre content swapping.
+  - [x] 4.21a Root cause: every `/feed` route was its own top-level view and each one rendered
+        `FeedLayout` itself, so the 3-column shell (with `FeedSidebar` + `FeedRightRail`) was
+        torn down and rebuilt on every navigation — hence the avatar/stats flash, the repeated
+        `fetchMine`/`fetchSuggested` calls, and the sidebar fading with the posts under
+        `App.vue`'s route transition.
+  - [x] 4.21b New `views/FeedShellView.vue` replaces `components/feed/FeedLayout.vue` (deleted):
+        same grid markup, but it owns the two rails and renders a nested `<router-view>` in the
+        centre cell. The fade transition now lives here and wraps only that cell.
+  - [x] 4.21c `router/index.ts`: `/feed`, `/feed/following`, `/feed/explore`, `/feed/saved`,
+        `/feed/me` and `/feed/u/:id` became children of one `/feed` shell record. Route names are
+        unchanged, so every existing link/`router.push` still resolves. `/feed/:postId` stays a
+        top-level route on purpose — the single-post page is full-width with no feed chrome — and
+        still matches, since static child segments outrank a param.
+  - [x] 4.21d The sidebar can no longer take `active`/`show-create-post` from the child view (it
+        sits above it now), so both moved to route `meta` as `feedTab` and `feedCreatePost`, typed
+        in the `RouteMeta` augmentation and read by the shell.
+  - [x] 4.21e The six child views dropped their `FeedLayout` wrapper; each one's root is now the
+        centre column itself (`flex min-w-0 flex-col gap-4`) — a single root, which the shell's
+        `<transition>` requires.
+  - [x] 4.21f The four fixed tabs are kept alive inside the shell so switching between them is
+        instant and their filter state survives; `/feed/me` and `/feed/u/:id` stay uncached so a
+        param change never shows another account's data. Same lifecycle contract as 4.19b:
+        `FeedFollowingView` / `FeedExploreView` / `FeedSavedView` moved `onMounted` to
+        `onActivated` (which also fires on first mount) so a revisit still refreshes.
+  - [x] 4.21g `App.vue`'s `cachedViewNames` now lists `FeedShellView` instead of `FeedView` —
+        the whole feed shell, inner cached tabs included, survives a trip to another top-nav tab.
+  - [x] 4.21h Verification: `vue-tsc --noEmit` and `eslint` clean on all 9 touched files. Manual
+        browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+
+- [x] 4.22 Own Posts/Following counts never moved until something happened to refetch (surfaced
+      2026-09-11 as a side effect of 4.21, fixed on the user's go-ahead). Pre-existing, not new:
+      `createPost` only unshifted the post and `toggleFollow` only flipped the card's flag, so
+      the sidebar's tallies were wrong from the moment you acted. 4.21 only removed the accident
+      that hid it — remounting `FeedSidebar` on every feed navigation refetched `GET /players/me`
+      and the number silently caught up. The user chose fixing the counts at the source over
+      re-buying that refetch.
+  - [x] 4.22a `stores/feed.ts` gains `bumpMyCounts({ posts, following })`, called after
+        `createPost` and after `toggleFollow`. It writes to both `auth.user` and `players.mine`,
+        since every surface showing these reads one or the other (`FeedSidebar` prefers `mine`
+        and falls back to `auth.user`; `/feed/me` reads `auth.user`). Floors at 0. Both stores
+        are resolved inside the call, not at import time.
+  - [x] 4.22b `followersCount` is deliberately left alone: it only changes when *someone else*
+        follows you, which no action on this client can observe. `PublicProfileView` already
+        applies the `followersCount` the follow endpoint returns for the profile being viewed —
+        that's the target's count, not your own, and is untouched by this.
+  - [x] 4.22c Every follow button in the app already routes through `feedStore.toggleFollow`
+        (feed cards, post thread, right rail, `FollowListPanel`, `ProfileHeader`,
+        `PublicProfileView`), so one call site covers all of them. There is no delete-post
+        action yet, so `postsCount` only ever goes up.
+  - [x] 4.22d `MyProfileView.vue` reads its own `PublicProfile` copy rather than the stores, so
+        the store bump can't reach its header. `ProfileFeedsTab.vue` (which owns the composer,
+        but not the header) now re-emits `created`, and the page bumps its own `postsCount`.
+        Harmless for `PlayerProfileView`, the tab's other consumer, which shows followers rather
+        than posts in its header.
+  - [x] 4.22e Verification: `vue-tsc --noEmit` and `eslint` clean on all 3 touched files. Manual
+        browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+
+- [x] 4.23 Settings page's top-right "Save changes" button (reported 2026-09-11 by the user: it
+      was disabled for both Pal and non-Pal accounts, while the Account tab's own Save button
+      worked fine).
+  - [x] 4.23a Root cause: `SettingsView.vue`'s header button was a static placeholder in both
+        layout branches - `<UButton disabled>Save changes</UButton>` with no click handler and no
+        dirty-state tracking, so it could never enable. It also had nothing consistent to save:
+        Account and Payments/Security persist through real store/API calls, but Notifications and
+        Privacy are plain local `ref()`s with no backend behind them at all.
+  - [x] 4.23b User chose removing the dead button over wiring it up (which would first require
+        adding persistence to the Notifications and Privacy tabs). Deleted it from both branches
+        of `SettingsView.vue` and unwrapped the now-single-child header flex row. Each tab keeps
+        its own working save/action controls, matching the pattern that already works.
+  - [x] 4.23c Verification: `eslint` clean. Manual browser walkthrough left to the user per
+        [[feedback_no_build_or_run_skill]].
+  - [x] 4.23d Noted, not fixed: Account tab's Save doesn't include the `language`/`timezone`
+        selects in its `updateAccount` payload, so those two fields don't persist despite the
+        button working. Left for the user to prioritize.
+
 ---
 
 ## Cut list (only if time runs out)
 
+- Settings Notifications/Privacy persistence (found 2026-09-11 during 4.23) — both tabs are
+  local-only `ref()`s with no store or backend; toggles/selects reset on tab switch or reload
+- Album/Wish CRUD (found 2026-09-11 during 4.20) — add/edit/delete endpoints + UI for
+  `album_items`/`wish_items`, re-scoped to work for buyers (`user_id`) as well as Pals
+  (`player_id`); today both tables are read-only, Pal-only, seed-data-populated
 - Admin panel (1.15, 3.14)
 - Earnings tracker — fall back to plain booking history (3.7)
 - Subscriptions backend — fall back to the static mock page as-is (3.11)

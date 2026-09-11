@@ -2,7 +2,6 @@
 import { computed, onActivated, ref } from 'vue'
 import { PhCamera, PhFilmSlate, PhPencilSimple, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
@@ -63,7 +62,7 @@ async function toggleLike(post: FeedPost) {
 </script>
 
 <template>
-  <FeedLayout active="feed">
+  <div class="flex min-w-0 flex-col gap-4">
     <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
     <template v-else>
@@ -155,5 +154,5 @@ async function toggleLike(post: FeedPost) {
         </FeedPostCard>
       </template>
     </template>
-  </FeedLayout>
+  </div>
 </template>

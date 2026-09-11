@@ -15,7 +15,6 @@ import {
 } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
-import FeedLayout from '@/components/feed/FeedLayout.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
@@ -96,7 +95,7 @@ async function toggleLike(post: FeedPost) {
 </script>
 
 <template>
-  <FeedLayout active="profile">
+  <div class="flex min-w-0 flex-col gap-4">
     <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
     <FollowListPanel
@@ -244,5 +243,5 @@ async function toggleLike(post: FeedPost) {
         </FeedPostCard>
       </template>
     </template>
-  </FeedLayout>
+  </div>
 </template>

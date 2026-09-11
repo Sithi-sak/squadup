@@ -11,6 +11,13 @@ declare module 'vue-router' {
      * Browsing (players, profiles, feed, services) stays public; only account-bound pages are
      * gated. See CHECKPOINT.md 2.5. */
     requiresAuth?: boolean
+    /** Which `FeedSidebar` nav item is lit for this page. Read by `FeedShellView`, the shared
+     * parent route of every `/feed` page - the sidebar itself never remounts, so the active tab
+     * has to come from the route rather than from a prop the child view passes up. */
+    feedTab?: 'feed' | 'following' | 'explore' | 'saved' | 'profile'
+    /** Shows the sidebar's "Create post" button - set on the feed pages that have no composer
+     * of their own. */
+    feedCreatePost?: boolean
     /** Redirects to `/home` when someone's already signed in — a live session can't land back
      * on the marketing/landing or auth pages (via link, browser back, or bookmark) until they
      * sign out. */
@@ -67,41 +74,58 @@ const router = createRouter({
       component: () => import('@/views/AllServicesView.vue'),
       meta: { hideFooter: true },
     },
+    /** Every feed page is a child of one persistent shell (4.21): the sidebar and right rail
+     * are mounted by `FeedShellView` and stay put, so navigating between these only swaps the
+     * centre column. `/feed/:postId` below is deliberately *not* a child - the single-post page
+     * is full-width, with no feed chrome. */
     {
       path: '/feed',
-      name: 'feed',
-      component: () => import('@/views/FeedView.vue'),
+      component: () => import('@/views/FeedShellView.vue'),
       meta: { hideFooter: true },
+      children: [
+        {
+          path: '',
+          name: 'feed',
+          component: () => import('@/views/FeedView.vue'),
+          meta: { feedTab: 'feed' },
+        },
+        {
+          path: 'following',
+          name: 'feed-following',
+          component: () => import('@/views/FeedFollowingView.vue'),
+          meta: { feedTab: 'following', feedCreatePost: true },
+        },
+        {
+          path: 'explore',
+          name: 'feed-explore',
+          component: () => import('@/views/FeedExploreView.vue'),
+          meta: { feedTab: 'explore', feedCreatePost: true },
+        },
+        {
+          path: 'saved',
+          name: 'feed-saved',
+          component: () => import('@/views/FeedSavedView.vue'),
+          meta: { feedTab: 'saved', feedCreatePost: true },
+        },
+        {
+          path: 'me',
+          name: 'feed-profile',
+          component: () => import('@/views/UserDashboardView.vue'),
+          meta: { feedTab: 'profile', requiresAuth: true },
+        },
+        {
+          path: 'u/:id',
+          name: 'user-profile',
+          component: () => import('@/views/PublicProfileView.vue'),
+          meta: { feedTab: 'feed' },
+        },
+      ],
     },
     {
-      path: '/feed/following',
-      name: 'feed-following',
-      component: () => import('@/views/FeedFollowingView.vue'),
-      meta: { hideFooter: true },
-    },
-    {
-      path: '/feed/explore',
-      name: 'feed-explore',
-      component: () => import('@/views/FeedExploreView.vue'),
-      meta: { hideFooter: true },
-    },
-    {
-      path: '/feed/saved',
-      name: 'feed-saved',
-      component: () => import('@/views/FeedSavedView.vue'),
-      meta: { hideFooter: true },
-    },
-    {
-      path: '/feed/me',
-      name: 'feed-profile',
-      component: () => import('@/views/UserDashboardView.vue'),
+      path: '/profile/me',
+      name: 'my-profile',
+      component: () => import('@/views/MyProfileView.vue'),
       meta: { hideFooter: true, requiresAuth: true },
-    },
-    {
-      path: '/feed/u/:id',
-      name: 'user-profile',
-      component: () => import('@/views/PublicProfileView.vue'),
-      meta: { hideFooter: true },
     },
     {
       path: '/feed/:postId',

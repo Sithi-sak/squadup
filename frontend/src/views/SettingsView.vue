@@ -28,12 +28,9 @@ const activeTab = ref(isPal.value ? 'profile' : 'account')
 <template>
   <DashboardLayout v-if="isPal" active="settings">
     <div class="flex h-full flex-col gap-6 overflow-y-auto pr-1">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-bold text-white sm:text-3xl">Settings</h1>
-          <p class="mt-1 text-sm text-slate-400">Manage your profile, account and preferences</p>
-        </div>
-        <UButton color="primary" class="rounded-full" disabled>Save changes</UButton>
+      <div>
+        <h1 class="text-2xl font-bold text-white sm:text-3xl">Settings</h1>
+        <p class="mt-1 text-sm text-slate-400">Manage your profile, account and preferences</p>
       </div>
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
@@ -53,12 +50,9 @@ const activeTab = ref(isPal.value ? 'profile' : 'account')
 
   <div v-else class="h-[calc(100vh-65px)] overflow-y-auto px-4 py-6 md:px-6">
     <div class="mx-auto flex max-w-(--content-max-width) flex-col gap-6">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-bold text-white sm:text-3xl">Settings</h1>
-          <p class="mt-1 text-sm text-slate-400">Manage your account and preferences</p>
-        </div>
-        <UButton color="primary" class="rounded-full" disabled>Save changes</UButton>
+      <div>
+        <h1 class="text-2xl font-bold text-white sm:text-3xl">Settings</h1>
+        <p class="mt-1 text-sm text-slate-400">Manage your account and preferences</p>
       </div>
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">

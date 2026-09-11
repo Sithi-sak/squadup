@@ -12,7 +12,7 @@ import { resolveAvatarUrl } from '@/utils/avatar'
  * controls (the backend only lets an edit change text/image, category stays fixed same as
  * before), "Save changes" instead of "Post". */
 const props = defineProps<{ post?: FeedPost | null }>()
-const emit = defineEmits<{ updated: [FeedPost] }>()
+const emit = defineEmits<{ updated: [FeedPost]; created: [FeedPost] }>()
 
 const open = defineModel<boolean>('open', { required: true })
 
@@ -93,7 +93,7 @@ async function submitPost() {
       })
       emit('updated', updated)
     } else {
-      await feedStore.createPost({ text: text.value.trim(), image: files.value ?? undefined })
+      emit('created', await feedStore.createPost({ text: text.value.trim(), image: files.value ?? undefined }))
     }
     open.value = false
   } catch (err) {

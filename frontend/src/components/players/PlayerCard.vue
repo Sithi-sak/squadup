@@ -38,9 +38,6 @@ function formatCount(count: number) {
           class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
         />
       </div>
-      <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/40 text-white">
-        <PhPlay :size="14" weight="fill" />
-      </span>
     </div>
 
     <span class="truncate font-semibold text-white">{{ player.displayName }}</span>

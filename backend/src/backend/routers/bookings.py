@@ -6,7 +6,6 @@ from pydantic import Field
 
 from ..core.auth import get_current_user_id
 from ..core.config import get_settings
-from ..core.feed_events import post_status
 from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
@@ -360,7 +359,6 @@ def complete_booking(booking_id: str, user_id: str = Depends(get_current_user_id
     updated = _fetch_booking(client, booking_id)
     pal_name, _, _, service_name = _booking_names(updated)
     notify(updated["user_id"], "booking", f"Your session for {service_name} with {pal_name} is complete.")
-    post_status(updated["user_id"], f"Just wrapped up a session with {pal_name} on {service_name}. 🎮")
     return _booking_out(updated)
 
 

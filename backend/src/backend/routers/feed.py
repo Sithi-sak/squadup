@@ -13,7 +13,6 @@ from fastapi import (
 from pydantic import Field
 
 from ..core.auth import get_current_user_id, get_optional_user_id
-from ..core.feed_events import post_status
 from ..core.schema import CamelModel
 from ..core.storage import upload_image_as_webp
 from ..core.supabase import get_supabase_client
@@ -589,9 +588,8 @@ def follow_user(target_id: str, user_id: str = Depends(get_current_user_id)) -> 
     client = get_supabase_client()
     if target_id == user_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot follow yourself")
-    target = _require_user_exists(client, target_id)
+    _require_user_exists(client, target_id)
     client.table("follows").upsert({"follower_id": user_id, "followed_id": target_id}).execute()
-    post_status(user_id, f"Started following {target['display_name']}.", category="chilling")
     return _refresh_follow(client, target_id, user_id, following=True)
 
 

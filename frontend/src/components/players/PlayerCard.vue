@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PhStar, PhTrophy, PhUserCircle } from '@phosphor-icons/vue'
+import { PhPlay, PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import type { PlayerSummary } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
@@ -16,11 +16,21 @@ function formatCount(count: number) {
 <template>
   <router-link
     :to="`/players/${player.id}`"
-    class="flex flex-col gap-3 rounded-xl bg-gray-800/70 p-4 transition-colors hover:bg-gray-800"
+    class="relative isolate flex flex-col gap-2.5 overflow-hidden rounded-xl bg-gray-800/70 p-4 transition duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30"
   >
-    <div class="flex items-center gap-4">
+    <div class="absolute inset-0 -z-10">
+      <img
+        :src="resolveAvatarUrl(player.id, player.avatarUrl)"
+        alt=""
+        class="h-full w-full scale-110 object-cover object-top saturate-50 brightness-90"
+      />
+      <div class="absolute inset-0 bg-linear-to-b from-transparent via-gray-800/80 via-55% to-gray-800" />
+      <div class="absolute inset-0 bg-gray-800/70" />
+    </div>
+
+    <div class="flex items-start justify-between">
       <div class="relative shrink-0">
-        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="3xl" class="bg-white/10 text-slate-300">
+        <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="3xl" class="bg-white/10 text-slate-300 size-20">
           <PhUserCircle :size="26" />
         </UAvatar>
         <span
@@ -28,28 +38,23 @@ function formatCount(count: number) {
           class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
         />
       </div>
-      <div class="min-w-0">
-        <div class="flex items-center gap-1.5">
-          <span class="truncate font-semibold text-white">{{ player.displayName }}</span>
-          <PhTrophy
-            v-if="(player.rating ?? 0) >= 4.8"
-            :size="14"
-            weight="fill"
-            class="shrink-0 text-amber-400"
-          />
-        </div>
-        <p class="inline-flex items-center gap-1 text-xs text-slate-400">
-          <template v-if="player.rating">
-            <PhStar :size="12" weight="fill" class="text-amber-400" />
-            {{ player.rating.toFixed(1) }}
-            <span v-if="player.reviewCount">({{ formatCount(player.reviewCount) }})</span>
-          </template>
-          <span v-else>No reviews yet</span>
-        </p>
-      </div>
+      <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/40 text-white">
+        <PhPlay :size="14" weight="fill" />
+      </span>
     </div>
 
-    <div class="flex flex-wrap gap-1.5">
+    <span class="truncate font-semibold text-white">{{ player.displayName }}</span>
+
+    <p class="inline-flex items-center gap-1 text-xs text-slate-400">
+      <PhStar :size="12" weight="fill" class="text-amber-400" />
+      <template v-if="player.rating">
+        {{ player.rating.toFixed(1) }}
+        <span v-if="player.reviewCount">({{ formatCount(player.reviewCount) }})</span>
+      </template>
+      <span v-else>--</span>
+    </p>
+
+    <div v-if="player.rank || player.role" class="flex flex-wrap gap-1.5">
       <UBadge v-if="player.rank" color="neutral" variant="soft" size="md" class="rounded-full">
         {{ player.rank }}
       </UBadge>
@@ -60,21 +65,19 @@ function formatCount(count: number) {
 
     <p v-if="player.tagline" class="line-clamp-2 text-sm text-slate-400">{{ player.tagline }}</p>
 
-    <div class="mt-auto flex items-center justify-between gap-2 pt-1">
-      <UBadge
-        v-if="player.promoBadge"
-        color="primary"
-        variant="solid"
-        size="lg"
-        class="rounded-full"
-      >
-        {{ player.promoBadge }}
-      </UBadge>
-      <span v-else />
-      <span v-if="player.priceCoins" class="inline-flex items-center gap-2 text-sm font-semibold text-white">
-        <img :src="coinIcon" alt="" class="h-5 w-5" />
-        {{ player.priceCoins }}/Game
-      </span>
-    </div>
+    <UBadge
+      v-if="player.promoBadge"
+      color="primary"
+      variant="solid"
+      size="lg"
+      class="mt-auto w-fit rounded-full"
+    >
+      {{ player.promoBadge }}
+    </UBadge>
+
+    <span v-if="player.priceCoins" class="inline-flex items-center gap-2 text-sm font-semibold text-white">
+      <img :src="coinIcon" alt="" class="h-5 w-5" />
+      {{ player.priceCoins }}/Game
+    </span>
   </router-link>
 </template>

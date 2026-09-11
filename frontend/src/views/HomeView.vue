@@ -5,13 +5,12 @@ import {
   PhStar,
   PhUserCircle,
   PhArrowRight,
-  PhTrophy,
   PhCaretLeft,
   PhCaretRight,
 } from '@phosphor-icons/vue'
 import { usePlayersStore } from '@/stores/players'
 import { useEstarsStore } from '@/stores/estars'
-import coinIcon from '@/assets/squadup-coin.svg'
+import PlayerCard from '@/components/players/PlayerCard.vue'
 import homeSpotlightImage from '@/assets/home-rec.jpg'
 import gamesTileImage from '@/assets/game.jpg'
 import chillingTileImage from '@/assets/chilling.jpg'
@@ -248,70 +247,23 @@ function goToProfile(id: string) {
           v-if="playersStore.loading && !morePals.length"
           class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <div v-for="n in 8" :key="n" class="flex flex-col gap-3 rounded-2xl bg-gray-800/70 p-4">
-            <div class="flex items-center gap-2.5">
-              <USkeleton class="h-12 w-12 rounded-full" />
-              <div class="min-w-0 flex-1 space-y-1.5">
-                <USkeleton class="h-4 w-24" />
-                <USkeleton class="h-3 w-14" />
-              </div>
+          <div v-for="n in 8" :key="n" class="flex flex-col gap-2.5 rounded-xl bg-gray-800/70 p-4">
+            <div class="flex items-start justify-between">
+              <USkeleton class="size-20 rounded-full" />
+              <USkeleton class="size-8 rounded-full" />
             </div>
-            <USkeleton class="h-3 w-32" />
-            <div class="mt-auto flex items-center justify-between pt-1">
-              <USkeleton class="h-4 w-14" />
-              <USkeleton class="h-8 w-16 rounded-full" />
+            <USkeleton class="h-4 w-28" />
+            <USkeleton class="h-3 w-14" />
+            <div class="flex gap-1.5">
+              <USkeleton class="h-6 w-16 rounded-full" />
+              <USkeleton class="h-6 w-14 rounded-full" />
             </div>
+            <USkeleton class="h-3 w-36" />
+            <USkeleton class="mt-auto h-5 w-20" />
           </div>
         </div>
         <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <article
-            v-for="player in morePals"
-            :key="player.id"
-            class="flex flex-col gap-3 rounded-2xl bg-gray-800/70 p-4"
-          >
-            <div class="flex items-center gap-2.5">
-              <UAvatar :src="resolveAvatarUrl(player.id, player.avatarUrl)" size="xl" class="bg-white/10 text-slate-300">
-                <PhUserCircle :size="22" />
-              </UAvatar>
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="truncate font-semibold text-white">{{ player.displayName }}</span>
-                  <PhTrophy
-                    v-if="(player.rating ?? 0) >= 4.8"
-                    :size="20"
-                    weight="fill"
-                    class="shrink-0 text-amber-400"
-                  />
-                </div>
-                <p class="inline-flex items-center gap-1 text-sm text-slate-400">
-                  <PhStar :size="16" weight="fill" class="text-amber-400" />
-                  {{ player.rating ?? '—' }}
-                </p>
-              </div>
-            </div>
-            <div class="flex flex-wrap gap-1.5">
-              <UBadge v-if="player.rank" color="neutral" variant="soft" size="md" class="rounded-full text-xs">
-                {{ player.rank }}
-              </UBadge>
-              <UBadge v-if="player.role" color="neutral" variant="soft" size="md" class="rounded-full text-xs">
-                {{ player.role }}
-              </UBadge>
-            </div>
-            <div class="mt-auto flex items-center justify-between pt-1">
-              <span class="inline-flex items-center gap-2 text-md font-semibold text-white">
-                <img :src="coinIcon" alt="" class="h-6 w-6" />
-                {{ player.pricePerHour ?? '—' }}/hr
-              </span>
-              <UButton
-                size="md"
-                variant="solid"
-                class="rounded-full"
-                @click="router.push(`/players/${player.id}`)"
-              >
-                Book
-              </UButton>
-            </div>
-          </article>
+          <PlayerCard v-for="player in morePals" :key="player.id" :player="player" />
         </div>
       </div>
     </section>

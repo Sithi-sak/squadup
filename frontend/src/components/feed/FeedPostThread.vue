@@ -101,10 +101,13 @@ const comments = computed(() => {
 })
 
 const newComment = ref('')
+const posting = ref(false)
 
 async function postComment() {
+  if (posting.value) return
   const text = newComment.value.trim()
   if (!text) return
+  posting.value = true
   try {
     await feedStore.postComment(props.postId, text)
     newComment.value = ''
@@ -114,6 +117,8 @@ async function postComment() {
       description: err instanceof Error ? err.message : 'Please try again.',
       color: 'error',
     })
+  } finally {
+    posting.value = false
   }
 }
 
@@ -236,9 +241,18 @@ async function toggleLike() {
           variant="subtle"
           class="w-full rounded-full"
           :ui="{ base: 'rounded-full' }"
+          :disabled="posting"
           @keyup.enter="postComment"
         />
-        <UButton color="primary" class="shrink-0 rounded-full px-6" @click="postComment">Post</UButton>
+        <UButton
+          color="primary"
+          class="shrink-0 rounded-full px-6"
+          :loading="posting"
+          :disabled="posting"
+          @click="postComment"
+        >
+          Post
+        </UButton>
       </div>
 
       <p v-if="comments.length === 0" class="py-10 text-center text-sm text-slate-400">

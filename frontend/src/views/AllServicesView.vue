@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { PhArrowRight, PhArrowLeft, PhMagnifyingGlass } from '@phosphor-icons/vue'
 import gamesTileImage from '@/assets/game.jpg'
@@ -56,7 +56,7 @@ function openDrawer(tab: CategoryTab) {
 
 const route = useRoute()
 
-onMounted(() => {
+onActivated(() => {
   const tab = route.query.tab
   if (tab === 'games' || tab === 'chilling') {
     openDrawer(tab)
@@ -128,7 +128,7 @@ const filteredChillingSections = computed(() => {
             :style="{ backgroundImage: `url(${tile.image})` }"
             @click="openDrawer(tile.tab)"
           >
-            <div class="absolute inset-0 bg-squadup-dark/60 transition-colors hover:bg-squadup-dark/20" />
+            <div class="absolute inset-0 bg-squadup-dark/60 transition-colors hover:bg-squadup-dark/20 cursor-pointer" />
             <span class="relative text-lg font-semibold text-white">{{ tile.label }}</span>
           </button>
         </div>
@@ -147,7 +147,7 @@ const filteredChillingSections = computed(() => {
                 class="absolute inset-0 h-full w-full object-cover"
               />
               <div
-                class="absolute inset-0 bg-linear-to-t from-squadup-dark via-squadup-dark/15 to-transparent"
+                class="absolute inset-0 bg-linear-to-t from-squadup-dark via-squadup-dark/15 to-transparent transition-colors hover:bg-squadup-dark/20 cursor-pointer"
               />
             </template>
             <span class="relative px-4 pb-4 font-semibold text-white">{{ card.label }}</span>
@@ -192,7 +192,7 @@ const filteredChillingSections = computed(() => {
               <UButton
                 :color="gameFilter === 'all' ? 'primary' : 'neutral'"
                 :variant="gameFilter === 'all' ? 'solid' : 'soft'"
-                size="sm"
+                size="md"
                 class="rounded-full"
                 @click="gameFilter = 'all'"
               >
@@ -201,7 +201,7 @@ const filteredChillingSections = computed(() => {
               <UButton
                 :color="gameFilter === 'multiplayer' ? 'primary' : 'neutral'"
                 :variant="gameFilter === 'multiplayer' ? 'solid' : 'soft'"
-                size="sm"
+                size="md"
                 class="rounded-full"
                 @click="gameFilter = 'multiplayer'"
               >
@@ -215,6 +215,7 @@ const filteredChillingSections = computed(() => {
               v-model="search"
               placeholder="Search"
               variant="subtle"
+              size="md"
               class="w-48 rounded-full sm:w-64"
               :ui="{ base: 'rounded-full' }"
             >

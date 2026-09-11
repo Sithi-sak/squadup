@@ -2127,6 +2127,50 @@ kind of Stripe id.
   - [x] 4.17d Verification: `vue-tsc --build` and `eslint` clean on the touched files. Manual
         browser walkthrough left to the user.
 
+- [x] 4.18 Navigation feel: preconnect to the real backend origins (requested directly by the
+      user, who found page/profile navigation jarring; researched an article on hard-navigation
+      browser APIs first). Speculation Rules API / prerendering don't apply here since all
+      internal nav is client-side routed by vue-router (no document reload) - preconnect is the
+      one technique from that research that's real for this app. Hover/intent prefetch of route
+      chunks + data, `<Transition>` on `router-view`, and `KeepAlive` for the nav tabs are the
+      separate follow-up for the actual soft-nav jank, not yet implemented.
+  - [x] 4.18a `frontend/index.html` now preconnects to `%VITE_SUPABASE_URL%` and `%VITE_API_URL%`
+        (Vite's built-in HTML env interpolation) alongside the existing Google Fonts preconnects,
+        shaving the DNS/TLS/TCP handshake off the first Supabase/API request per page load.
+  - [x] 4.18b Verification: visual review only - `bun run dev`/browser check left to the user per
+        [[feedback_no_build_or_run_skill]].
+
+- [x] 4.19 Soft-nav smoothing for the 6 top-nav links (Discover/Feed/Games/eStars/Become a
+      Pal/Help) - the actual fix for the jarring feeling 4.18 didn't touch, since that nav is
+      all client-side routed with no document reload.
+  - [x] 4.19a `App.vue`: bare `<router-view />` replaced with the scoped-slot form -
+        `<transition name="route-fade" mode="out-in">` wrapping a `<keep-alive
+        :include="cachedViewNames">`, `cachedViewNames` listing the 6 nav views by their
+        `<script setup>`-inferred component name. Fade CSS respects `prefers-reduced-motion`.
+  - [x] 4.19b KeepAlive changes each of those views' lifecycle contract - `onMounted` doesn't
+        re-fire on revisit, but `onActivated` does (on first mount too). Moved the fetch/query
+        logic that needs to rerun on revisit from `onMounted` to `onActivated` in `FeedView.vue`
+        (`feedStore.fetchFeed()`), `EstarsLeaderboardView.vue` (`refetch`), and
+        `AllServicesView.vue` (the `route.query.tab` auto-open-drawer read). `HomeView.vue`,
+        `BecomeAPalView.vue`, `HelpCenterView.vue` needed no change (already length-guarded or
+        fully static).
+  - [x] 4.19c New `frontend/src/composables/useNavPrefetch.ts`: on hover-intent (~120ms
+        debounce), touchstart, or focus of a nav link, re-invokes that route's lazy `()  =>
+        import(...)` loader (safe/free once Vite's cached the chunk promise) and, for
+        `/home`/`/feed`/`/estars`, calls the same store fetch the destination view calls by
+        default so the data's already in flight by the time it mounts. Wired onto
+        `AppHeader.vue`'s `navLinks` loop.
+  - [x] 4.19d Dedup guard: hover-prefetch firing then the view's own `onActivated` firing
+        moments later would otherwise double-fetch. Added `if (loading.value) return` as the
+        first line of `feedStore.fetchFeed`, `estarsStore.fetchLeaderboard`,
+        `playersStore.fetchList`, and `playersStore.fetchGameCounts` (which had no `loading`
+        ref before now - added one, same convention every other fetch in that store already
+        uses) - the same in-flight call still updates state, so nothing is lost.
+  - [x] 4.19e Verification: `vue-tsc --build` and `eslint` clean on all 9 touched files (2
+        pre-existing, unrelated errors elsewhere left alone). Manual browser walkthrough (hover
+        a nav link and watch Network tab, then bounce between tabs) left to the user per
+        [[feedback_no_build_or_run_skill]].
+
 ---
 
 ## Cut list (only if time runs out)

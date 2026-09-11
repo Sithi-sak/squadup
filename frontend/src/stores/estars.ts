@@ -28,6 +28,7 @@ export const useEstarsStore = defineStore('estars', () => {
    * `mockEstarsLeaderboard` if the request fails, same mock-fallback resilience convention as
    * every other Phase 3 store (`stores/bookings.ts`'s `fetchList`/`fetchIncoming`, etc). */
   async function fetchLeaderboard(period: EstarPeriod, category?: string | null) {
+    if (loading.value) return
     loading.value = true
     error.value = null
     try {

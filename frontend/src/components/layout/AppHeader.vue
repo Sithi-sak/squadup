@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   PhList,
   PhMagnifyingGlass,
@@ -19,6 +19,7 @@ import { useWalletStore } from '@/stores/wallet'
 import { usePlayersStore } from '@/stores/players'
 import NotificationPanel from '@/components/layout/NotificationPanel.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { useNavPrefetch } from '@/composables/useNavPrefetch'
 
 const notificationsStore = useNotificationsStore()
 const authStore = useAuthStore()
@@ -26,6 +27,9 @@ const walletStore = useWalletStore()
 const playersStore = usePlayersStore()
 
 const router = useRouter()
+const route = useRoute()
+
+const { onIntentEnter, onIntentLeave, onIntentNow } = useNavPrefetch(router)
 
 const mobileMenuOpen = ref(false)
 const searchQuery = ref('')
@@ -54,13 +58,19 @@ watch(
 const isPal = computed(() => !!authStore.user?.playerId)
 
 const navLinks = computed(() => [
-  { label: 'Discover', to: '/home' },
-  { label: 'Feed', to: '/feed' },
-  { label: 'Games', to: '/services' },
-  { label: 'eStars', to: '/estars' },
-  ...(isPal.value ? [] : [{ label: 'Become a Pal', to: '/become-a-pal' }]),
-  { label: 'Help', to: '/help' },
+  { label: 'Discover', to: '/home', match: ['/home'] },
+  { label: 'Feed', to: '/feed', match: ['/feed'] },
+  { label: 'Games', to: '/services', match: ['/services', '/players'] },
+  { label: 'eStars', to: '/estars', match: ['/estars'] },
+  ...(isPal.value
+    ? []
+    : [{ label: 'Become a Pal', to: '/become-a-pal', match: ['/become-a-pal'] }]),
+  { label: 'Help', to: '/help', match: ['/help', '/faq'] },
 ])
+
+function isLinkActive(link: { match: string[] }) {
+  return link.match.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
+}
 
 const dashboardPath = computed(() => (isPal.value ? '/dashboard/player' : '/feed/me'))
 const firstName = computed(
@@ -106,8 +116,12 @@ function handleSearch() {
           <router-link
             v-if="link.to"
             :to="link.to"
-            class="text-sm text-slate-300 hover:text-white"
-            active-class="text-brand-400"
+            class="text-sm"
+            :class="isLinkActive(link) ? 'text-brand-400' : 'text-slate-300 hover:text-white'"
+            @mouseenter="onIntentEnter(link.to)"
+            @mouseleave="onIntentLeave"
+            @touchstart="onIntentNow(link.to)"
+            @focus="onIntentNow(link.to)"
           >
             {{ link.label }}
           </router-link>

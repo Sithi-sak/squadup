@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onActivated, ref, watch } from 'vue'
 import {
   PhCaretUp,
   PhCaretDown,
@@ -31,7 +31,7 @@ function refetch() {
   estarsStore.fetchLeaderboard(periodParams[activePeriod.value], category)
 }
 
-onMounted(refetch)
+onActivated(refetch)
 watch(activePeriod, refetch)
 watch(activeCategory, refetch)
 

@@ -289,6 +289,7 @@ export const usePlayersStore = defineStore('players', () => {
   const suggestedLoading = ref(false)
 
   const gameCounts = ref<Record<string, number>>({})
+  const gameCountsLoading = ref(false)
 
   const mine = ref<MyPlayerProfile | null>(null)
   const mineLoading = ref(false)
@@ -306,6 +307,7 @@ export const usePlayersStore = defineStore('players', () => {
    * top-rated-only path on the backend (see `list_players`) for callers like Home/Landing that
    * only need a small rail, not the full catalog to filter/search over. */
   async function fetchList(params: { q?: string; game?: string; limit?: number } = {}) {
+    if (loading.value) return
     loading.value = true
     error.value = null
     try {
@@ -342,10 +344,14 @@ export const usePlayersStore = defineStore('players', () => {
    * "empty is a normal state" convention as `fetchSuggested`, since a 0 count reads the same as
    * a missing one on the card. */
   async function fetchGameCounts() {
+    if (gameCountsLoading.value) return
+    gameCountsLoading.value = true
     try {
       gameCounts.value = await api.get<Record<string, number>>('/players/game-counts')
     } catch {
       gameCounts.value = {}
+    } finally {
+      gameCountsLoading.value = false
     }
   }
 

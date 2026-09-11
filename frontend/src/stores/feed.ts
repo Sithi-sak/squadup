@@ -222,6 +222,7 @@ export const useFeedStore = defineStore('feed', () => {
   /** Feed (`/feed`). Falls back to `mockFeedPosts` if the request fails (signed out, network
    * error, backend down), same resilience convention as 3.1j/3.2d/3.4c/3.5d. */
   async function fetchFeed() {
+    if (postsLoading.value) return
     postsLoading.value = true
     postsError.value = null
     try {

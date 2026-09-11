@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import { PhCamera, PhFilmSlate, PhPencilSimple, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import FeedLayout from '@/components/feed/FeedLayout.vue'
@@ -21,7 +21,7 @@ const toast = useToast()
 const currentUserId = computed(() => authStore.user?.id ?? mockCurrentUser.id)
 const composerAvatarUrl = computed(() => resolveAvatarUrl(currentUserId.value, playersStore.mine?.avatarUrl))
 
-onMounted(() => {
+onActivated(() => {
   feedStore.fetchFeed()
 })
 
@@ -67,7 +67,7 @@ async function toggleLike(post: FeedPost) {
     <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
     <template v-else>
-      <div class="rounded-xl bg-gray-800/70 p-4">
+      <div class="rounded-xl bg-gray-800/50 p-4">
         <div class="flex items-center gap-3">
           <UAvatar :src="composerAvatarUrl" size="md" class="shrink-0 bg-white/10 text-slate-300">
             <PhUserCircle :size="20" />

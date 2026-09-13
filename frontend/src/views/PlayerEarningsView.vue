@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockPalDashboardStats } from '@/mocks/dashboardStats'
@@ -33,8 +32,7 @@ function formatDate(iso: string) {
 </script>
 
 <template>
-  <DashboardLayout active="earnings">
-    <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
+  <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">Earnings</h1>
@@ -143,6 +141,5 @@ function formatDate(iso: string) {
           </div>
         </div>
       </div>
-    </div>
-  </DashboardLayout>
+  </div>
 </template>

@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhStar, PhTrash } from '@phosphor-icons/vue'
-import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { usePlayersStore } from '@/stores/players'
@@ -68,8 +67,7 @@ async function handleDelete() {
 </script>
 
 <template>
-  <DashboardLayout active="services">
-    <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
+  <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">My services</h1>
@@ -170,7 +168,6 @@ async function handleDelete() {
           </div>
         </div>
       </div>
-    </div>
 
     <ConfirmModal
       v-model:open="deleteOpen"
@@ -181,5 +178,5 @@ async function handleDelete() {
       destructive
       @confirm="handleDelete"
     />
-  </DashboardLayout>
+  </div>
 </template>

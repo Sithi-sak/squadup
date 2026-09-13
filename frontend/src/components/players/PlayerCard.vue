@@ -16,7 +16,7 @@ function formatCount(count: number) {
 <template>
   <router-link
     :to="`/players/${player.id}`"
-    class="relative isolate flex flex-col gap-2.5 overflow-hidden rounded-xl bg-gray-800/70 p-4 transition duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30"
+    class="relative isolate flex flex-col gap-2.5 overflow-hidden rounded-2xl bg-gray-800/70 p-4 transition duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30"
   >
     <div class="absolute inset-0 -z-10">
       <img

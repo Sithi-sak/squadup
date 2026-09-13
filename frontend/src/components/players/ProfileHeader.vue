@@ -150,7 +150,7 @@ function confirmBlock() {
         {{ following ? 'Following' : 'Follow' }}
       </UButton>
       <UButton
-        v-if="!isOwnProfile && profile.subscribeLabel"
+        v-if="false && !isOwnProfile && profile.subscribeLabel"
         color="primary"
         :variant="subscribed ? 'soft' : 'outline'"
         class="rounded-full"

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import SettingsNav from '@/components/settings/SettingsNav.vue'
 import SettingsProfileTab from '@/components/settings/SettingsProfileTab.vue'
 import SettingsAccountTab from '@/components/settings/SettingsAccountTab.vue'
@@ -26,27 +25,25 @@ const activeTab = ref(isPal.value ? 'profile' : 'account')
 </script>
 
 <template>
-  <DashboardLayout v-if="isPal" active="settings">
-    <div class="flex h-full flex-col gap-6 overflow-y-auto pr-1">
-      <div>
-        <h1 class="text-2xl font-bold text-white sm:text-3xl">Settings</h1>
-        <p class="mt-1 text-sm text-slate-400">Manage your profile, account and preferences</p>
-      </div>
+  <div v-if="isPal" class="flex h-full flex-col gap-6 overflow-y-auto pr-1">
+    <div>
+      <h1 class="text-2xl font-bold text-white sm:text-3xl">Settings</h1>
+      <p class="mt-1 text-sm text-slate-400">Manage your profile, account and preferences</p>
+    </div>
 
-      <div class="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
-        <SettingsNav v-model:active="activeTab" :tabs="tabs" />
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
+      <SettingsNav v-model:active="activeTab" :tabs="tabs" />
 
-        <div class="min-w-0">
-          <SettingsProfileTab v-if="activeTab === 'profile'" />
-          <SettingsAccountTab v-else-if="activeTab === 'account'" />
-          <SettingsNotificationsTab v-else-if="activeTab === 'notifications'" />
-          <SettingsPaymentsTab v-else-if="activeTab === 'payments'" />
-          <SettingsPrivacyTab v-else-if="activeTab === 'privacy'" />
-          <SettingsSecurityTab v-else-if="activeTab === 'security'" />
-        </div>
+      <div class="min-w-0">
+        <SettingsProfileTab v-if="activeTab === 'profile'" />
+        <SettingsAccountTab v-else-if="activeTab === 'account'" />
+        <SettingsNotificationsTab v-else-if="activeTab === 'notifications'" />
+        <SettingsPaymentsTab v-else-if="activeTab === 'payments'" />
+        <SettingsPrivacyTab v-else-if="activeTab === 'privacy'" />
+        <SettingsSecurityTab v-else-if="activeTab === 'security'" />
       </div>
     </div>
-  </DashboardLayout>
+  </div>
 
   <div v-else class="h-[calc(100vh-65px)] overflow-y-auto px-4 py-6 md:px-6">
     <div class="mx-auto flex max-w-(--content-max-width) flex-col gap-6">

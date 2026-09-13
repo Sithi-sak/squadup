@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhStar, PhTrendUp, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { mockCurrentUser } from '@/mocks/users'
@@ -96,8 +95,7 @@ function formatScheduled(iso: string) {
 </script>
 
 <template>
-  <DashboardLayout active="dashboard">
-    <div class="flex h-full flex-col gap-6 overflow-y-auto pr-1">
+  <div class="flex h-full flex-col gap-6 overflow-y-auto pr-1">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">
@@ -268,6 +266,5 @@ function formatScheduled(iso: string) {
           </div>
         </div>
       </div>
-    </div>
-  </DashboardLayout>
+  </div>
 </template>

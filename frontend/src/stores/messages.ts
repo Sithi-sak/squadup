@@ -12,6 +12,7 @@ export interface MessageThread {
   lastMessagePreview: string | null
   updatedAt: string
   unreadCount: number
+  muted: boolean
 }
 
 export interface ChatMessage {
@@ -156,6 +157,45 @@ export const useMessagesStore = defineStore('messages', () => {
     appendMessage(threadId, message)
   }
 
+  /** Optimistic: flips `muted` immediately rather than waiting on the round trip, since nothing
+   * about the mute state depends on the server's response - rolls back on failure. */
+  async function muteThread(threadId: string, muted: boolean) {
+    const thread = threads.value.find((t) => t.id === threadId)
+    if (!thread) return
+    const previous = thread.muted
+    thread.muted = muted
+    try {
+      await api.patch(`/messages/threads/${threadId}/mute`, { muted })
+    } catch (err) {
+      thread.muted = previous
+      throw err
+    }
+  }
+
+  /** Optimistic removal, same rationale as `muteThread` - restores the thread (and active
+   * selection) in place on failure. */
+  async function deleteThread(threadId: string) {
+    const index = threads.value.findIndex((t) => t.id === threadId)
+    if (index === -1) return
+    const [removed] = threads.value.splice(index, 1)
+    const wasActive = activeThreadId.value === threadId
+    if (wasActive) activeThreadId.value = null
+
+    try {
+      await api.delete(`/messages/threads/${threadId}`)
+    } catch (err) {
+      threads.value.splice(index, 0, removed)
+      if (wasActive) activeThreadId.value = threadId
+      throw err
+    }
+
+    if (wasActive) {
+      delete messagesByThread.value[threadId]
+      const fallbackId = threads.value[0]?.id
+      if (fallbackId) await selectThread(fallbackId)
+    }
+  }
+
   return {
     threads,
     threadsLoading,
@@ -170,5 +210,7 @@ export const useMessagesStore = defineStore('messages', () => {
     selectThread,
     startThread,
     sendMessage,
+    muteThread,
+    deleteThread,
   }
 })

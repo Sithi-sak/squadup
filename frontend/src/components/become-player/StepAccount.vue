@@ -12,18 +12,18 @@ const emit = defineEmits<{ continue: [] }>()
 
 const regionOptions = [
   'Cambodia',
-  'Vietnam',
-  'Philippines',
-  'Singapore',
-  'Indonesia',
-  'Malaysia',
+  // 'Vietnam',
+  // 'Philippines',
+  // 'Singapore',
+  // 'Indonesia',
+  // 'Malaysia',
 ]
 
 const timezoneOptions = [
-  'GMT+06:30',
+  // 'GMT+06:30',
   'GMT+07:00',
-  'GMT+08:00',
-  'GMT+09:00',
+  // 'GMT+08:00',
+  // 'GMT+09:00',
 ]
 
 const fileInput = ref<HTMLInputElement | null>(null)

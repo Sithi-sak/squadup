@@ -2295,6 +2295,83 @@ kind of Stripe id.
         selects in its `updateAccount` payload, so those two fields don't persist despite the
         button working. Left for the user to prioritize.
 
+- [x] 4.24 Messages page cleanup + per-chat mute/delete (requested directly by the user
+      2026-09-13, off a screenshot of the Messages page).
+  - [x] 4.24a Frontend: removed `MessagesPanel.vue`'s disabled "New chat" button (dead placeholder,
+        `PhPlus` import dropped) and the conversation header's Call button (`PhPhone` import
+        dropped) - both were non-functional per the user, "it's not needed"/"it's useless". Each
+        chat-list row's outer `<button>` became a `role="button"` `<div>` so a per-row 3-dot
+        (`PhDotsThree`) `UDropdownMenu` could sit inside without an invalid nested-button; the
+        button uses `@click.stop` so opening the menu doesn't also select the thread. Menu offers
+        Mute/Unmute and Delete, revealed on row hover/focus via `group-hover`.
+  - [x] 4.24b Initial pass was frontend-only (local `ref` `Set`s for muted/hidden thread ids, no
+        persistence) since no backend existed yet - the user then asked to wire it up for real.
+  - [x] 4.24c Backend: new `message_thread_states` table (migration
+        `20260913050000_message_thread_states.sql`) - one row per `(thread_id, user_id)` since
+        mute/delete are per-participant, not shared like `message_threads` itself; `deleted_at` is
+        a soft hide so the other participant's copy of the thread/messages is unaffected. RLS
+        enabled with no policies (consistent with every table `routers/messages.py`'s
+        service-role client is the only reader/writer of - no frontend-direct Supabase access
+        needed here, unlike 3.5b's realtime tables). Applied via `bunx supabase db push`.
+  - [x] 4.24d Backend: `routers/messages.py` - `PATCH /messages/threads/{id}/mute` and
+        `DELETE /messages/threads/{id}` (204, soft-hide only), both scoped to the caller via the
+        existing `_get_thread` membership check. `ThreadOut` gained a `muted` field; `list_threads`
+        now batch-fetches state rows alongside threads/messages (same batching convention as
+        3.5a) and filters out threads the caller has hidden. Deleting a thread you're still
+        chatting in isn't permanent: `start_thread` un-hides it if you message that participant
+        again, and `send_message` un-hides it for the *recipient* too, so a chat you deleted
+        doesn't silently swallow a message the other person sends you later.
+  - [x] 4.24e Frontend: `stores/messages.ts` - `MessageThread` gained `muted: boolean` (mocks
+        updated to match); new `muteThread(threadId, muted)`/`deleteThread(threadId)` actions
+        calling the new endpoints, updating/removing the thread locally on success rather than
+        refetching the whole list. `MessagesPanel.vue`'s menu items and mute indicator now read
+        `thread.muted` from the store instead of local state, with a toast on failure (same
+        pattern as `handleSend`).
+  - [x] 4.24f Verification: `ruff check` and `vue-tsc --noEmit` both clean, `eslint` clean on the
+        changed files. Manual browser walkthrough left to the user per
+        [[feedback_no_build_or_run_skill]].
+  - [x] 4.24g Perf fix (reported 2026-09-13 by the user: mute/unmute felt slow). Root cause: the
+        mute endpoint chained 4 sequential Supabase round trips - a joined `_get_thread` fetch,
+        the state upsert, then `_full_thread_out` re-fetching *every message in the thread*
+        (unbounded) plus a redundant state re-read, all just to hand back a `ThreadOut` the
+        frontend immediately overwrote in place. Not a Realtime problem - Realtime pushes DB
+        changes to *other* viewers, it doesn't speed up the round trip for your own write.
+        Trimmed `set_thread_muted`/`delete_thread` to one cheap membership check
+        (`_require_membership`, no display-name join) plus the upsert; mute now returns a minimal
+        `{id, muted}` (`MuteThreadOut`) instead of a recomputed `ThreadOut`. `_full_thread_out`
+        deleted as dead code. Frontend `stores/messages.ts`'s `muteThread`/`deleteThread` are now
+        optimistic - flip/remove the thread locally before the request resolves, roll back on
+        failure - so the click feels instant regardless of network latency.
+
+- [x] 4.25 Player dashboard navigation re-rendered the whole page too (reported 2026-09-13 by the
+      user with a screenshot of the Dashboard page - same complaint as 4.21, but for
+      `/dashboard/player/*`, `/messages` and `/settings`): moving between Dashboard/Orders/My
+      services/Earnings/Messages/Settings tore down and rebuilt `DashboardSidebar` on every nav.
+  - [x] 4.25a Root cause: `/dashboard/player`, `/orders`, `/services`, `/earnings` were four
+        separate top-level routes, each rendering `DashboardLayout` (and its `DashboardSidebar`)
+        itself; `/messages` and `/settings` did the same conditionally for Pal accounts.
+  - [x] 4.25b New `views/PlayerDashboardShellView.vue`: owns `DashboardLayout`/`DashboardSidebar`
+        once, with a nested `<router-view>` (fade transition + `keep-alive`) in the content slot.
+  - [x] 4.25c `router/index.ts`: those four dashboard routes became children of one
+        `/dashboard/player` shell record. `/messages` and `/settings` were pulled in too via
+        absolute child paths (`path: '/messages'`/`'/settings'`) so they nest under the same
+        shell for rendering while keeping their existing top-level URLs - vue-router supports
+        this (a child path starting with `/` skips the parent's URL prefix but keeps the parent
+        component nesting, confirmed with a throwaway `router.resolve()` script). `.../services/new`
+        stays a top-level sibling route on purpose - the create-service flow is full-width, with
+        no sidebar.
+  - [x] 4.25d Active nav item moved from a prop (`active`) to route `meta.dashboardTab`, since
+        the sidebar sits above the child view now (same pattern as 4.21d's `feedTab`).
+  - [x] 4.25e The six child views dropped their own `DashboardLayout` wrapper. `MessagesView`/
+        `SettingsView` keep their `isPal` branch for buyer-facing content differences, but the
+        Pal branch no longer wraps itself in `DashboardLayout` - the shell only renders that
+        chrome `v-if="isPal"` and hands buyers straight through via a plain `v-else`
+        `<router-view>`, so buyers still see their existing full-bleed layout untouched.
+  - [x] 4.25f All six child views are kept alive inside the shell so switching tabs is instant
+        and preserves scroll/selection/filter state.
+  - [x] 4.25g Verification: `vue-tsc --noEmit` and `eslint` clean on all touched files. Manual
+        browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+
 ---
 
 ## Cut list (only if time runs out)

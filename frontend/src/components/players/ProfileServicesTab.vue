@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhStar } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
@@ -6,6 +7,8 @@ import coinIcon from '@/assets/squadup-coin.svg'
 import type { PlayerReview, PlayerServiceDetail } from '@/stores/players'
 import { useMessagesStore } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
+import { games } from '@/data/games'
+import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
 import ServiceReviewsPanel from '@/components/players/ServiceReviewsPanel.vue'
 
 const props = defineProps<{
@@ -21,6 +24,15 @@ const router = useRouter()
 const messagesStore = useMessagesStore()
 const authStore = useAuthStore()
 const toast = useToast()
+
+/** Service titles are the game name the Pal picked during onboarding (`data/games.ts`'s
+ * `games` list), so reuse the same slug + CDN manifest lookup as the game rails elsewhere. */
+const coverFilenames = useCoverManifest()
+const coverSrc = computed(() => {
+  const slug = games.find((g) => g.name === props.detail.title)?.id
+  const filename = slug ? coverFilenames.value.get(slug) : undefined
+  return slug && filename ? gameCoverUrl(slug, filename) : undefined
+})
 
 async function handleMessage() {
   if (!authStore.isAuthenticated) {
@@ -94,7 +106,9 @@ async function handleMessage() {
     </div>
 
     <div class="flex flex-col gap-4">
-      <div class="aspect-video w-full rounded-xl bg-white/5" />
+      <div class="aspect-video w-full overflow-hidden rounded-xl bg-white/5">
+        <img v-if="coverSrc" :src="coverSrc" :alt="detail.title" class="h-full w-full object-cover" />
+      </div>
 
       <div v-if="!isOwnProfile" class="rounded-xl bg-gray-800/70 p-4">
         <UButton

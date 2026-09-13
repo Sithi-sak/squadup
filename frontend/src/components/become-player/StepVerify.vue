@@ -138,8 +138,8 @@ const canSubmit = computed(() => data.value.idFrontFile !== null)
         <UButton
           v-else
           color="primary"
-          variant="soft"
-          size="sm"
+          variant="solid"
+          size="md"
           class="shrink-0 rounded-full"
           @click.stop="openFilePicker('selfie')"
         >

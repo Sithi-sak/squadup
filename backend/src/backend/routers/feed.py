@@ -364,7 +364,7 @@ def _saved_item_out(row: dict, author: dict | None = None, player: dict | None =
 
 @router.get("", response_model=list[PostOut])
 def list_feed(
-    author_id: str | None = Query(None),
+    author_id: str | None = Query(None, alias="authorId"),
     user_id: str | None = Depends(get_optional_user_id),
 ) -> list[dict]:
     client = get_supabase_client()

@@ -21,6 +21,15 @@ class SendMessageIn(CamelModel):
     body: str
 
 
+class MuteThreadIn(CamelModel):
+    muted: bool
+
+
+class MuteThreadOut(CamelModel):
+    id: str
+    muted: bool
+
+
 class ThreadOut(CamelModel):
     id: str
     participant_id: str
@@ -28,6 +37,7 @@ class ThreadOut(CamelModel):
     last_message_preview: str | None
     updated_at: str
     unread_count: int
+    muted: bool
 
 
 class MessageOut(CamelModel):
@@ -65,7 +75,9 @@ def _get_thread(client, thread_id: str, user_id: str) -> dict:
     return thread
 
 
-def _thread_out(thread: dict, user_id: str, *, last_message: dict | None, unread_count: int) -> dict:
+def _thread_out(
+    thread: dict, user_id: str, *, last_message: dict | None, unread_count: int, muted: bool = False
+) -> dict:
     is_a = thread["user_a_id"] == user_id
     participant_id = thread["user_b_id"] if is_a else thread["user_a_id"]
     participant = (thread.get("user_b") if is_a else thread.get("user_a")) or {}
@@ -76,7 +88,44 @@ def _thread_out(thread: dict, user_id: str, *, last_message: dict | None, unread
         "last_message_preview": last_message["body"] if last_message else None,
         "updated_at": last_message["created_at"] if last_message else thread["created_at"],
         "unread_count": unread_count,
+        "muted": muted,
     }
+
+
+def _get_thread_state(client, thread_id: str, user_id: str) -> dict:
+    result = (
+        client.table("message_thread_states")
+        .select("muted, deleted_at")
+        .eq("thread_id", thread_id)
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    return (result.data if result else None) or {"muted": False, "deleted_at": None}
+
+
+def _set_thread_state(client, thread_id: str, user_id: str, **fields) -> None:
+    client.table("message_thread_states").upsert(
+        {"thread_id": thread_id, "user_id": user_id, **fields},
+        on_conflict="thread_id,user_id",
+    ).execute()
+
+
+def _require_membership(client, thread_id: str, user_id: str) -> None:
+    """Cheaper than `_get_thread` for endpoints that only need the auth check, not the joined
+    display names - mute/delete don't return a full `ThreadOut`, so there's no reason to pay for
+    that join."""
+    result = (
+        client.table("message_threads")
+        .select("user_a_id, user_b_id")
+        .eq("id", thread_id)
+        .maybe_single()
+        .execute()
+    )
+    if not result or not result.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Thread not found")
+    if user_id not in (result.data["user_a_id"], result.data["user_b_id"]):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Thread not found")
 
 
 # Routes --------------------------------------------------------------------------------------
@@ -95,6 +144,21 @@ def list_threads(user_id: str = Depends(get_current_user_id)) -> list[dict]:
         .data
         or []
     )
+    if not threads:
+        return []
+
+    all_thread_ids = [t["id"] for t in threads]
+    states = (
+        client.table("message_thread_states")
+        .select("thread_id, muted, deleted_at")
+        .eq("user_id", user_id)
+        .in_("thread_id", all_thread_ids)
+        .execute()
+        .data
+        or []
+    )
+    state_by_thread = {s["thread_id"]: s for s in states}
+    threads = [t for t in threads if not (state_by_thread.get(t["id"]) or {}).get("deleted_at")]
     if not threads:
         return []
 
@@ -122,6 +186,7 @@ def list_threads(user_id: str = Depends(get_current_user_id)) -> list[dict]:
             user_id,
             last_message=last_message_by_thread.get(thread["id"]),
             unread_count=unread_by_thread.get(thread["id"], 0),
+            muted=(state_by_thread.get(thread["id"]) or {}).get("muted", False),
         )
         for thread in threads
     ]
@@ -150,6 +215,11 @@ def start_thread(payload: StartThreadIn, user_id: str = Depends(get_current_user
     )
     if existing and existing.data:
         thread = existing.data
+        # Starting a thread you'd previously deleted brings it back into your list rather than
+        # leaving it permanently hidden - matches `_get_thread_state`'s "no row = not deleted".
+        state = _get_thread_state(client, thread["id"], user_id)
+        if state["deleted_at"]:
+            _set_thread_state(client, thread["id"], user_id, deleted_at=None)
     else:
         created = (
             client.table("message_threads")
@@ -157,8 +227,9 @@ def start_thread(payload: StartThreadIn, user_id: str = Depends(get_current_user
             .execute()
         )
         thread = _get_thread(client, created.data[0]["id"], user_id)
+        state = {"muted": False}
 
-    return _thread_out(thread, user_id, last_message=None, unread_count=0)
+    return _thread_out(thread, user_id, last_message=None, unread_count=0, muted=state["muted"])
 
 
 @router.get("/threads/{thread_id}/messages", response_model=list[MessageOut])
@@ -211,4 +282,27 @@ def send_message(thread_id: str, payload: SendMessageIn, user_id: str = Depends(
     preview = body if len(body) <= 60 else f"{body[:57]}..."
     notify(other_user_id, "message", f'{sender_name} sent you a message: "{preview}"')
 
+    # A new message un-hides the thread for whoever deleted it, so it isn't lost off their list
+    # forever - mirrors `start_thread`'s own revive-on-restart behavior.
+    _set_thread_state(client, thread_id, other_user_id, deleted_at=None)
+
     return created.data[0]
+
+
+@router.patch("/threads/{thread_id}/mute", response_model=MuteThreadOut)
+def set_thread_muted(
+    thread_id: str, payload: MuteThreadIn, user_id: str = Depends(get_current_user_id)
+) -> dict:
+    client = get_supabase_client()
+    _require_membership(client, thread_id, user_id)
+    _set_thread_state(client, thread_id, user_id, muted=payload.muted)
+    return {"id": thread_id, "muted": payload.muted}
+
+
+@router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_thread(thread_id: str, user_id: str = Depends(get_current_user_id)) -> None:
+    """Hides the thread from this user's list only - the other participant's copy (and the
+    messages themselves) are untouched, per `message_thread_states`' per-user design."""
+    client = get_supabase_client()
+    _require_membership(client, thread_id, user_id)
+    _set_thread_state(client, thread_id, user_id, deleted_at=datetime.now(UTC).isoformat())

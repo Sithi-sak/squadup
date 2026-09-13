@@ -91,7 +91,6 @@ const accountMenuItems = computed(() => [
     { label: 'My Profile', to: myProfilePath.value },
     { label: 'My orders', to: '/bookings' },
     { label: 'Wallet', to: '/wallet' },
-    { label: 'Subscriptions', to: '/subscriptions' },
     { label: 'Settings', to: '/settings' },
   ],
   [{ label: 'Log out', onSelect: handleLogout }],
@@ -259,7 +258,6 @@ function handleSearch() {
             <router-link :to="myProfilePath" class="text-base text-white">My Profile</router-link>
             <router-link to="/bookings" class="text-base text-white">My Bookings</router-link>
             <router-link to="/wallet" class="text-base text-white">Wallet</router-link>
-            <router-link to="/subscriptions" class="text-base text-white">Subscriptions</router-link>
             <router-link :to="dashboardPath" class="text-base text-white">Dashboard</router-link>
             <router-link to="/settings" class="text-base text-white">Settings</router-link>
             <template v-if="!isPal">

@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { getBuyer } from '@/mocks/buyers'
 import { orderStatusMeta } from '@/utils/orderStatus'
@@ -84,8 +83,7 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <DashboardLayout active="orders">
-    <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
+  <div class="flex h-full flex-col gap-5 overflow-y-auto pr-1">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold text-white sm:text-3xl">Orders</h1>
@@ -209,7 +207,6 @@ const rows = computed(() => {
           </tbody>
         </table>
       </div>
-    </div>
 
     <UModal
       :open="!!viewing"
@@ -285,5 +282,5 @@ const rows = computed(() => {
         </div>
       </template>
     </UModal>
-  </DashboardLayout>
+  </div>
 </template>

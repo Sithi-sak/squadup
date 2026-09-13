@@ -9,6 +9,7 @@ export const mockThreads: MessageThread[] = [
     lastMessagePreview: "Sure, I'm free at 8PM. What server are you on?",
     updatedAt: '2026-08-16T08:12:00.000Z',
     unreadCount: 2,
+    muted: false,
   },
   {
     id: 't2',
@@ -17,6 +18,7 @@ export const mockThreads: MessageThread[] = [
     lastMessagePreview: 'Booking accepted, see you then!',
     updatedAt: '2026-08-15T20:45:00.000Z',
     unreadCount: 0,
+    muted: false,
   },
   {
     id: 't3',
@@ -25,6 +27,7 @@ export const mockThreads: MessageThread[] = [
     lastMessagePreview: 'GG! Thanks for the session 🙏',
     updatedAt: '2026-08-10T16:20:00.000Z',
     unreadCount: 1,
+    muted: false,
   },
 ]
 

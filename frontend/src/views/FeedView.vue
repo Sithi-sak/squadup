@@ -90,10 +90,6 @@ async function toggleLike(post: FeedPost) {
               <PhFilmSlate :size="16" weight="bold" />
               Clip
             </UButton>
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
-              <PhSmiley :size="16" weight="bold" />
-              Emoji
-            </UButton>
           </div>
           <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
         </div>

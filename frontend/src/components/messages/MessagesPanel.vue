@@ -2,15 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import {
+  PhBellSlash,
   PhDotsThree,
   PhMagnifyingGlass,
   PhPaperclip,
-  PhPhone,
-  PhPlus,
   PhSmiley,
   PhUserCircle,
 } from '@phosphor-icons/vue'
-import { useMessagesStore } from '@/stores/messages'
+import { useMessagesStore, type MessageThread } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayers } from '@/mocks/players'
@@ -48,6 +47,48 @@ const filteredThreads = computed(() => {
   if (!query) return sorted
   return sorted.filter((thread) => thread.participantDisplayName.toLowerCase().includes(query))
 })
+
+function threadMenuItems(thread: MessageThread) {
+  return [
+    [
+      {
+        label: thread.muted ? 'Unmute chat' : 'Mute chat',
+        onSelect: () => toggleMute(thread),
+      },
+    ],
+    [
+      {
+        label: 'Delete chat',
+        color: 'error' as const,
+        onSelect: () => deleteChat(thread.id),
+      },
+    ],
+  ]
+}
+
+async function toggleMute(thread: MessageThread) {
+  try {
+    await store.muteThread(thread.id, !thread.muted)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't update chat",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
+async function deleteChat(threadId: string) {
+  try {
+    await store.deleteThread(threadId)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't delete chat",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
 
 const totalUnread = computed(() => store.threads.reduce((sum, t) => sum + t.unreadCount, 0))
 
@@ -93,15 +134,9 @@ async function handleSend() {
 
 <template>
   <div class="flex h-full flex-col gap-5">
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-bold text-white">{{ title }}</h1>
-        <p class="mt-1 text-sm text-slate-400">{{ subtitle }}</p>
-      </div>
-      <UButton color="primary" class="rounded-full" disabled title="Coming soon">
-        <PhPlus :size="16" weight="bold" />
-        New chat
-      </UButton>
+    <div>
+      <h1 class="text-3xl font-bold text-white">{{ title }}</h1>
+      <p class="mt-1 text-sm text-slate-400">{{ subtitle }}</p>
     </div>
 
     <div
@@ -119,11 +154,12 @@ async function handleSend() {
             v-model="search"
             placeholder="Search chats"
             variant="subtle"
+            size="lg"
             class="w-full rounded-full"
             :ui="{ base: 'rounded-full' }"
           >
             <template #leading>
-              <PhMagnifyingGlass :size="16" />
+              <PhMagnifyingGlass :size="20" />
             </template>
           </UInput>
         </div>
@@ -149,13 +185,15 @@ async function handleSend() {
           </UEmpty>
 
           <template v-else>
-            <button
+            <div
               v-for="thread in filteredThreads"
               :key="thread.id"
-              type="button"
-              class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
+              role="button"
+              tabindex="0"
+              class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
               :class="thread.id === store.activeThreadId ? 'bg-brand-600/15' : 'hover:bg-white/5'"
               @click="store.selectThread(thread.id)"
+              @keydown.enter="store.selectThread(thread.id)"
             >
               <div class="relative shrink-0">
                 <UAvatar
@@ -171,11 +209,30 @@ async function handleSend() {
                 />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-semibold text-white">{{ thread.participantDisplayName }}</p>
+                <div class="flex items-center gap-1.5">
+                  <p class="truncate text-sm font-semibold text-white">{{ thread.participantDisplayName }}</p>
+                  <PhBellSlash v-if="thread.muted" :size="14" class="shrink-0 text-slate-500" />
+                </div>
                 <p class="truncate text-sm text-slate-400">{{ thread.lastMessagePreview }}</p>
               </div>
               <div class="flex shrink-0 flex-col items-end gap-1.5">
-                <span class="text-xs text-slate-500">{{ formatRelative(thread.updatedAt) }}</span>
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-slate-500">{{ formatRelative(thread.updatedAt) }}</span>
+                  <UDropdownMenu :items="threadMenuItems(thread)" :content="{ side: 'bottom', align: 'end' }">
+                    <UButton
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      square
+                      :ui="{ base: 'rounded-full' }"
+                      aria-label="Chat options"
+                      class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                      @click.stop
+                    >
+                      <PhDotsThree :size="24" />
+                    </UButton>
+                  </UDropdownMenu>
+                </div>
                 <span
                   v-if="thread.unreadCount"
                   class="flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white"
@@ -183,7 +240,7 @@ async function handleSend() {
                   {{ thread.unreadCount }}
                 </span>
               </div>
-            </button>
+            </div>
 
             <UEmpty
               v-if="filteredThreads.length === 0 && store.threads.length === 0"
@@ -214,16 +271,13 @@ async function handleSend() {
             </UAvatar>
             <div>
               <p class="font-semibold text-white">{{ store.activeThread.participantDisplayName }}</p>
-              <p class="text-xs text-slate-400">
+              <p class="text-sm text-slate-400">
                 <span v-if="activeParticipant?.games?.[0]">{{ activeParticipant.games[0] }} · </span>
                 {{ activeParticipant?.online ? 'Online' : 'Offline' }}
               </p>
             </div>
           </div>
           <div class="flex items-center gap-1.5">
-            <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Call">
-              <PhPhone :size="24" />
-            </UButton>
             <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="More">
               <PhDotsThree :size="24" />
             </UButton>

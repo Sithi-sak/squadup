@@ -18,6 +18,11 @@ declare module 'vue-router' {
     /** Shows the sidebar's "Create post" button - set on the feed pages that have no composer
      * of their own. */
     feedCreatePost?: boolean
+    /** Which `DashboardSidebar` nav item is lit for this page. Read by `PlayerDashboardShellView`,
+     * the shared parent route of every `/dashboard/player` page - the sidebar itself never
+     * remounts, so the active tab has to come from the route rather than a prop the child view
+     * passes up. */
+    dashboardTab?: 'dashboard' | 'orders' | 'services' | 'earnings' | 'messages' | 'settings'
     /** Redirects to `/home` when someone's already signed in — a live session can't land back
      * on the marketing/landing or auth pages (via link, browser back, or bookmark) until they
      * sign out. */
@@ -195,46 +200,61 @@ const router = createRouter({
       component: () => import('@/views/OrderDetailView.vue'),
       meta: { requiresAuth: true },
     },
-    {
-      path: '/messages',
-      name: 'messages',
-      component: () => import('@/views/MessagesView.vue'),
-      meta: { hideFooter: true, requiresAuth: true },
-    },
+    /** Every `/dashboard/player` page is a child of one persistent shell: the sidebar is
+     * mounted by `PlayerDashboardShellView` and stays put, so navigating between Dashboard/
+     * Orders/My services/Earnings/Messages/Settings only swaps the content column.
+     * `/messages` and `/settings` are pulled in here too (with absolute child paths, so their
+     * URLs stay top-level) since they share the same sidebar for Pal users - vue-router still
+     * nests them under the shell's `<router-view>` even though the URL isn't prefixed with
+     * `/dashboard/player`. `.../services/new` below is deliberately *not* a child - the
+     * create-service flow is full-width, with no sidebar. */
     {
       path: '/dashboard/player',
-      name: 'player-dashboard',
-      component: () => import('@/views/PlayerDashboardView.vue'),
+      component: () => import('@/views/PlayerDashboardShellView.vue'),
       meta: { hideFooter: true, requiresAuth: true },
-    },
-    {
-      path: '/dashboard/player/orders',
-      name: 'player-dashboard-orders',
-      component: () => import('@/views/PlayerOrdersView.vue'),
-      meta: { hideFooter: true, requiresAuth: true },
-    },
-    {
-      path: '/dashboard/player/services',
-      name: 'player-dashboard-services',
-      component: () => import('@/views/PlayerServicesView.vue'),
-      meta: { hideFooter: true, requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'player-dashboard',
+          component: () => import('@/views/PlayerDashboardView.vue'),
+          meta: { dashboardTab: 'dashboard' },
+        },
+        {
+          path: 'orders',
+          name: 'player-dashboard-orders',
+          component: () => import('@/views/PlayerOrdersView.vue'),
+          meta: { dashboardTab: 'orders' },
+        },
+        {
+          path: 'services',
+          name: 'player-dashboard-services',
+          component: () => import('@/views/PlayerServicesView.vue'),
+          meta: { dashboardTab: 'services' },
+        },
+        {
+          path: 'earnings',
+          name: 'player-dashboard-earnings',
+          component: () => import('@/views/PlayerEarningsView.vue'),
+          meta: { dashboardTab: 'earnings' },
+        },
+        {
+          path: '/messages',
+          name: 'messages',
+          component: () => import('@/views/MessagesView.vue'),
+          meta: { dashboardTab: 'messages' },
+        },
+        {
+          path: '/settings',
+          name: 'settings',
+          component: () => import('@/views/SettingsView.vue'),
+          meta: { dashboardTab: 'settings' },
+        },
+      ],
     },
     {
       path: '/dashboard/player/services/new',
       name: 'player-dashboard-create-service',
       component: () => import('@/views/CreateServiceView.vue'),
-      meta: { hideFooter: true, requiresAuth: true },
-    },
-    {
-      path: '/dashboard/player/earnings',
-      name: 'player-dashboard-earnings',
-      component: () => import('@/views/PlayerEarningsView.vue'),
-      meta: { hideFooter: true, requiresAuth: true },
-    },
-    {
-      path: '/settings',
-      name: 'settings',
-      component: () => import('@/views/SettingsView.vue'),
       meta: { hideFooter: true, requiresAuth: true },
     },
     {

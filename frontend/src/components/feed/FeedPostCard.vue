@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { PhChatCircle, PhHeart, PhShareFat, PhUserCircle } from '@phosphor-icons/vue'
+import { PhChatCircle, PhHeart, PhShareFat, PhUserCircle, PhX } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
@@ -65,6 +65,8 @@ function toggleLike() {
   }
   localLiked[props.id] = !localLiked[props.id]
 }
+
+const lightboxOpen = ref(false)
 </script>
 
 <template>
@@ -104,13 +106,48 @@ function toggleLike() {
 
     <p class="mt-3 text-md leading-relaxed" :class="isStatus ? 'text-slate-300' : 'text-slate-200'">{{ text }}</p>
 
-    <img
+    <button
       v-if="imageUrl"
-      :src="imageUrl"
-      alt=""
-      class="mt-3 aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
-    />
+      type="button"
+      class="mt-3 block w-full cursor-zoom-in"
+      aria-label="View full-size image"
+      @click="lightboxOpen = true"
+    >
+      <img
+        :src="imageUrl"
+        alt=""
+        class="aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
+      />
+    </button>
     <div v-else-if="hasImage" class="mt-3 aspect-video w-full rounded-lg bg-white/5 ring-1 ring-inset ring-white/10" />
+
+    <UModal
+      v-if="imageUrl"
+      v-model:open="lightboxOpen"
+      title="Image preview"
+      :ui="{ content: 'max-w-none w-auto bg-transparent shadow-none ring-0', overlay: 'bg-black/90' }"
+    >
+      <template #content="{ close }">
+        <div class="relative flex items-center justify-center" @click="close">
+          <img
+            :src="imageUrl"
+            alt=""
+            class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+            @click.stop
+          />
+          <UButton
+            color="neutral"
+            variant="solid"
+            square
+            class="absolute right-2 top-2 rounded-full bg-black/70 text-white hover:bg-black/80"
+            aria-label="Close image preview"
+            @click="close"
+          >
+            <PhX :size="18" />
+          </UButton>
+        </div>
+      </template>
+    </UModal>
 
     <div v-if="!isStatus" class="mt-3 flex items-center gap-4 text-md text-slate-400">
       <button

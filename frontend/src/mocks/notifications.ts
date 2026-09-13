@@ -19,6 +19,7 @@ export const mockNotifications: AppNotification[] = [
     message: 'mochi sent you a message: "ty for the feeding sesh!"',
     createdAt: ago(minutes(12)),
     read: false,
+    threadId: 't1',
   },
   {
     id: 'n3',

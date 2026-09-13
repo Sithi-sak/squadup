@@ -16,6 +16,7 @@ class NotificationOut(CamelModel):
     message: str
     read: bool
     created_at: str
+    thread_id: str | None = None
 
 
 # Routes --------------------------------------------------------------------------------------

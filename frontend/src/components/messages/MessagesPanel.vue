@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import {
   PhBellSlash,
@@ -22,7 +23,16 @@ defineProps<{
 
 const store = useMessagesStore()
 const authStore = useAuthStore()
+const router = useRouter()
+const route = useRoute()
 const toast = useToast()
+
+// `thread.participantId` is a `users.id` (message threads are user-to-user, not
+// player-to-player) - `user-profile` looks it up and itself redirects to `/players/{id}` if
+// that user turns out to be a Pal, same as `profileRouteFor` does elsewhere.
+function goToProfile(participantId: string) {
+  router.push({ name: 'user-profile', params: { id: participantId } })
+}
 const search = ref('')
 const draft = ref('')
 const sending = ref(false)
@@ -31,13 +41,32 @@ const sending = ref(false)
 // resilience convention `stores/messages.ts` uses for the thread/message data itself.
 const currentUserId = computed(() => authStore.user?.id ?? mockCurrentUser.id)
 
+// A notification (or any other deep link) can request a specific thread via `?thread=id` -
+// falls back to the first thread when absent/unknown, same as before.
+function openThreadFromQuery() {
+  const requestedId = route.query.thread
+  if (typeof requestedId === 'string' && store.threads.some((t) => t.id === requestedId)) {
+    store.selectThread(requestedId)
+    return true
+  }
+  return false
+}
+
 onMounted(async () => {
   await store.fetchThreads()
+  if (openThreadFromQuery()) return
   const firstThreadId = store.threads[0]?.id
   if (!store.activeThreadId && firstThreadId) {
     store.selectThread(firstThreadId)
   }
 })
+
+// Handles clicking a message notification while already on the Messages page, where `onMounted`
+// won't fire again.
+watch(
+  () => route.query.thread,
+  () => openThreadFromQuery(),
+)
 
 const filteredThreads = computed(() => {
   const query = search.value.trim().toLowerCase()
@@ -195,7 +224,12 @@ async function handleSend() {
               @click="store.selectThread(thread.id)"
               @keydown.enter="store.selectThread(thread.id)"
             >
-              <div class="relative shrink-0">
+              <button
+                type="button"
+                class="relative shrink-0 cursor-pointer"
+                aria-label="View profile"
+                @click.stop="goToProfile(thread.participantId)"
+              >
                 <UAvatar
                   :src="resolveAvatarUrl(thread.participantId, participant(thread.participantId)?.avatarUrl)"
                   size="md"
@@ -207,10 +241,15 @@ async function handleSend() {
                   v-if="participant(thread.participantId)?.online"
                   class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
                 />
-              </div>
+              </button>
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5">
-                  <p class="truncate text-sm font-semibold text-white">{{ thread.participantDisplayName }}</p>
+                  <p
+                    class="w-fit truncate text-sm font-semibold text-white hover:underline"
+                    @click.stop="goToProfile(thread.participantId)"
+                  >
+                    {{ thread.participantDisplayName }}
+                  </p>
                   <PhBellSlash v-if="thread.muted" :size="14" class="shrink-0 text-slate-500" />
                 </div>
                 <p class="truncate text-sm text-slate-400">{{ thread.lastMessagePreview }}</p>
@@ -261,7 +300,10 @@ async function handleSend() {
 
       <div v-if="store.activeThread" class="flex min-h-0 min-w-0 flex-col">
         <div class="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-          <div class="flex items-center gap-3">
+          <router-link
+            :to="{ name: 'user-profile', params: { id: store.activeThread.participantId } }"
+            class="flex items-center gap-3"
+          >
             <UAvatar
               :src="resolveAvatarUrl(store.activeThread.participantId, activeParticipant?.avatarUrl)"
               size="md"
@@ -270,13 +312,13 @@ async function handleSend() {
               <PhUserCircle :size="22" />
             </UAvatar>
             <div>
-              <p class="font-semibold text-white">{{ store.activeThread.participantDisplayName }}</p>
+              <p class="font-semibold text-white hover:underline">{{ store.activeThread.participantDisplayName }}</p>
               <p class="text-sm text-slate-400">
                 <span v-if="activeParticipant?.games?.[0]">{{ activeParticipant.games[0] }} · </span>
                 {{ activeParticipant?.online ? 'Online' : 'Offline' }}
               </p>
             </div>
-          </div>
+          </router-link>
           <div class="flex items-center gap-1.5">
             <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="More">
               <PhDotsThree :size="24" />

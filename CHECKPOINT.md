@@ -2372,6 +2372,39 @@ kind of Stripe id.
   - [x] 4.25g Verification: `vue-tsc --noEmit` and `eslint` clean on all touched files. Manual
         browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
 
+- [x] 4.26 Notification panel: clicking a "message" notification opens that conversation
+      (requested 2026-09-13 by the user off a screenshot of the notification dropdown).
+  - [x] 4.26a Root issue: `AppNotification` only carried a pre-rendered `message` string with no
+        id back to the conversation it came from, so there was nothing to route to. Added a
+        `thread_id` column to `notifications` (migration `20260913060000_notification_thread_id.sql`,
+        nullable/`on delete set null` since only "message" notifications use it) and threaded it
+        through: `core/notify.py`'s `notify()` takes an optional `thread_id`; `routers/messages.py`'s
+        `send_message` passes the thread's id; `NotificationOut` gained `thread_id`. Applied via
+        `bunx supabase db push`.
+  - [x] 4.26b Frontend: `stores/notifications.ts`'s `AppNotification` gained `threadId?: string`
+        (mock data updated to match). `NotificationPanel.vue`'s row click now marks the
+        notification read *and*, for `type: 'message'` with a `threadId`, closes the popover and
+        navigates to `{ name: 'messages', query: { thread: threadId } }` - other notification
+        types keep the old mark-read-only behavior.
+  - [x] 4.26c `MessagesPanel.vue` had no way to open a specific thread from outside itself - it
+        always defaulted to the first thread on mount. Added `openThreadFromQuery()`, reading
+        `?thread=` and selecting that thread if it's in the caller's thread list, falling back to
+        the old first-thread default otherwise; a `watch` on the query re-runs it too, since
+        clicking a notification while already on `/messages` reuses the mounted component
+        (`onMounted` won't fire again).
+  - [x] 4.26d Verification: `ruff check` clean on the backend files, `vue-tsc --noEmit` and
+        `eslint` clean on the frontend files. Manual browser walkthrough left to the user per
+        [[feedback_no_build_or_run_skill]].
+  - [x] 4.26e User reported clicking a notification still only marked it read, no redirect.
+        Root cause: the new `thread_id` column only gets populated by *new* sends -
+        pre-existing "message" notifications (created before 4.26a) still had it `null`, so
+        `NotificationPanel.vue`'s click handler correctly no-opped on the redirect for them.
+        Backfill migration (`20260913062000_backfill_notification_thread_id.sql`) matches each
+        null-`thread_id` notification to the message that triggered it, by closest `created_at`
+        (within 10s - `notify()` runs right after the message insert in the same request) within
+        a thread the notified user actually belongs to. Applied via `bunx supabase db push`;
+        spot-checked all pre-existing rows now have a non-null `thread_id`.
+
 ---
 
 ## Cut list (only if time runs out)

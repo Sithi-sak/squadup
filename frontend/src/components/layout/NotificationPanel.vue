@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import { useNotificationsStore } from '@/stores/notifications'
+import { useNotificationsStore, type AppNotification } from '@/stores/notifications'
 import { notificationIcon, formatNotificationTime } from '@/utils/notifications'
 
 const props = defineProps<{ close?: () => void }>()
@@ -40,6 +40,14 @@ async function markRead(id: string) {
     await store.markRead(id)
   } catch {
     // silent - a stray unread dot on a panel row isn't worth a toast
+  }
+}
+
+function handleClick(notification: AppNotification) {
+  markRead(notification.id)
+  if (notification.type === 'message' && notification.threadId) {
+    props.close?.()
+    router.push({ name: 'messages', query: { thread: notification.threadId } })
   }
 }
 </script>
@@ -93,7 +101,7 @@ async function markRead(id: string) {
         :key="notification.id"
         type="button"
         class="flex w-full cursor-pointer items-start gap-3 border-b border-white/5 px-4 py-3 text-left last:border-b-0 hover:bg-white/5"
-        @click="markRead(notification.id)"
+        @click="handleClick(notification)"
       >
         <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600">
           <component :is="notificationIcon[notification.type]" :size="18" weight="bold" class="text-white" />

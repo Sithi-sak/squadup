@@ -20,6 +20,8 @@ export interface AppNotification {
   message: string
   createdAt: string
   read: boolean
+  /** Set on `type: 'message'` notifications so clicking one can open that conversation. */
+  threadId?: string
 }
 
 export const useNotificationsStore = defineStore('notifications', () => {

@@ -280,7 +280,7 @@ def send_message(thread_id: str, payload: SendMessageIn, user_id: str = Depends(
     sender_name = sender.get("display_name") or "Someone"
     other_user_id = thread["user_b_id"] if is_a else thread["user_a_id"]
     preview = body if len(body) <= 60 else f"{body[:57]}..."
-    notify(other_user_id, "message", f'{sender_name} sent you a message: "{preview}"')
+    notify(other_user_id, "message", f'{sender_name} sent you a message: "{preview}"', thread_id=thread_id)
 
     # A new message un-hides the thread for whoever deleted it, so it isn't lost off their list
     # forever - mirrors `start_thread`'s own revive-on-restart behavior.

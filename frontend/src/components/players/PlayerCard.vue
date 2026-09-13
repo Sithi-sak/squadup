@@ -35,7 +35,7 @@ function formatCount(count: number) {
         </UAvatar>
         <span
           v-if="player.online"
-          class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
+          class="absolute right-1 bottom-1 h-3 w-3 rounded-full bg-brand-400 ring-2 ring-gray-800"
         />
       </div>
     </div>

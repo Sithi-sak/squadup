@@ -4,6 +4,7 @@ import { PhCaretLeft, PhUserCircle } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore, type FollowUser } from '@/stores/feed'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { profileRouteFor } from '@/utils/profileRoute'
 
 const props = defineProps<{ userId: string; initialTab?: 'followers' | 'following' }>()
 const emit = defineEmits<{ back: [] }>()
@@ -102,18 +103,20 @@ async function toggleFollow(user: FollowUser) {
 
         <template v-else>
           <div v-for="user in list" :key="user.id" class="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-            <UAvatar :src="resolveAvatarUrl(user.id, user.avatarUrl)" size="md" class="shrink-0 bg-white/10 text-slate-300">
-              <PhUserCircle :size="20" />
-            </UAvatar>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <p class="truncate text-sm font-medium text-white">{{ user.displayName }}</p>
-                <UBadge v-if="user.tier" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">
-                  {{ user.tier }}
-                </UBadge>
+            <router-link :to="profileRouteFor(user.id, authStore.user?.id) ?? {}" class="flex min-w-0 flex-1 items-center gap-3">
+              <UAvatar :src="resolveAvatarUrl(user.id, user.avatarUrl)" size="md" class="shrink-0 bg-white/10 text-slate-300">
+                <PhUserCircle :size="20" />
+              </UAvatar>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <p class="truncate text-sm font-medium text-white hover:underline">{{ user.displayName }}</p>
+                  <UBadge v-if="user.tier" color="neutral" variant="soft" size="sm" class="rounded-full text-xs">
+                    {{ user.tier }}
+                  </UBadge>
+                </div>
+                <p v-if="user.handle" class="truncate text-xs text-slate-400">{{ user.handle }}</p>
               </div>
-              <p v-if="user.handle" class="truncate text-xs text-slate-400">{{ user.handle }}</p>
-            </div>
+            </router-link>
             <UButton
               v-if="user.id !== authStore.user?.id"
               :color="user.following ? 'neutral' : 'primary'"

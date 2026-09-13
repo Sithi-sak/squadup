@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { PhHeart, PhUserCircle } from '@phosphor-icons/vue'
 import type { FeedComment } from '@/stores/feed'
+import { useAuthStore } from '@/stores/auth'
 import { formatTimeAgo } from '@/utils/timeAgo'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { profileRouteFor } from '@/utils/profileRoute'
 
 const props = defineProps<{
   comment: FeedComment
@@ -10,22 +13,37 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'toggle-like': [comment: FeedComment] }>()
+
+const authStore = useAuthStore()
+const profileRoute = computed(() => profileRouteFor(props.comment.authorId, authStore.user?.id))
 </script>
 
 <template>
   <div>
     <div class="flex items-start gap-3">
-      <UAvatar
-        :src="resolveAvatarUrl(props.comment.authorId || props.comment.author)"
-        size="sm"
-        class="shrink-0 bg-white/10 text-slate-300"
+      <component
+        :is="profileRoute ? 'router-link' : 'div'"
+        :to="profileRoute ?? undefined"
+        class="shrink-0"
       >
-        <PhUserCircle :size="18" />
-      </UAvatar>
+        <UAvatar
+          :src="resolveAvatarUrl(props.comment.authorId || props.comment.author)"
+          size="sm"
+          class="bg-white/10 text-slate-300"
+        >
+          <PhUserCircle :size="18" />
+        </UAvatar>
+      </component>
       <div class="min-w-0 flex-1">
         <div class="rounded-2xl px-4 py-2.5" :class="nested ? 'bg-gray-800/40' : 'bg-gray-800/70'">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="font-semibold text-white">{{ comment.author }}</span>
+            <component
+              :is="profileRoute ? 'router-link' : 'span'"
+              :to="profileRoute ?? undefined"
+              class="font-semibold text-white"
+              :class="profileRoute && 'hover:underline'"
+              >{{ comment.author }}</component
+            >
             <UBadge v-if="comment.isCreator" color="primary" variant="soft" size="sm" class="rounded-full text-xs">
               Creator
             </UBadge>

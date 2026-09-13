@@ -155,7 +155,10 @@ async function toggleBan() {
         <tbody>
           <tr v-for="flag in rows" :key="flag.id" class="border-b border-white/5 last:border-0">
             <td class="px-5 py-4">
-              <div class="flex items-center gap-3">
+              <router-link
+                :to="{ name: 'player-profile', params: { id: flag.playerId } }"
+                class="flex w-fit items-center gap-3 hover:underline"
+              >
                 <UAvatar :src="resolveAvatarUrl(flag.playerId, flag.avatarUrl)" size="md" class="bg-white/10" />
                 <div class="flex items-center gap-2">
                   <p class="font-semibold text-white">{{ flag.displayName }}</p>
@@ -163,7 +166,7 @@ async function toggleBan() {
                     Banned
                   </span>
                 </div>
-              </div>
+              </router-link>
             </td>
             <td class="px-5 py-4 text-slate-300">{{ flag.reason }}</td>
             <td class="px-5 py-4 text-slate-300">{{ flag.reportCount }}</td>
@@ -193,13 +196,16 @@ async function toggleBan() {
     >
       <template #body>
         <div v-if="viewing" class="flex flex-col gap-4 text-sm">
-          <div class="flex items-center gap-3">
+          <router-link
+            :to="{ name: 'player-profile', params: { id: viewing.playerId } }"
+            class="flex w-fit items-center gap-3 hover:underline"
+          >
             <UAvatar :src="resolveAvatarUrl(viewing.playerId, viewing.avatarUrl)" size="lg" class="bg-white/10" />
             <div>
               <p class="font-semibold text-white">{{ viewing.displayName }}</p>
               <p class="text-slate-400">{{ viewing.reportCount }} report{{ viewing.reportCount > 1 ? 's' : '' }} · reported by {{ viewing.reportedBy }}</p>
             </div>
-          </div>
+          </router-link>
 
           <div class="flex items-center justify-between border-t border-white/10 pt-3">
             <span class="text-slate-400">Reason</span>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import { PhMagnifyingGlass } from '@phosphor-icons/vue'
+import { PhMagnifyingGlass, PhX } from '@phosphor-icons/vue'
 import { useAdminStore } from '@/stores/admin'
 import type { AdminPalApplication, PalApplicationStatus } from '@/mocks/admin'
 import { resolveAvatarUrl } from '@/utils/avatar'
@@ -16,9 +16,16 @@ onMounted(() => {
 const viewing = ref<AdminPalApplication | null>(null)
 const search = ref('')
 const statusUpdating = ref(false)
+const idPreviewUrl = ref<string | null>(null)
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/** IDs are uploaded as PNG/JPG or PDF (`StepVerify.vue`'s "PNG, JPG or PDF" hint) - a PDF can't
+ * render as an `<img>`, so it still opens in a new tab instead of the lightbox. */
+function isPdf(url: string) {
+  return url.toLowerCase().endsWith('.pdf')
 }
 
 const rows = computed(() => {
@@ -181,25 +188,57 @@ async function setStatus(status: PalApplicationStatus) {
             <span class="font-medium text-white">{{ formatDate(viewing.submittedAt) }}</span>
           </div>
 
-          <div v-if="viewing.idFrontUrl || viewing.idBackUrl" class="flex flex-wrap gap-3 border-t border-white/10 pt-3">
-            <a
-              v-if="viewing.idFrontUrl"
-              :href="viewing.idFrontUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="font-medium text-brand-400 hover:text-brand-300"
-            >
-              View ID (front)
-            </a>
-            <a
-              v-if="viewing.idBackUrl"
-              :href="viewing.idBackUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="font-medium text-brand-400 hover:text-brand-300"
-            >
-              View ID (back)
-            </a>
+          <div v-if="viewing.idFrontUrl || viewing.idBackUrl" class="grid grid-cols-2 gap-3 border-t border-white/10 pt-3">
+            <div v-if="viewing.idFrontUrl">
+              <p class="mb-1.5 text-slate-400">ID (front)</p>
+              <a
+                v-if="isPdf(viewing.idFrontUrl)"
+                :href="viewing.idFrontUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="font-medium text-brand-400 hover:text-brand-300"
+              >
+                View PDF
+              </a>
+              <button
+                v-else
+                type="button"
+                class="block w-full cursor-zoom-in"
+                aria-label="View ID front full-size"
+                @click="idPreviewUrl = viewing.idFrontUrl"
+              >
+                <img
+                  :src="viewing.idFrontUrl"
+                  alt="ID front"
+                  class="aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
+                />
+              </button>
+            </div>
+            <div v-if="viewing.idBackUrl">
+              <p class="mb-1.5 text-slate-400">ID (back)</p>
+              <a
+                v-if="isPdf(viewing.idBackUrl)"
+                :href="viewing.idBackUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="font-medium text-brand-400 hover:text-brand-300"
+              >
+                View PDF
+              </a>
+              <button
+                v-else
+                type="button"
+                class="block w-full cursor-zoom-in"
+                aria-label="View ID back full-size"
+                @click="idPreviewUrl = viewing.idBackUrl"
+              >
+                <img
+                  :src="viewing.idBackUrl"
+                  alt="ID back"
+                  class="aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
+                />
+              </button>
+            </div>
           </div>
 
           <div class="grid grid-cols-2 gap-3 border-t border-white/10 pt-4">
@@ -227,6 +266,34 @@ async function setStatus(status: PalApplicationStatus) {
               Approve
             </UButton>
           </div>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      :open="!!idPreviewUrl"
+      title="ID preview"
+      :ui="{ content: 'max-w-none w-auto bg-transparent shadow-none ring-0', overlay: 'bg-black/90' }"
+      @update:open="(value: boolean) => { if (!value) idPreviewUrl = null }"
+    >
+      <template #content="{ close }">
+        <div class="relative flex items-center justify-center" @click="close">
+          <img
+            :src="idPreviewUrl ?? ''"
+            alt=""
+            class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+            @click.stop
+          />
+          <UButton
+            color="neutral"
+            variant="solid"
+            square
+            class="absolute right-2 top-2 rounded-full bg-black/70 text-white hover:bg-black/80"
+            aria-label="Close ID preview"
+            @click="close"
+          >
+            <PhX :size="18" />
+          </UButton>
         </div>
       </template>
     </UModal>

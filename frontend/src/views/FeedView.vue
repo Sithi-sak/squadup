@@ -82,16 +82,16 @@ async function toggleLike(post: FeedPost) {
         </div>
         <div class="mt-3 flex items-center justify-between gap-3">
           <div class="flex items-center gap-2">
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+            <UButton color="neutral" variant="soft" size="md" class="rounded-full" @click="createPostOpen = true">
               <PhCamera :size="16" weight="bold" />
               Photo
             </UButton>
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+            <UButton color="neutral" variant="soft" size="md" class="rounded-full" @click="createPostOpen = true">
               <PhFilmSlate :size="16" weight="bold" />
               Clip
             </UButton>
           </div>
-          <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
+          <UButton color="primary" size="md" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
         </div>
       </div>
 

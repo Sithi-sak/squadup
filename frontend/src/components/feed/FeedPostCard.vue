@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { PhChatCircle, PhHeart, PhShareFat, PhUserCircle, PhX } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { profileRouteFor } from '@/utils/profileRoute'
 
 const props = defineProps<{
   id: string
@@ -38,15 +39,8 @@ const emit = defineEmits<{ 'toggle-like': []; 'open-comments': [] }>()
 const router = useRouter()
 const authStore = useAuthStore()
 
-/** Where clicking the author's name/avatar goes: their own posts jump to "Your profile", a
- * Pal's to their full `/players/{id}` page, everyone else to a plain public profile. Falsy
- * when there's no author to link to (e.g. `FeedSavedView`'s local mock fallback). */
-const profileRoute = computed(() => {
-  if (!props.authorId) return null
-  if (props.authorId === authStore.user?.id) return { name: 'feed-profile' }
-  if (props.playerId) return { name: 'player-profile', params: { id: props.playerId } }
-  return { name: 'user-profile', params: { id: props.authorId } }
-})
+/** Falsy when there's no author to link to (e.g. `FeedSavedView`'s local mock fallback). */
+const profileRoute = computed(() => profileRouteFor(props.authorId, authStore.user?.id, props.playerId))
 
 function goToProfile() {
   if (profileRoute.value) router.push(profileRoute.value)

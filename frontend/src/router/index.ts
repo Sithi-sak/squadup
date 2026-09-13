@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useUsersStore } from '@/stores/users'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -123,6 +124,24 @@ const router = createRouter({
           name: 'user-profile',
           component: () => import('@/views/PublicProfileView.vue'),
           meta: { feedTab: 'feed' },
+          // Resolves before the Feed shell ever paints, so clicking a Pal's name/avatar lands
+          // directly on `/players/{id}` instead of flashing this route's Feed-shell chrome first
+          // and only then redirecting (`PublicProfileView` used to make this same call, but from
+          // inside `onMounted`, after the shell had already rendered around it).
+          beforeEnter: async (to) => {
+            const authStore = useAuthStore()
+            const id = String(to.params.id)
+            if (id === authStore.user?.id) return { name: 'my-profile' }
+            const usersStore = useUsersStore()
+            try {
+              const profile = await usersStore.fetchPublicProfile(id)
+              if (profile.playerId) return `/players/${profile.playerId}`
+              usersStore.prefetchedProfile = { userId: id, profile }
+            } catch {
+              // Let the view's own fetch handle the error/not-found state.
+            }
+            return true
+          },
         },
       ],
     },

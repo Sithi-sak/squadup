@@ -106,7 +106,7 @@ async function handleMessage() {
     </div>
 
     <div class="flex flex-col gap-4">
-      <div class="aspect-video w-full overflow-hidden rounded-xl bg-white/5">
+      <div class="aspect-square w-full overflow-hidden rounded-xl bg-white/5">
         <img v-if="coverSrc" :src="coverSrc" :alt="detail.title" class="h-full w-full object-cover" />
       </div>
 

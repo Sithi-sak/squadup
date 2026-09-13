@@ -102,13 +102,13 @@ const openDisputeCount = computed(
           <div class="mt-3 flex flex-col divide-y divide-white/10">
             <p v-if="recentFlagged.length === 0" class="py-3 text-sm text-slate-400">No flagged players yet.</p>
             <div v-for="flag in recentFlagged" :key="flag.id" class="flex items-center justify-between gap-3 py-3">
-              <div class="flex items-center gap-3">
+              <router-link :to="{ name: 'player-profile', params: { id: flag.playerId } }" class="flex items-center gap-3 hover:underline">
                 <UAvatar :src="resolveAvatarUrl(flag.playerId, flag.avatarUrl)" size="md" class="bg-white/10" />
                 <div>
                   <p class="font-semibold text-white">{{ flag.displayName }}</p>
                   <p class="text-sm text-slate-400">{{ flag.reason }}</p>
                 </div>
-              </div>
+              </router-link>
               <span class="text-sm text-slate-400">{{ flag.reportCount }} report{{ flag.reportCount > 1 ? 's' : '' }}</span>
             </div>
           </div>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { PhCamera, PhChatCircle, PhDotsThree, PhFilmSlate, PhHeart, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
+import { PhCamera, PhFilmSlate, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
+import FeedPostCard from '@/components/feed/FeedPostCard.vue'
+import FeedPostThread from '@/components/feed/FeedPostThread.vue'
+import SuggestedPalsCard from '@/components/feed/SuggestedPalsCard.vue'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
 import type { PlayerSummary } from '@/stores/players'
 import { formatTimeAgo } from '@/utils/timeAgo'
@@ -33,6 +36,7 @@ watch(
 )
 
 const createPostOpen = ref(false)
+const activePostId = ref<string | null>(null)
 
 function onPostCreated(post: FeedPost) {
   localFeed.value.unshift(post)
@@ -55,103 +59,80 @@ async function toggleLike(post: FeedPost) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div v-if="isOwnProfile" class="rounded-xl bg-gray-800/70 p-4">
-      <div class="flex items-center gap-3">
-        <UAvatar
-          :src="resolveAvatarUrl(player.id, player.avatarUrl)"
-          size="md"
-          class="shrink-0 bg-white/10 text-slate-300"
-        >
-          <PhUserCircle :size="20" />
-        </UAvatar>
-        <UInput
-          placeholder="Share something with your squad..."
-          variant="subtle"
-          class="w-full rounded-full"
-          :ui="{ base: 'rounded-full cursor-pointer' }"
-          readonly
-          @click="createPostOpen = true"
-        />
-      </div>
-      <div class="mt-3 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
-            <PhCamera :size="16" weight="bold" />
-            Photo
-          </UButton>
-          <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
-            <PhFilmSlate :size="16" weight="bold" />
-            Clip
-          </UButton>
-          <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
-            <PhSmiley :size="16" weight="bold" />
-            Emoji
-          </UButton>
-        </div>
-        <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
-      </div>
-    </div>
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_300px] lg:items-start">
+    <div class="flex flex-col gap-4">
+      <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
-    <CreatePostModal v-if="isOwnProfile" v-model:open="createPostOpen" @created="onPostCreated" />
-
-    <p v-if="localFeed.length === 0" class="py-10 text-center text-sm text-slate-400">
-      {{ isOwnProfile ? 'You haven\'t' : `${player.displayName} hasn't` }} posted anything yet.
-    </p>
-
-    <div v-for="post in localFeed" :key="post.id" class="rounded-xl bg-gray-800/70 p-4">
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <UAvatar
-            :src="resolveAvatarUrl(player.id, player.avatarUrl)"
-            size="md"
-            class="shrink-0 bg-white/10 text-slate-300"
-          >
-            <PhUserCircle :size="20" />
-          </UAvatar>
-          <div>
+      <template v-else>
+        <div v-if="isOwnProfile" class="rounded-xl bg-gray-800/70 p-4">
+          <div class="flex items-center gap-3">
+            <UAvatar
+              :src="resolveAvatarUrl(player.id, player.avatarUrl)"
+              size="md"
+              class="shrink-0 bg-white/10 text-slate-300"
+            >
+              <PhUserCircle :size="20" />
+            </UAvatar>
+            <UInput
+              placeholder="Share something with your squad..."
+              variant="subtle"
+              class="w-full rounded-full"
+              :ui="{ base: 'rounded-full cursor-pointer' }"
+              readonly
+              @click="createPostOpen = true"
+            />
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3">
             <div class="flex items-center gap-2">
-              <span class="font-semibold text-white">{{ player.displayName }}</span>
-              <UBadge v-if="post.tier" color="neutral" variant="soft" size="sm" class="rounded-full">
-                {{ post.tier }}
-              </UBadge>
+              <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+                <PhCamera :size="16" weight="bold" />
+                Photo
+              </UButton>
+              <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+                <PhFilmSlate :size="16" weight="bold" />
+                Clip
+              </UButton>
+              <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+                <PhSmiley :size="16" weight="bold" />
+                Emoji
+              </UButton>
             </div>
-            <p class="text-xs text-slate-400">{{ handle ?? player.displayName }} · {{ formatTimeAgo(post.createdAt) }}</p>
+            <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
           </div>
         </div>
-        <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Post options">
-          <PhDotsThree :size="18" weight="bold" />
-        </UButton>
-      </div>
 
-      <p class="mt-3 text-sm leading-relaxed text-slate-200">{{ post.text }}</p>
+        <CreatePostModal v-if="isOwnProfile" v-model:open="createPostOpen" @created="onPostCreated" />
 
-      <img
-        v-if="post.imageUrl"
-        :src="post.imageUrl"
-        alt=""
-        class="mt-3 aspect-video w-full rounded-lg object-cover ring-1 ring-inset ring-white/10"
-      />
-      <div
-        v-else-if="post.hasImage"
-        class="mt-3 aspect-video w-full rounded-lg bg-white/5 ring-1 ring-inset ring-white/10"
-      />
+        <p v-if="localFeed.length === 0" class="py-10 text-center text-sm text-slate-400">
+          {{ isOwnProfile ? 'You haven\'t' : `${player.displayName} hasn't` }} posted anything yet.
+        </p>
 
-      <div class="mt-3 flex items-center gap-4 text-sm text-slate-400">
-        <button
-          type="button"
-          class="flex items-center gap-1.5 transition-colors hover:text-white"
-          :class="post.liked && 'text-brand-400'"
-          @click="toggleLike(post)"
-        >
-          <PhHeart :size="18" :weight="post.liked ? 'fill' : 'regular'" />
-          {{ post.likes }}
-        </button>
-        <span class="flex items-center gap-1.5">
-          <PhChatCircle :size="18" />
-          {{ post.comments }}
-        </span>
-      </div>
+        <FeedPostCard
+          v-for="post in localFeed"
+          :key="post.id"
+          :id="post.id"
+          :author-id="post.authorId"
+          :author="post.author"
+          :avatar-url="post.avatarUrl"
+          :handle="post.handle"
+          :tier="post.tier"
+          :player-id="post.playerId"
+          :time-ago="formatTimeAgo(post.createdAt)"
+          :text="post.text ?? ''"
+          :has-image="post.hasImage"
+          :image-url="post.imageUrl"
+          :likes="post.likes"
+          :comments="post.comments"
+          :liked="post.liked"
+          :kind="post.kind"
+          @toggle-like="toggleLike(post)"
+          @open-comments="activePostId = post.id"
+        />
+      </template>
+    </div>
+
+    <div class="hidden lg:sticky lg:top-20 lg:block">
+      <SuggestedPalsCard />
     </div>
   </div>
 </template>

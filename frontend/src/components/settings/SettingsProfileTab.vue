@@ -118,7 +118,7 @@ const pushNotifications = ref(true)
             v-for="lang in languages"
             :key="lang"
             color="primary"
-            variant="soft"
+            variant="solid"
             size="lg"
             class="rounded-full"
           >

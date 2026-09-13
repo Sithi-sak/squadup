@@ -145,17 +145,18 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
 
       <template v-else>
         <div class="mt-8 grid grid-cols-1 items-center gap-4 md:grid-cols-3">
-          <div
+          <router-link
             v-for="entry in topThree"
             :key="entry.id"
+            :to="{ name: 'player-profile', params: { id: entry.id } }"
             :class="[tierMeta[entry.rank as 1 | 2 | 3].order, tierMeta[entry.rank as 1 | 2 | 3].card]"
-            class="flex flex-col items-center gap-3 rounded-3xl text-center"
+            class="flex flex-col items-center gap-3 rounded-3xl text-center transition-colors hover:bg-white/5"
           >
             <div
               :class="tierMeta[entry.rank as 1 | 2 | 3].medal"
               class="flex h-11 w-11 items-center justify-center rounded-full"
             >
-              <PhMedal :size="22" weight="fill" />
+              <PhMedal :size="24" weight="fill" />
             </div>
             <p
               :class="tierMeta[entry.rank as 1 | 2 | 3].accent"
@@ -182,7 +183,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
             </div>
 
             <p class="inline-flex items-center gap-1 text-sm text-slate-300">
-              <PhStar :size="14" weight="fill" class="text-amber-400" />
+              <PhStar :size="16" weight="fill" class="text-amber-400" />
               {{ entry.rating ? entry.rating.toFixed(entry.rating % 1 === 0 ? 1 : 2) : '--' }}
             </p>
 
@@ -193,19 +194,20 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
               <img :src="coinIcon" alt="" class="h-5 w-5" />
               {{ entry.coins.toLocaleString() }}
             </p>
-          </div>
+          </router-link>
         </div>
 
         <div class="mt-8 divide-y divide-white/10 border-t border-white/10">
-          <div
+          <router-link
             v-for="entry in rest"
             :key="entry.id"
-            class="flex items-center gap-4 py-4"
+            :to="{ name: 'player-profile', params: { id: entry.id } }"
+            class="flex items-center gap-4 py-4 transition-colors hover:bg-white/5"
           >
             <span class="w-8 shrink-0 font-semibold text-slate-400">#{{ entry.rank }}</span>
 
-            <UAvatar :src="resolveAvatarUrl(entry.id, entry.avatarUrl)" size="md" class="shrink-0 bg-white/10 text-slate-300">
-              <PhUserCircle :size="20" />
+            <UAvatar :src="resolveAvatarUrl(entry.id, entry.avatarUrl)" size="lg" class="shrink-0 bg-white/10 text-slate-300">
+              <PhUserCircle :size="24" />
             </UAvatar>
 
             <div class="min-w-0 flex-1">
@@ -214,7 +216,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
             </div>
 
             <span class="hidden shrink-0 items-center gap-1 text-sm text-slate-300 sm:inline-flex">
-              <PhStar :size="14" weight="fill" class="text-amber-400" />
+              <PhStar :size="16" weight="fill" class="text-amber-400" />
               {{ entry.rating ? entry.rating.toFixed(entry.rating % 1 === 0 ? 1 : 2) : '--' }}
             </span>
 
@@ -230,7 +232,7 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
               :class="trendClass[entry.trend]"
               class="shrink-0"
             />
-          </div>
+          </router-link>
         </div>
       </template>
     </div>

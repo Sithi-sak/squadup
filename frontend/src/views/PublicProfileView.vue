@@ -37,7 +37,9 @@ async function load() {
   const id = userId.value
 
   // Your own account has its own self-view page (no follow button, composer, ...) - which
-  // forwards Pals on to `/players/{id}` in turn.
+  // forwards Pals on to `/players/{id}` in turn. Normally already handled by this route's
+  // `beforeEnter` guard before this component ever mounts; kept here too since `watch(userId,
+  // load)` re-runs on param changes the guard doesn't see again.
   if (id === authStore.user?.id) {
     router.replace({ name: 'my-profile' })
     return
@@ -47,7 +49,10 @@ async function load() {
   profile.value = null
   posts.value = []
   try {
-    profile.value = await usersStore.fetchPublicProfile(id)
+    // The route guard already fetched this and would have redirected a Pal straight to
+    // `/players/{id}`, so reaching here with a hand-off means it's already the plain profile -
+    // only a direct param change (no guard re-run) falls through to fetching it here instead.
+    profile.value = usersStore.takePrefetchedProfile(id) ?? (await usersStore.fetchPublicProfile(id))
     if (profile.value.playerId) {
       router.replace(`/players/${profile.value.playerId}`)
       return

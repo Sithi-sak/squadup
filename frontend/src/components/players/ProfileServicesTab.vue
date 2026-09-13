@@ -29,6 +29,7 @@ const toast = useToast()
  * `games` list), so reuse the same slug + CDN manifest lookup as the game rails elsewhere. */
 const coverFilenames = useCoverManifest()
 const coverSrc = computed(() => {
+  if (props.detail.coverImageUrl) return props.detail.coverImageUrl
   const slug = games.find((g) => g.name === props.detail.title)?.id
   const filename = slug ? coverFilenames.value.get(slug) : undefined
   return slug && filename ? gameCoverUrl(slug, filename) : undefined

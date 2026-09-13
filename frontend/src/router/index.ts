@@ -277,6 +277,12 @@ const router = createRouter({
       meta: { hideFooter: true, requiresAuth: true },
     },
     {
+      path: '/dashboard/player/services/:id/edit',
+      name: 'player-dashboard-edit-service',
+      component: () => import('@/views/CreateServiceView.vue'),
+      meta: { hideFooter: true, requiresAuth: true },
+    },
+    {
       path: '/wallet',
       name: 'wallet',
       component: () => import('@/views/WalletView.vue'),

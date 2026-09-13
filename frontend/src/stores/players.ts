@@ -38,6 +38,10 @@ export interface PlayerServiceListing {
   priceUnit: string
   /** Whether buyers can currently book this service, shown as the toggle on My Services (Pal Dashboard). */
   active?: boolean
+  coverImageUrl: string | null
+  /** Structured counterpart to `promoBadge`, for prefilling Edit Service's promo toggles. */
+  firstOrderFree?: boolean
+  percentOff?: number | null
 }
 
 export interface ServiceTypeOption {
@@ -59,6 +63,7 @@ export interface PlayerServiceDetail {
   /** Checklist shown on the Service Detail page, e.g. "Live voice comms the whole session". */
   whatsIncluded: string[]
   avgResponseTime: string
+  coverImageUrl?: string | null
 }
 
 export interface PlayerReview {
@@ -176,14 +181,6 @@ export interface MyPlayerProfile {
 export interface MyService extends PlayerServiceListing, Omit<PlayerServiceDetail, 'title'> {
   title: string
 }
-
-/** Fields `PATCH /players/me/services/{id}` accepts (backend's `ServiceUpdateIn`). */
-export type ServiceUpdate = Partial<
-  Pick<
-    MyService,
-    'name' | 'description' | 'styles' | 'platforms' | 'whatsIncluded' | 'avgResponseTime' | 'active'
-  >
->
 
 /** Narrows a `GET /players/{id}` response down to the `PlayerSummary` shape used by browse
  * cards and the Player Profile header. */
@@ -400,8 +397,11 @@ export const usePlayersStore = defineStore('players', () => {
     return service
   }
 
-  async function updateService(serviceId: string, patch: ServiceUpdate) {
-    const service = await api.patch<MyService>(`/players/me/services/${serviceId}`, patch)
+  /** `PATCH /players/me/services/{id}`, multipart - every field is optional server-side, so
+   * this backs both the lightweight active-toggle (a `FormData` with just `active`) and the
+   * full Edit Service form (everything `createService` accepts, resubmitted wholesale). */
+  async function updateService(serviceId: string, formData: FormData) {
+    const service = await api.patch<MyService>(`/players/me/services/${serviceId}`, formData)
     await fetchMine()
     return service
   }

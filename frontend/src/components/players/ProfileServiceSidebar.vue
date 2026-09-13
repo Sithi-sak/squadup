@@ -49,7 +49,9 @@ const visible = computed(() =>
         "
         @click="$emit('select', service.id)"
       >
-        <div class="h-10 w-10 shrink-0 rounded-full bg-white/10" />
+        <div class="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white/10">
+          <img v-if="service.coverImageUrl" :src="service.coverImageUrl" alt="" class="h-full w-full object-cover" />
+        </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
             <span class="truncate text-md font-medium text-white">{{ service.name }}</span>

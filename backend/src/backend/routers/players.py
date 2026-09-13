@@ -34,6 +34,11 @@ class PlayerServiceListing(CamelModel):
     price_coins: int
     price_unit: str
     active: bool
+    cover_image_url: str | None
+    # Structured counterpart to `promo_badge`, for prefilling the Edit Service form's promo
+    # toggles rather than parsing them back out of the display label.
+    first_order_free: bool
+    percent_off: float | None
 
 
 class PlayerServiceDetail(CamelModel):
@@ -46,6 +51,7 @@ class PlayerServiceDetail(CamelModel):
     service_types: list[ServiceTypeOption]
     whats_included: list[str]
     avg_response_time: str
+    cover_image_url: str | None
 
 
 class PlayerSummaryOut(CamelModel):
@@ -132,6 +138,9 @@ class ServiceOut(CamelModel):
     promo_badge: str | None
     price_coins: int
     price_unit: str
+    cover_image_url: str | None
+    first_order_free: bool
+    percent_off: float | None
 
 
 class PricingOptionIn(BaseModel):
@@ -148,16 +157,6 @@ class ServiceCreateForm(BaseModel):
     pricing_options: list[PricingOptionIn]
     first_order_free: bool = False
     percent_off: float | None = None
-
-
-class ServiceUpdateIn(CamelModel):
-    name: str | None = None
-    description: str | None = None
-    styles: list[str] | None = None
-    platforms: list[str] | None = None
-    whats_included: list[str] | None = None
-    avg_response_time: str | None = None
-    active: bool | None = None
 
 
 class EarningsBar(CamelModel):
@@ -218,6 +217,19 @@ def _active_promo_label(promotions: list[dict]) -> str | None:
     return None
 
 
+def _active_promo(promotions: list[dict]) -> tuple[bool, float | None]:
+    """Structured counterpart to `_active_promo_label`, for prefilling the Edit Service form's
+    promo toggles rather than parsing them back out of the display label."""
+    for promo in promotions:
+        if not promo.get("active"):
+            continue
+        if promo["discount_type"] == "first_order_free":
+            return True, None
+        if promo["discount_type"] == "percent_off" and promo.get("discount_value") is not None:
+            return False, promo["discount_value"]
+    return False, None
+
+
 def _sorted_pricing(service: dict) -> list[dict]:
     return sorted(service.get("service_pricing_options") or [], key=lambda p: p["sort_order"])
 
@@ -225,6 +237,7 @@ def _sorted_pricing(service: dict) -> list[dict]:
 def _service_listing(service: dict) -> dict:
     pricing = _sorted_pricing(service)
     first = pricing[0] if pricing else None
+    first_order_free, percent_off = _active_promo(service.get("service_promotions") or [])
     return {
         "id": service["id"],
         "name": service["name"],
@@ -232,6 +245,9 @@ def _service_listing(service: dict) -> dict:
         "price_coins": first["price_coins"] if first else 0,
         "price_unit": first["price_unit"] if first else "/game",
         "active": service["active"],
+        "cover_image_url": service.get("cover_image_url"),
+        "first_order_free": first_order_free,
+        "percent_off": percent_off,
     }
 
 
@@ -255,6 +271,7 @@ def _service_detail(service: dict) -> dict:
         ],
         "whats_included": service["whats_included"],
         "avg_response_time": service["avg_response_time"] or "",
+        "cover_image_url": service.get("cover_image_url"),
     }
 
 
@@ -801,13 +818,80 @@ async def create_my_service(
 
 
 @router.patch("/me/services/{service_id}", response_model=ServiceOut)
-def update_my_service(service_id: str, payload: ServiceUpdateIn, user_id: str = Depends(get_current_user_id)) -> dict:
+async def update_my_service(
+    service_id: str,
+    name: str | None = Form(None),
+    description: str | None = Form(None),
+    styles: list[str] | None = Form(None),  # noqa: B008
+    platforms: list[str] | None = Form(None),  # noqa: B008
+    pricing_options: str | None = Form(None),
+    first_order_free: bool | None = Form(None),
+    percent_off: float | None = Form(None),
+    active: bool | None = Form(None),
+    cover: UploadFile | None = File(None),  # noqa: B008
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """Partial update - every field is optional and only the ones present in the form are
+    touched, so this backs both the lightweight active-toggle (just `active`) and the full
+    Edit Service form (everything `create_my_service` accepts, resubmitted wholesale)."""
     client = get_supabase_client()
-    _get_owned_service(user_id, service_id)
+    service = _get_owned_service(user_id, service_id)
 
-    updates = payload.model_dump(exclude_unset=True)
+    parsed_options = None
+    if pricing_options is not None:
+        try:
+            parsed_options = [PricingOptionIn.model_validate(o) for o in json.loads(pricing_options)]
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid pricing options") from exc
+        if not parsed_options:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "At least one pricing option is required")
+
+    updates: dict = {}
+    if name is not None:
+        updates["name"] = name
+    if description is not None:
+        updates["description"] = description
+    if styles is not None:
+        updates["styles"] = styles
+    if platforms is not None:
+        updates["platforms"] = platforms
+    if active is not None:
+        updates["active"] = active
+    if cover is not None:
+        updates["cover_image_url"] = upload_file(
+            "service-covers", f"{service['player_id']}/cover-{uuid4()}", cover
+        )
     if updates:
         client.table("services").update(updates).eq("id", service_id).execute()
+
+    if parsed_options is not None:
+        client.table("service_pricing_options").delete().eq("service_id", service_id).execute()
+        for sort_order, option in enumerate(parsed_options):
+            client.table("service_pricing_options").insert(
+                {
+                    "service_id": service_id,
+                    "label": option.label,
+                    "price_coins": option.price_coins,
+                    "price_unit": option.price_unit,
+                    "sort_order": sort_order,
+                }
+            ).execute()
+
+    if first_order_free is not None or percent_off is not None:
+        client.table("service_promotions").delete().eq("service_id", service_id).execute()
+        if first_order_free:
+            client.table("service_promotions").insert(
+                {"service_id": service_id, "label": "1st Order Free", "discount_type": "first_order_free"}
+            ).execute()
+        elif percent_off:
+            client.table("service_promotions").insert(
+                {
+                    "service_id": service_id,
+                    "label": f"{percent_off:g}% Off",
+                    "discount_type": "percent_off",
+                    "discount_value": percent_off,
+                }
+            ).execute()
 
     result = (
         client.table("services")

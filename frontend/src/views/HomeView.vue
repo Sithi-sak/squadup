@@ -87,15 +87,15 @@ function goToProfile(id: string) {
         >
           <div class="flex flex-col justify-center gap-4 p-8 md:p-10">
             <span
-              class="inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-xs font-medium text-brand-300"
+              class="inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-sm font-medium text-brand-300"
             >
-              <PhStar :size="14" weight="fill" />
+              <PhStar :size="16" weight="fill" />
               eStar of the Week
             </span>
-            <h1 class="text-3xl font-extrabold text-white md:text-4xl">
+            <h1 class="text-4xl font-extrabold text-white md:text-5xl">
               {{ spotlight.displayName }}
             </h1>
-            <p class="max-w-100 text-sm leading-relaxed text-slate-300">
+            <p class="max-w-120 text-md leading-relaxed text-slate-300">
               Top-rated {{ spotlight.category }} Pal this week, {{ spotlight.rating }} rating and
               glowing reviews. Book a session before the spot is gone.
             </p>

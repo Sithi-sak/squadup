@@ -89,7 +89,14 @@ async function handleMessage() {
 
       <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <div class="flex flex-col gap-4">
-          <div class="aspect-video w-full rounded-xl bg-white/5 ring-1 ring-inset ring-white/10" />
+          <div class="relative aspect-video w-full overflow-hidden rounded-xl bg-white/5 ring-1 ring-inset ring-white/10">
+            <img
+              v-if="service.coverImageUrl"
+              :src="service.coverImageUrl"
+              alt=""
+              class="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
 
           <div class="rounded-xl bg-gray-800/70 p-5">
             <h1 class="text-2xl font-bold text-white">{{ detail.title }}</h1>

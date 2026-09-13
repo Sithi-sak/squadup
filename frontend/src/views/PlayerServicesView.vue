@@ -22,21 +22,27 @@ const cards = computed(() =>
   })),
 )
 
-const togglingId = ref<string | null>(null)
-
 async function toggleActive(serviceId: string, active: boolean) {
-  togglingId.value = serviceId
+  const service = playersStore.mine?.services.find((s) => s.id === serviceId)
+  if (!service) return
+  const previous = service.active
+  service.active = active
   try {
-    await playersStore.updateService(serviceId, { active })
+    const formData = new FormData()
+    formData.append('active', String(active))
+    await playersStore.updateService(serviceId, formData)
   } catch (err) {
+    service.active = previous
     toast.add({
       title: "Couldn't update service",
       description: err instanceof Error ? err.message : 'Please try again.',
       color: 'error',
     })
-  } finally {
-    togglingId.value = null
   }
+}
+
+function editService(serviceId: string) {
+  router.push({ name: 'player-dashboard-edit-service', params: { id: serviceId } })
 }
 
 const deleteTarget = ref<{ id: string; name: string } | null>(null)
@@ -122,6 +128,12 @@ async function handleDelete() {
       <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <div v-for="{ service, detail } in cards" :key="service.id" class="overflow-hidden rounded-xl bg-gray-800/70">
           <div class="relative aspect-21/9 w-full bg-white/5 ring-1 ring-inset ring-white/10">
+            <img
+              v-if="service.coverImageUrl"
+              :src="service.coverImageUrl"
+              alt=""
+              class="absolute inset-0 h-full w-full object-cover"
+            />
             <span
               class="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-squadup-dark/70 px-2.5 py-1 text-xs font-medium"
               :class="service.active ? 'text-brand-400' : 'text-slate-400'"
@@ -136,7 +148,6 @@ async function handleDelete() {
               <USwitch
                 :model-value="service.active"
                 color="primary"
-                :disabled="togglingId === service.id"
                 @update:model-value="toggleActive(service.id, $event)"
               />
             </div>
@@ -153,7 +164,9 @@ async function handleDelete() {
               </span>
             </div>
             <div class="mt-4 flex items-center gap-2">
-              <UButton color="neutral" variant="soft" block class="rounded-full" disabled>Edit</UButton>
+              <UButton color="neutral" variant="soft" block class="rounded-full" @click="editService(service.id)">
+                Edit
+              </UButton>
               <UButton
                 color="neutral"
                 variant="soft"

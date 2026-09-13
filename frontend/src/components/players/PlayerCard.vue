@@ -42,8 +42,8 @@ function formatCount(count: number) {
 
     <span class="truncate font-semibold text-white">{{ player.displayName }}</span>
 
-    <p class="inline-flex items-center gap-1 text-xs text-slate-400">
-      <PhStar :size="12" weight="fill" class="text-amber-400" />
+    <p class="inline-flex items-center gap-1 text-sm text-slate-400">
+      <PhStar :size="16" weight="fill" class="text-amber-400" />
       <template v-if="player.rating">
         {{ player.rating.toFixed(1) }}
         <span v-if="player.reviewCount">({{ formatCount(player.reviewCount) }})</span>

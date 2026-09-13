@@ -1,21 +1,48 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { PhCaretLeft, PhLightning, PhPlus, PhStar, PhTrophy, PhUserCircle, PhX } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { usePlayersStore } from '@/stores/players'
+import { usePlayersStore, type ServiceTypeOption } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { games } from '@/data/games'
 
 const router = useRouter()
+const route = useRoute()
 const playersStore = usePlayersStore()
 const previewAvatarUrl = computed(() =>
   resolveAvatarUrl(playersStore.mine?.id ?? 'you', playersStore.mine?.avatarUrl),
 )
 
-onMounted(() => {
-  if (!playersStore.mine) playersStore.fetchMine()
+/** Present (`/dashboard/player/services/:id/edit`) iff we're editing an existing service
+ * rather than creating a new one - the rest of this component reuses the same form for both. */
+const editingId = computed(() => (typeof route.params.id === 'string' ? route.params.id : null))
+const isEdit = computed(() => editingId.value !== null)
+const prefillError = ref<string | null>(null)
+
+onMounted(async () => {
+  if (!playersStore.mine) await playersStore.fetchMine()
+  if (editingId.value) prefillFromExisting(editingId.value)
 })
+
+function prefillFromExisting(serviceId: string) {
+  const service = playersStore.mine?.services.find((s) => s.id === serviceId)
+  const detail = playersStore.mine?.serviceDetails[serviceId]
+  if (!service || !detail) {
+    prefillError.value = "Couldn't find that service"
+    return
+  }
+  title.value = service.name
+  description.value = detail.description
+  game.value = detail.platforms[0] ?? gameOptions[0]!
+  coverPreviewUrl.value = service.coverImageUrl
+  firstOrderFree.value = service.firstOrderFree ?? false
+  percentageDiscount.value = service.percentOff != null
+  discountPct.value = service.percentOff ?? 15
+  if (detail.serviceTypes.length) {
+    serviceTypes.value = detail.serviceTypes.map((type) => rowFromServiceType(type))
+  }
+}
 
 const categoryOptions = ['Game', 'Coaching', 'Chat', 'Watch Party']
 const gameOptions = games.map((g) => g.name)
@@ -37,20 +64,20 @@ function openCoverPicker() {
 function onCoverSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
-  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+  if (coverPreviewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = URL.createObjectURL(file)
   coverFile.value = file
 }
 
 function removeCover() {
-  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+  if (coverPreviewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = null
   coverFile.value = null
   if (coverInput.value) coverInput.value.value = ''
 }
 
 onBeforeUnmount(() => {
-  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+  if (coverPreviewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(coverPreviewUrl.value)
 })
 
 interface ServiceTypeRow {
@@ -63,6 +90,10 @@ interface ServiceTypeRow {
 let nextRowId = 1
 function createRow(label = ''): ServiceTypeRow {
   return { id: nextRowId++, label, priceCoins: null, priceUnit: unitOptions[0]! }
+}
+
+function rowFromServiceType(type: ServiceTypeOption): ServiceTypeRow {
+  return { id: nextRowId++, label: type.label, priceCoins: type.priceCoins, priceUnit: type.priceUnit }
 }
 
 const serviceTypes = ref<ServiceTypeRow[]>([createRow()])
@@ -110,7 +141,7 @@ function saveDraft() {
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
 
-async function publish() {
+async function submit() {
   if (!canPublish.value || submitting.value) return
   submitting.value = true
   submitError.value = null
@@ -119,7 +150,7 @@ async function publish() {
 
   const formData = new FormData()
   formData.append('name', title.value.trim())
-  if (description.value.trim()) formData.append('description', description.value.trim())
+  if (isEdit.value || description.value.trim()) formData.append('description', description.value.trim())
   formData.append('platforms', game.value)
   formData.append(
     'pricing_options',
@@ -132,10 +163,14 @@ async function publish() {
   if (coverFile.value) formData.append('cover', coverFile.value)
 
   try {
-    await playersStore.createService(formData)
+    if (editingId.value) {
+      await playersStore.updateService(editingId.value, formData)
+    } else {
+      await playersStore.createService(formData)
+    }
     goBack()
   } catch (err) {
-    submitError.value = err instanceof Error ? err.message : 'Failed to publish service'
+    submitError.value = err instanceof Error ? err.message : `Failed to ${isEdit.value ? 'save changes' : 'publish service'}`
   } finally {
     submitting.value = false
   }
@@ -143,9 +178,11 @@ async function publish() {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-65px)] overflow-y-auto px-4 py-6 md:px-6">
+  <div class="h-[calc(100vh-65px)] overflow-y-auto px-4 pb-6 md:px-6">
     <div class="mx-auto max-w-2/3">
-      <div class="flex flex-wrap items-center justify-between gap-4">
+      <div
+        class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-squadup-bg pt-6 pb-4"
+      >
         <div class="flex items-center gap-3">
           <button
             type="button"
@@ -155,22 +192,25 @@ async function publish() {
           >
             <PhCaretLeft :size="18" weight="bold" />
           </button>
-          <h1 class="text-2xl font-bold text-white sm:text-3xl">Create a service</h1>
+          <h1 class="text-2xl font-bold text-white sm:text-3xl">{{ isEdit ? 'Edit service' : 'Create a service' }}</h1>
         </div>
         <div class="flex items-center gap-3">
-          <UButton color="neutral" variant="soft" class="rounded-full" @click="saveDraft">Save draft</UButton>
+          <UButton v-if="!isEdit" color="neutral" variant="soft" class="rounded-full" @click="saveDraft">
+            Save draft
+          </UButton>
           <UButton
             color="primary"
             class="rounded-full"
             :disabled="!canPublish"
             :loading="submitting"
-            @click="publish"
+            @click="submit"
           >
-            Publish
+            {{ isEdit ? 'Save changes' : 'Publish' }}
           </UButton>
         </div>
       </div>
 
+      <p v-if="prefillError" class="mt-3 text-sm text-red-400">{{ prefillError }}</p>
       <p v-if="submitError" class="mt-3 text-sm text-red-400">{{ submitError }}</p>
 
       <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -353,7 +393,7 @@ async function publish() {
           </div>
         </div>
 
-        <div class="flex flex-col gap-3 lg:sticky lg:top-6 lg:self-start">
+        <div class="flex flex-col gap-3 lg:sticky lg:top-24 lg:self-start">
           <p class="text-sm font-medium text-slate-300">Live preview</p>
 
           <div class="rounded-2xl bg-gray-800/70 p-5">
@@ -368,9 +408,9 @@ async function publish() {
 
             <div class="mt-3 flex items-center gap-1.5">
               <span class="font-semibold text-white">{{ playersStore.mine?.displayName ?? 'You' }}</span>
-              <PhTrophy :size="14" weight="fill" class="shrink-0 text-amber-400" />
+              <PhTrophy :size="16" weight="fill" class="shrink-0 text-amber-400" />
             </div>
-            <p class="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-400">
+            <p class="mt-0.5 inline-flex items-center gap-1 text-sm text-slate-400">
               <PhStar :size="12" weight="fill" class="text-amber-400" />
               New · 0 orders
             </p>
@@ -398,7 +438,7 @@ async function publish() {
             </div>
           </div>
 
-          <p class="text-xs text-slate-500">Your service is reviewed within a few minutes before going live.</p>
+          <p class="text-sm text-slate-500">Your service is reviewed within a few minutes before going live.</p>
         </div>
       </div>
     </div>

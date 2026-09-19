@@ -20,7 +20,6 @@ const statusUpdating = ref(false)
 
 const filters = [
   { key: 'requested', label: 'Awaiting review' },
-  { key: 'in_progress', label: 'In progress' },
   { key: 'paid', label: 'Paid' },
   { key: 'rejected', label: 'Declined' },
   { key: 'all', label: 'All' },
@@ -28,9 +27,11 @@ const filters = [
 
 const activeFilter = ref<(typeof filters)[number]['key']>('requested')
 
+/** Admins only approve or decline, so `in_progress` is legacy: rows that predate the review flow
+ * were already approved, so they read as Paid. */
 const statusMeta: Record<AdminWithdrawalStatus, { label: string; class: string }> = {
   requested: { label: 'Awaiting review', class: 'text-amber-400' },
-  in_progress: { label: 'In progress', class: 'text-sky-400' },
+  in_progress: { label: 'Paid', class: 'text-brand-400' },
   paid: { label: 'Paid', class: 'text-brand-400' },
   rejected: { label: 'Declined', class: 'text-red-400' },
 }
@@ -48,7 +49,12 @@ const pendingCount = computed(
 const rows = computed(() => {
   const query = search.value.trim().toLowerCase()
   return adminStore.withdrawals
-    .filter((withdrawal) => activeFilter.value === 'all' || withdrawal.status === activeFilter.value)
+    .filter(
+      (withdrawal) =>
+        activeFilter.value === 'all' ||
+        withdrawal.status === activeFilter.value ||
+        (activeFilter.value === 'paid' && withdrawal.status === 'in_progress'),
+    )
     .filter(
       (withdrawal) =>
         !query ||
@@ -62,7 +68,7 @@ const rows = computed(() => {
 
 /** A decided payout is final - the backend 409s on a second review, so the buttons go away
  * rather than offering an action that cannot succeed. */
-const isDecided = computed(() => viewing.value?.status === 'paid' || viewing.value?.status === 'rejected')
+const isDecided = computed(() => viewing.value !== null && viewing.value.status !== 'requested')
 
 async function setStatus(status: AdminWithdrawalStatus) {
   if (!viewing.value || statusUpdating.value) return
@@ -271,41 +277,29 @@ async function setStatus(status: AdminWithdrawalStatus) {
               Approving debits {{ viewing.coins.toLocaleString() }} SC from
               {{ viewing.displayName }}'s wallet. Declining releases the hold and takes nothing.
             </p>
-            <div class="grid grid-cols-3 gap-3">
-            <UButton
-              color="neutral"
-              variant="soft"
-              size="md"
-              block
-              class="rounded-full"
-              :loading="statusUpdating"
-              :disabled="statusUpdating || viewing.status === 'in_progress'"
-              @click="setStatus('in_progress')"
-            >
-              Processing
-            </UButton>
-            <UButton
-              color="primary"
-              size="md"
-              block
-              class="rounded-full"
-              :loading="statusUpdating"
-              :disabled="statusUpdating"
-              @click="setStatus('paid')"
-            >
-              Approve
-            </UButton>
-            <UButton
-              color="error"
-              variant="soft"
-              size="md"
-              block
-              class="rounded-full"
-              :loading="statusUpdating"
-              :disabled="statusUpdating"
-              @click="setStatus('rejected')"
-            >
-              Decline
+            <div class="grid grid-cols-2 gap-3">
+              <UButton
+                color="primary"
+                size="md"
+                block
+                class="rounded-full"
+                :loading="statusUpdating"
+                :disabled="statusUpdating"
+                @click="setStatus('paid')"
+              >
+                Approve
+              </UButton>
+              <UButton
+                color="error"
+                variant="soft"
+                size="md"
+                block
+                class="rounded-full"
+                :loading="statusUpdating"
+                :disabled="statusUpdating"
+                @click="setStatus('rejected')"
+              >
+                Decline
               </UButton>
             </div>
           </div>

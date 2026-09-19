@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { PhCaretLeft, PhCheckCircle, PhStar } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
+import { gameCoverForName } from '@/lib/covers'
+import { resolveAvatarUrl } from '@/utils/avatar'
 import { fallbackServiceDetail } from '@/mocks/playerProfiles'
 import { usePlayerProfileData } from '@/composables/usePlayerProfileData'
 import { useMessagesStore } from '@/stores/messages'
@@ -42,11 +44,16 @@ const selectedType = computed(
   () => detail.value.serviceTypes[selectedTypeIndex.value] ?? detail.value.serviceTypes[0]!,
 )
 
-const tags = computed(() => [
-  ...detail.value.platforms,
-  ...detail.value.styles,
-  ...player.value.languages,
-])
+/** Falls back to the game's cover art so a Pal who skipped the upload still gets a banner
+ * instead of an empty picture frame; undefined means render the header on a flat panel. */
+const coverSrc = computed(() => service.value.coverImageUrl ?? gameCoverForName(detail.value.title))
+
+// The title already names the game, so don't repeat it in the tag row.
+const tags = computed(() =>
+  [...detail.value.platforms, ...detail.value.styles, ...player.value.languages].filter(
+    (tag) => tag !== detail.value.title,
+  ),
+)
 
 const bookingOpen = ref(false)
 
@@ -89,57 +96,64 @@ async function handleMessage() {
 
       <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <div class="flex flex-col gap-4">
-          <div class="relative aspect-video w-full overflow-hidden rounded-xl bg-white/5 ring-1 ring-inset ring-white/10">
-            <img
-              v-if="service.coverImageUrl"
-              :src="service.coverImageUrl"
-              alt=""
-              class="absolute inset-0 h-full w-full object-cover"
-            />
-          </div>
+          <!-- Cover and title were two stacked cards, so an empty cover pushed everything that
+               matters below the fold. They're one banner now, with the header overlaid when
+               there's art and sitting on the plain panel when there isn't. -->
+          <div class="relative overflow-hidden rounded-xl bg-gray-800/70">
+            <template v-if="coverSrc">
+              <img :src="coverSrc" alt="" class="h-64 w-full object-cover sm:h-80 lg:h-96" />
+              <!-- Weighted toward the bottom so the header stays readable while the top two
+                   thirds of the art come through nearly untouched. -->
+              <div
+                class="absolute inset-0 bg-gradient-to-t from-gray-900 from-20% via-gray-900/75 via-55% to-transparent"
+              />
+            </template>
 
-          <div class="rounded-xl bg-gray-800/70 p-5">
-            <h1 class="text-2xl font-bold text-white">{{ detail.title }}</h1>
+            <div :class="coverSrc ? 'absolute inset-x-0 bottom-0 p-6' : 'p-6'">
+              <h1 class="text-3xl font-bold text-white sm:text-4xl">{{ detail.title }}</h1>
 
-            <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <div class="flex items-center gap-3">
-                <div class="h-10 w-10 shrink-0 rounded-full bg-white/10" />
-                <div>
-                  <p class="font-medium text-white">{{ player.displayName }}</p>
-                  <p class="inline-flex items-center gap-1 text-xs text-slate-400">
-                    <PhStar :size="12" weight="fill" class="text-amber-400" />
-                    {{ detail.rating ? detail.rating.toFixed(1) : '--' }} ({{
-                      detail.servedCount.toLocaleString()
-                    }})
-                  </p>
+              <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <UAvatar
+                    :src="resolveAvatarUrl(player.id, player.avatarUrl)"
+                    size="xl"
+                    class="size-20 shrink-0 bg-white/10 text-slate-300"
+                  />
+                  <div>
+                    <p class="text-3xl font-semibold text-white">{{ player.displayName }}</p>
+                    <p class="mt-0.5 inline-flex items-center gap-1 text-md text-slate-200">
+                      <PhStar :size="14" weight="fill" class="text-amber-400" />
+                      {{ detail.rating ? detail.rating.toFixed(1) : '--' }} ({{
+                        detail.servedCount.toLocaleString()
+                      }})
+                    </p>
+                  </div>
                 </div>
+                <UButton
+                  color="primary"
+                  variant="solid"
+                  class="rounded-full"
+                  @click="handleMessage"
+                >
+                  Message
+                </UButton>
               </div>
-              <UButton
-                color="primary"
-                variant="soft"
-                size="sm"
-                class="rounded-full"
-                @click="handleMessage"
-              >
-                Message
-              </UButton>
-            </div>
 
-            <div v-if="tags.length" class="mt-4 flex flex-wrap gap-2">
-              <UBadge
-                v-for="tag in tags"
-                :key="tag"
-                color="neutral"
-                variant="soft"
-                size="sm"
-                class="rounded-full text-xs"
-              >
-                {{ tag }}
-              </UBadge>
+              <div v-if="tags.length" class="mt-4 flex flex-wrap gap-2">
+                <UBadge
+                  v-for="tag in tags"
+                  :key="tag"
+                  color="neutral"
+                  variant="soft"
+                  class="rounded-full bg-white/10 text-sm text-white"
+                >
+                  {{ tag }}
+                </UBadge>
+              </div>
             </div>
           </div>
 
-          <div class="rounded-xl bg-gray-800/70 p-5">
+          <div v-if="detail.description" class="rounded-xl bg-gray-800/70 p-5">
             <h2 class="text-lg font-bold text-white">About this service</h2>
             <p class="mt-2 text-sm leading-relaxed text-slate-300">{{ detail.description }}</p>
           </div>
@@ -248,7 +262,7 @@ async function handleMessage() {
           </UButton>
           <UButton
             color="primary"
-            variant="outline"
+            variant="soft"
             block
             size="lg"
             class="mt-2.5 rounded-full"
@@ -256,7 +270,7 @@ async function handleMessage() {
           >
             Chat first
           </UButton>
-          <p class="mt-3 text-center text-xs text-slate-400">
+          <p v-if="detail.avgResponseTime" class="mt-3 text-center text-xs text-slate-400">
             Avg response {{ detail.avgResponseTime }}
           </p>
         </div>

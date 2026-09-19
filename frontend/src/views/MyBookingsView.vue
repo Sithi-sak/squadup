@@ -184,10 +184,18 @@ function handlePrimaryAction(booking: Booking) {
 async function confirmReview(payload: { rating: number; highlights: string[]; comment: string; tipCoins: number }) {
   if (!reviewTarget.value) return
   try {
-    await bookingsStore.submitReview(reviewTarget.value.bookingId, { rating: payload.rating, text: payload.comment })
+    await bookingsStore.submitReview(reviewTarget.value.bookingId, {
+      rating: payload.rating,
+      text: payload.comment,
+      highlights: payload.highlights,
+      tipCoins: payload.tipCoins,
+    })
+    reviewModalOpen.value = false
     toast.add({
       title: 'Review submitted',
-      description: 'Thanks for the feedback!',
+      description: payload.tipCoins
+        ? `Thanks for the feedback! ${payload.tipCoins} SC tip sent.`
+        : 'Thanks for the feedback!',
       color: 'success',
     })
   } catch (err) {

@@ -5,6 +5,7 @@ import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhStar, PhTrash } from '@phosphor-icons/vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
+import { gameCoverForName } from '@/lib/covers'
 import { usePlayersStore } from '@/stores/players'
 
 const router = useRouter()
@@ -19,6 +20,7 @@ const cards = computed(() =>
   (playersStore.mine?.services ?? []).map((service) => ({
     service,
     detail: playersStore.mine!.serviceDetails[service.id],
+    cover: service.coverImageUrl ?? gameCoverForName(service.name),
   })),
 )
 
@@ -126,11 +128,11 @@ async function handleDelete() {
       </UEmpty>
 
       <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-4">
-        <div v-for="{ service, detail } in cards" :key="service.id" class="overflow-hidden rounded-xl bg-gray-800/70">
+        <div v-for="{ service, detail, cover } in cards" :key="service.id" class="overflow-hidden rounded-xl bg-gray-800/70">
           <div class="relative aspect-21/9 w-full bg-white/5 ring-1 ring-inset ring-white/10">
             <img
-              v-if="service.coverImageUrl"
-              :src="service.coverImageUrl"
+              v-if="cover"
+              :src="cover"
               alt=""
               class="absolute inset-0 h-full w-full object-cover"
             />
@@ -175,7 +177,7 @@ async function handleDelete() {
                 :aria-label="`Delete ${service.name}`"
                 @click="askDelete({ id: service.id, name: service.name })"
               >
-                <PhTrash :size="16" weight="bold" />
+                <PhTrash :size="20" />
               </UButton>
             </div>
           </div>

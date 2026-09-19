@@ -73,6 +73,11 @@ export interface PlayerReview {
   text: string
   timeAgo: string
   sentiment: 'positive' | 'neutral' | 'negative'
+  /** The "What went well?" chips the buyer picked in `LeaveReviewModal` (4.44). Optional so the
+   * authored mock fixtures don't each have to carry an empty array. */
+  highlights?: string[]
+  /** Coins tipped alongside the review, 0 when they skipped the tip (4.44). */
+  tipCoins?: number
 }
 
 export interface AlbumItem {
@@ -122,6 +127,9 @@ export interface PlayerProfile {
   /** Whether the signed-in viewer follows this Pal - always false for a mock profile or an
    * anonymous viewer. Drives the Follow/Following toggle in `ProfileHeader.vue`. */
   following: boolean
+  /** True when the viewer is the one who blocked this Pal (4.39) - the menu offers Unblock.
+   * Optional so the authored mock fixtures don't each have to carry it. */
+  blocked?: boolean
 }
 
 export interface PlayerFilters {
@@ -173,6 +181,9 @@ export interface MyPlayerProfile {
   /** Always false on `/players/me` (can't follow yourself) - carried on this type only because
    * `GET /players/{id}` reuses the same backend `PlayerDetailOut` shape. */
   following: boolean
+  /** True when the viewer is the one who blocked this Pal (4.39) - the menu offers Unblock.
+   * Optional so the authored mock fixtures don't each have to carry it. */
+  blocked?: boolean
 }
 
 /** `POST /players/me/services` and `PATCH /players/me/services/{id}` response shape
@@ -230,6 +241,7 @@ export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
     followersCount: p.followersCount,
     followingCount: p.followingCount,
     following: p.following,
+    blocked: p.blocked ?? false,
   }
 }
 
@@ -256,6 +268,8 @@ interface ReviewApiOut {
   rating: number
   text: string | null
   sentiment: 'positive' | 'neutral' | 'negative'
+  highlights: string[]
+  tipCoins: number
   createdAt: string
 }
 
@@ -270,6 +284,8 @@ function reviewsFromApi(grouped: Record<string, ReviewApiOut[]>): Record<string,
         text: r.text ?? '',
         timeAgo: formatTimeAgo(r.createdAt),
         sentiment: r.sentiment,
+        highlights: r.highlights ?? [],
+        tipCoins: r.tipCoins ?? 0,
       })),
     ]),
   )
@@ -476,6 +492,16 @@ export const usePlayersStore = defineStore('players', () => {
     }
   }
 
+  /** Profile report (`POST /players/{id}/report`, 4.38). Throws so the caller can toast - a
+   * report that silently fails is worse than no report button, which is what the modal used to
+   * do. Lands in `admin_flags`, which is what the admin moderation queue reads. */
+  async function reportPlayer(id: string, payload: { reason: string; details: string }) {
+    return api.post<{ id: string; status: string; reportCount: number }>(`/players/${id}/report`, {
+      reason: payload.reason,
+      details: payload.details || null,
+    })
+  }
+
   return {
     list,
     filters,
@@ -503,6 +529,7 @@ export const usePlayersStore = defineStore('players', () => {
     fetchPlayerFeed,
     fetchPlayerAlbum,
     fetchPlayerWish,
+    reportPlayer,
     earnings,
     earningsLoading,
     earningsError,

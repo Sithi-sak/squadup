@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import coverManifest from '@/data/coverManifest.json'
+import { games } from '@/data/games'
 
 const CDN_BASE = 'https://cdn.jsdelivr.net/gh/Sithi-sak/game-cover@main'
 
@@ -17,4 +18,13 @@ export function useCoverManifest(): Ref<Map<string, string>> {
 
 export function gameCoverUrl(slug: string, filename: string): string {
   return `${CDN_BASE}/covers/${slug}/${filename}`
+}
+
+/** Service titles are the game name the Pal picked during onboarding (`data/games.ts`'s `games`
+ * list), so a service with no uploaded cover falls back to that game's cover art rather than
+ * rendering an empty picture frame. */
+export function gameCoverForName(name: string | null | undefined): string | undefined {
+  const slug = name ? games.find((g) => g.name === name)?.id : undefined
+  const filename = slug ? coverFilenames.value.get(slug) : undefined
+  return slug && filename ? gameCoverUrl(slug, filename) : undefined
 }

@@ -630,9 +630,9 @@ unchecked box until the whole thing is done.
         reshaping needed on the frontend side). A review recomputes both `services.rating` (that
         service's reviews only) and `players.rating`/`review_count` (every review across all of
         the Pal's services) from scratch each time - simple average over live rows, no running
-        total to keep in sync. `highlights`/`tipCoins` the modal collects stay UI-only, same
-        "stays UI-only" convention as Create Service's Category field - `reviews` (2.3) has no
-        highlights column, and tips need the wallet ledger (3.9). `bookings.py`'s `BookingOut`
+        total to keep in sync. `highlights`/`tipCoins` the modal collects stayed UI-only here,
+        same "stays UI-only" convention as Create Service's Category field - `reviews` (2.3) had
+        no highlights column, and tips needed the wallet ledger (3.9). Both landed later in 4.44. `bookings.py`'s `BookingOut`
         gained `has_review` (a `reviews(id)` embed on the existing `_SELECT`) so My Bookings can
         tell a reviewed order from one still awaiting a review without a separate lookup.
   - [x] 3.6b Backend: live smoke test against the real Supabase project (a throwaway buyer + Pal
@@ -2248,6 +2248,83 @@ kind of Stripe id.
         the whole feed shell, inner cached tabs included, survives a trip to another top-nav tab.
   - [x] 4.21h Verification: `vue-tsc --noEmit` and `eslint` clean on all 9 touched files. Manual
         browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+  - [x] 4.27e User reported (2026-09-19) that "Apply crop" did nothing. Root cause: applying set
+        `files` to the cropped File, which re-fired 4.27c's `watch(files)` - by the time the
+        watcher flushed, `cropping` was already back to `false` and the File was not
+        `originalFile`, so it treated the crop's own output as a fresh pick and reopened the
+        cropper on it. The modal now remembers the File it wrote itself in `appliedFile` and the
+        watcher ignores that identity. Same commit: dropped the Portrait (4:5) preset at the
+        user's request, leaving Wide and Square.
+  - [x] 4.27f User reported (2026-09-19) the composer's "+ Add" tag button did nothing. It never
+        had a handler - it was placeholder markup - and, separately, the selected tags were never
+        sent: `createPost` accepted a `category` the modal never passed, so every post landed on
+        the backend's `"games"` default. Fixed both: "Add" is now a `USelectMenu` over
+        `data/games.ts`'s catalog (filtered to games not already offered as a chip) that appends
+        the picked game as a chip and selects it, and the chosen tag rides along as `category`.
+        The row is single-select now (`selectedTag`, was a `selectedTags` array) because a post
+        carries exactly one `category` server-side - it is what `FeedRightRail.vue` counts as a
+        trending topic and what `/feed/explore?category=` filters on. The row is also no longer
+        hidden when the account offers no services, since "Add" works without any.
+  - [x] 4.27g Composer textarea (user request, 2026-09-19): `resize-none` kills the browser's
+        drag handle, and `autoresize` with `:rows="5"` / `:maxrows="14"` holds it at five rows
+        until the text actually wraps past them, then grows a line at a time and scrolls beyond
+        fourteen instead of pushing the modal's footer off screen.
+  - [x] 4.27h `POST /feed/posts` 500'd on the tag from 4.27f: `invalid input value for enum
+        feed_category: "Bloodborne"`. 4.27f sent the picked tag as `category`, but `posts.category`
+        is the `feed_category` enum ('games' | 'chilling' | 'clips') - a post *type*, not a topic -
+        so a game name can never live there. Tags got their own nullable `posts.tag text` column
+        (`20260919090000_post_tag.sql`, plus a partial index on non-null tags), applied via
+        `bunx supabase db push`. Backend: `create_post` takes `tag: str | None = Form(None)`
+        (stripped, empty means null), `PostOut` and `_post_out` carry it; `category` keeps its
+        old meaning and `"games"` default. Frontend: `FeedPost.tag` / `CreatePostPayload.tag`,
+        the composer sends `tag`, and `FeedPostCard.vue` renders it as a `#tag` chip under the
+        post that deep-links to Explore.
+  - [x] 4.27i Made the new tag reachable once posted: `FeedRightRail.vue`'s "Trending now" counts
+        a post under its `tag` when it has one and its `category` otherwise (a game name is the
+        more useful topic than the enum), and `FeedExploreView.vue` matches both fields for the
+        `?category=` filter and the search box, so the card's `#tag` link lands on something.
+        `ruff check` clean on the backend file, `vue-tsc`/`oxlint` clean on the frontend ones
+        (the type-check errors that remain are the same pre-existing four from 4.27d).
+
+- [x] 4.28 Several images per post, laid out like Facebook (requested 2026-09-19 by the user,
+      with a screenshot of a five-image Facebook post as the target).
+  - [x] 4.28a Schema: `posts.image_urls text[] not null default '{}'`
+        (`20260919100000_post_image_urls.sql`), backfilled from `image_url`. `image_url` stays and
+        always holds the first image, so everything already reading it (saved items,
+        `has_image`, older rows, the mock-backed views) keeps working untouched. Applied via
+        `bunx supabase db push`.
+  - [x] 4.28b Backend: `create_post` takes a repeated `images` field (`list[UploadFile]`) next to
+        the old single `image`, both funneled through a new `_collect_uploads` helper that drops
+        the empty-filename entry a blank multipart field arrives as and caps the set at
+        `_MAX_POST_IMAGES` (10). `update_post` gained `manage_images` + `keep_image_urls`: with
+        the flag, `keep_image_urls` is the authoritative list of surviving images in display
+        order and `images` is appended to it, so an empty list clears them. Without the flag the
+        old single-image behavior (`image` replaces, `remove_image` clears) is untouched, which
+        is why the flag exists at all - an omitted repeated field and an empty one are
+        indistinguishable in multipart. `PostOut`/`_post_out` carry `image_urls`.
+  - [x] 4.28c Composer: one `attachments` list drives both modes, each entry either `existing`
+        (a URL the edit keeps) or `new` (a File that uploads), so create and edit share all the
+        add/remove/crop plumbing. A lone first pick still opens the cropper by itself; a
+        multi-pick lands as a thumbnail grid with per-photo crop and remove buttons, and
+        `autoCropId` marks the auto-opened crop so cancelling *that* discards the photo while
+        cancelling a crop the user asked for keeps it. Cropping an `existing` image converts it
+        to a `new` one (what uploads is the cropped output) and re-crops still run off the
+        untouched source.
+  - [x] 4.28d `ImageCropper.vue` gained an `error` emit and `crossorigin="anonymous"`: an image
+        already on the post is a Supabase Storage URL, which taints the canvas without a CORS
+        opt-in and makes `toBlob` throw. Verified the bucket answers with
+        `access-control-allow-origin: *`, so the anonymous request is enough; the emit means a
+        failure surfaces as a toast instead of a dead button.
+  - [x] 4.28e `FeedPostCard.vue` collage, sized off `photos` (`imageUrls`, falling back to the
+        single `imageUrl`): two side by side, a tall one beside a stacked pair for three, a 2x2
+        for four, and for five or more a row of two over a row of three with a "+N" cover on the
+        last tile (a 6-column grid is the smallest that divides into both halves and thirds).
+        The lightbox now tracks an index with prev/next buttons, a counter and arrow-key nav off
+        a window listener (the modal's content isn't focused on open). `:image-urls` passed
+        through all six store-backed call sites; `FeedSavedView` stays on its mock single image.
+  - [x] 4.28f Verification: `ruff check` clean on the backend file, `vue-tsc --build` and
+        `oxlint` clean across `src` (same four pre-existing type errors as 4.27d). Manual
+        browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
 
 - [x] 4.22 Own Posts/Following counts never moved until something happened to refetch (surfaced
       2026-09-11 as a side effect of 4.21, fixed on the user's go-ahead). Pre-existing, not new:
@@ -2276,6 +2353,43 @@ kind of Stripe id.
         than posts in its header.
   - [x] 4.22e Verification: `vue-tsc --noEmit` and `eslint` clean on all 3 touched files. Manual
         browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+  - [x] 4.27e User reported (2026-09-19) that "Apply crop" did nothing. Root cause: applying set
+        `files` to the cropped File, which re-fired 4.27c's `watch(files)` - by the time the
+        watcher flushed, `cropping` was already back to `false` and the File was not
+        `originalFile`, so it treated the crop's own output as a fresh pick and reopened the
+        cropper on it. The modal now remembers the File it wrote itself in `appliedFile` and the
+        watcher ignores that identity. Same commit: dropped the Portrait (4:5) preset at the
+        user's request, leaving Wide and Square.
+  - [x] 4.27f User reported (2026-09-19) the composer's "+ Add" tag button did nothing. It never
+        had a handler - it was placeholder markup - and, separately, the selected tags were never
+        sent: `createPost` accepted a `category` the modal never passed, so every post landed on
+        the backend's `"games"` default. Fixed both: "Add" is now a `USelectMenu` over
+        `data/games.ts`'s catalog (filtered to games not already offered as a chip) that appends
+        the picked game as a chip and selects it, and the chosen tag rides along as `category`.
+        The row is single-select now (`selectedTag`, was a `selectedTags` array) because a post
+        carries exactly one `category` server-side - it is what `FeedRightRail.vue` counts as a
+        trending topic and what `/feed/explore?category=` filters on. The row is also no longer
+        hidden when the account offers no services, since "Add" works without any.
+  - [x] 4.27g Composer textarea (user request, 2026-09-19): `resize-none` kills the browser's
+        drag handle, and `autoresize` with `:rows="5"` / `:maxrows="14"` holds it at five rows
+        until the text actually wraps past them, then grows a line at a time and scrolls beyond
+        fourteen instead of pushing the modal's footer off screen.
+  - [x] 4.27h `POST /feed/posts` 500'd on the tag from 4.27f: `invalid input value for enum
+        feed_category: "Bloodborne"`. 4.27f sent the picked tag as `category`, but `posts.category`
+        is the `feed_category` enum ('games' | 'chilling' | 'clips') - a post *type*, not a topic -
+        so a game name can never live there. Tags got their own nullable `posts.tag text` column
+        (`20260919090000_post_tag.sql`, plus a partial index on non-null tags), applied via
+        `bunx supabase db push`. Backend: `create_post` takes `tag: str | None = Form(None)`
+        (stripped, empty means null), `PostOut` and `_post_out` carry it; `category` keeps its
+        old meaning and `"games"` default. Frontend: `FeedPost.tag` / `CreatePostPayload.tag`,
+        the composer sends `tag`, and `FeedPostCard.vue` renders it as a `#tag` chip under the
+        post that deep-links to Explore.
+  - [x] 4.27i Made the new tag reachable once posted: `FeedRightRail.vue`'s "Trending now" counts
+        a post under its `tag` when it has one and its `category` otherwise (a game name is the
+        more useful topic than the enum), and `FeedExploreView.vue` matches both fields for the
+        `?category=` filter and the search box, so the card's `#tag` link lands on something.
+        `ruff check` clean on the backend file, `vue-tsc`/`oxlint` clean on the frontend ones
+        (the type-check errors that remain are the same pre-existing four from 4.27d).
 
 - [x] 4.23 Settings page's top-right "Save changes" button (reported 2026-09-11 by the user: it
       was disabled for both Pal and non-Pal accounts, while the Account tab's own Save button
@@ -2371,6 +2485,43 @@ kind of Stripe id.
         and preserves scroll/selection/filter state.
   - [x] 4.25g Verification: `vue-tsc --noEmit` and `eslint` clean on all touched files. Manual
         browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+  - [x] 4.27e User reported (2026-09-19) that "Apply crop" did nothing. Root cause: applying set
+        `files` to the cropped File, which re-fired 4.27c's `watch(files)` - by the time the
+        watcher flushed, `cropping` was already back to `false` and the File was not
+        `originalFile`, so it treated the crop's own output as a fresh pick and reopened the
+        cropper on it. The modal now remembers the File it wrote itself in `appliedFile` and the
+        watcher ignores that identity. Same commit: dropped the Portrait (4:5) preset at the
+        user's request, leaving Wide and Square.
+  - [x] 4.27f User reported (2026-09-19) the composer's "+ Add" tag button did nothing. It never
+        had a handler - it was placeholder markup - and, separately, the selected tags were never
+        sent: `createPost` accepted a `category` the modal never passed, so every post landed on
+        the backend's `"games"` default. Fixed both: "Add" is now a `USelectMenu` over
+        `data/games.ts`'s catalog (filtered to games not already offered as a chip) that appends
+        the picked game as a chip and selects it, and the chosen tag rides along as `category`.
+        The row is single-select now (`selectedTag`, was a `selectedTags` array) because a post
+        carries exactly one `category` server-side - it is what `FeedRightRail.vue` counts as a
+        trending topic and what `/feed/explore?category=` filters on. The row is also no longer
+        hidden when the account offers no services, since "Add" works without any.
+  - [x] 4.27g Composer textarea (user request, 2026-09-19): `resize-none` kills the browser's
+        drag handle, and `autoresize` with `:rows="5"` / `:maxrows="14"` holds it at five rows
+        until the text actually wraps past them, then grows a line at a time and scrolls beyond
+        fourteen instead of pushing the modal's footer off screen.
+  - [x] 4.27h `POST /feed/posts` 500'd on the tag from 4.27f: `invalid input value for enum
+        feed_category: "Bloodborne"`. 4.27f sent the picked tag as `category`, but `posts.category`
+        is the `feed_category` enum ('games' | 'chilling' | 'clips') - a post *type*, not a topic -
+        so a game name can never live there. Tags got their own nullable `posts.tag text` column
+        (`20260919090000_post_tag.sql`, plus a partial index on non-null tags), applied via
+        `bunx supabase db push`. Backend: `create_post` takes `tag: str | None = Form(None)`
+        (stripped, empty means null), `PostOut` and `_post_out` carry it; `category` keeps its
+        old meaning and `"games"` default. Frontend: `FeedPost.tag` / `CreatePostPayload.tag`,
+        the composer sends `tag`, and `FeedPostCard.vue` renders it as a `#tag` chip under the
+        post that deep-links to Explore.
+  - [x] 4.27i Made the new tag reachable once posted: `FeedRightRail.vue`'s "Trending now" counts
+        a post under its `tag` when it has one and its `category` otherwise (a game name is the
+        more useful topic than the enum), and `FeedExploreView.vue` matches both fields for the
+        `?category=` filter and the search box, so the card's `#tag` link lands on something.
+        `ruff check` clean on the backend file, `vue-tsc`/`oxlint` clean on the frontend ones
+        (the type-check errors that remain are the same pre-existing four from 4.27d).
 
 - [x] 4.26 Notification panel: clicking a "message" notification opens that conversation
       (requested 2026-09-13 by the user off a screenshot of the notification dropdown).
@@ -2404,6 +2555,515 @@ kind of Stripe id.
         (within 10s - `notify()` runs right after the message insert in the same request) within
         a thread the notified user actually belongs to. Applied via `bunx supabase db push`;
         spot-checked all pre-existing rows now have a non-null `thread_id`.
+
+- [x] 4.27 Crop the photo before posting (requested 2026-09-19 by the user, off a screenshot of
+      the Create post modal: picked images went up untouched, and the feed renders every post
+      image `aspect-video object-cover`, so tall photos got center-cropped by the browser with no
+      say in what stayed in frame).
+  - [x] 4.27a New `components/common/ImageCropper.vue`, dependency-free (no new package): the
+        image is drawn at `max(frameW/naturalW, frameH/naturalH) * zoom`, so it always covers the
+        frame and panning can never expose an empty edge; offsets are clamped to that on every
+        drag, zoom and aspect change. Pointer-capture drag, cursor-anchored wheel zoom sharing one
+        `zoomTo(next, anchorX, anchorY)` path with the slider, arrow-key nudge (shift = 32px),
+        `+`/`-` zoom, rule-of-thirds overlay, and Wide (16:9, the default since that is what the
+        feed shows) / Square / Portrait presets plus Reset.
+  - [x] 4.27b Export crops from the *source* pixels, not the on-screen preview: the visible frame
+        maps back through `scale` to `drawImage(img, sx, sy, sourceW, sourceH, ...)`, capped at
+        1600px on the long edge, encoded at quality 0.92. Output mime follows the upload when it
+        is one canvas can encode (png/webp/jpeg), else jpeg, so a PNG keeps its alpha.
+  - [x] 4.27c `CreatePostModal.vue` wiring: a `watch` on `files` sends a fresh pick straight into
+        the cropper (body swaps to the cropper, title becomes "Crop photo"). The untouched pick is
+        kept in `originalFile`/`originalUrl` so re-cropping never compounds quality loss, while
+        `files` holds the cropped `File` that actually uploads. Applying shows a preview with
+        Crop/Remove buttons in place of the dropzone; cancelling the *first* crop detaches the
+        image entirely (nothing was ever chosen), cancelling a re-crop keeps the current one.
+        Object URLs are revoked on replace, clear, modal close and unmount; `canPost` is false
+        while cropping so the footer cannot fire mid-crop.
+  - [x] 4.27d Verification: `vue-tsc --build` and `oxlint` clean on both files (the type-check
+        errors it does report are all pre-existing, in `mocks/playerProfiles.ts`,
+        `stores/players.ts`, `stores/messages.ts` and `become-player/StepGames.vue`). Manual
+        browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+  - [x] 4.27e User reported (2026-09-19) that "Apply crop" did nothing. Root cause: applying set
+        `files` to the cropped File, which re-fired 4.27c's `watch(files)` - by the time the
+        watcher flushed, `cropping` was already back to `false` and the File was not
+        `originalFile`, so it treated the crop's own output as a fresh pick and reopened the
+        cropper on it. The modal now remembers the File it wrote itself in `appliedFile` and the
+        watcher ignores that identity. Same commit: dropped the Portrait (4:5) preset at the
+        user's request, leaving Wide and Square.
+  - [x] 4.27f User reported (2026-09-19) the composer's "+ Add" tag button did nothing. It never
+        had a handler - it was placeholder markup - and, separately, the selected tags were never
+        sent: `createPost` accepted a `category` the modal never passed, so every post landed on
+        the backend's `"games"` default. Fixed both: "Add" is now a `USelectMenu` over
+        `data/games.ts`'s catalog (filtered to games not already offered as a chip) that appends
+        the picked game as a chip and selects it, and the chosen tag rides along as `category`.
+        The row is single-select now (`selectedTag`, was a `selectedTags` array) because a post
+        carries exactly one `category` server-side - it is what `FeedRightRail.vue` counts as a
+        trending topic and what `/feed/explore?category=` filters on. The row is also no longer
+        hidden when the account offers no services, since "Add" works without any.
+  - [x] 4.27g Composer textarea (user request, 2026-09-19): `resize-none` kills the browser's
+        drag handle, and `autoresize` with `:rows="5"` / `:maxrows="14"` holds it at five rows
+        until the text actually wraps past them, then grows a line at a time and scrolls beyond
+        fourteen instead of pushing the modal's footer off screen.
+  - [x] 4.27h `POST /feed/posts` 500'd on the tag from 4.27f: `invalid input value for enum
+        feed_category: "Bloodborne"`. 4.27f sent the picked tag as `category`, but `posts.category`
+        is the `feed_category` enum ('games' | 'chilling' | 'clips') - a post *type*, not a topic -
+        so a game name can never live there. Tags got their own nullable `posts.tag text` column
+        (`20260919090000_post_tag.sql`, plus a partial index on non-null tags), applied via
+        `bunx supabase db push`. Backend: `create_post` takes `tag: str | None = Form(None)`
+        (stripped, empty means null), `PostOut` and `_post_out` carry it; `category` keeps its
+        old meaning and `"games"` default. Frontend: `FeedPost.tag` / `CreatePostPayload.tag`,
+        the composer sends `tag`, and `FeedPostCard.vue` renders it as a `#tag` chip under the
+        post that deep-links to Explore.
+  - [x] 4.27i Made the new tag reachable once posted: `FeedRightRail.vue`'s "Trending now" counts
+        a post under its `tag` when it has one and its `category` otherwise (a game name is the
+        more useful topic than the enum), and `FeedExploreView.vue` matches both fields for the
+        `?category=` filter and the search box, so the card's `#tag` link lands on something.
+        `ruff check` clean on the backend file, `vue-tsc`/`oxlint` clean on the frontend ones
+        (the type-check errors that remain are the same pre-existing four from 4.27d).
+
+  - [x] 4.28 Top-up repricing (90 SC/$) + withdrawal approval flow (user request, 2026-09-19)
+  - [x] 4.28a Repriced the four `topup_packages` tiers to a flat 90 SC per dollar with small flat
+        bonuses: $5 = 450, $10 = 900 (base rate), $25 = 2,250 + 100 bonus, $50 = 4,500 + 200 bonus
+        (`20260919110000_topup_reprice.sql`, updates in place so ids already referenced by an open
+        PaymentIntent/KHQR session still resolve). `mocks/wallet.ts`'s fallback rows match, and
+        `WithdrawView.vue`'s `COINS_PER_USD` went 99 -> 90 since it was pinned to the old base rate.
+  - [x] 4.28b Payout queue schema: `withdrawal_status` gained `requested` (the new default) and
+        `rejected`, plus `withdrawals.reviewed_at` and a status index. Postgres will not let a
+        freshly added enum value be used in the same transaction, so the default flip lives in its
+        own follow-up migration (`20260919120000` then `20260919130000`). `in_progress` kept its
+        name but changed meaning: it used to be "requested and never touched again", it now means
+        an admin approved it and the transfer is with the provider.
+  - [x] 4.28c `WITHDRAWAL_FEE_PCT` 10 -> 20 in `routers/wallet.py` (and
+        `mockWithdrawalPlatformFeePct` to match), so a payout is an 80/20 split: the Pal keeps 80%,
+        SquadUp takes 20%. `create_withdrawal` inserts as `requested` and its notification says the
+        request is awaiting review rather than already processing.
+  - [x] 4.28d Admin endpoints: `GET /admin/withdrawals` (every Pal's request, joined to
+        `players`/`payout_methods`, with the 80% `payout_coins` computed server-side) and
+        `PATCH /admin/withdrawals/{id}/status`. Approve marks `paid`, `in_progress` is the optional
+        "with the provider" step, and `rejected` credits the full amount back via
+        `adjust_coin_balance` - the 20% fee is only earned on a payout that actually goes out. A
+        row that already reached `paid`/`rejected` 409s rather than being reviewed twice.
+        `wallet_transactions` gained a nullable `withdrawal_id`
+        (`20260919140000_wallet_txn_withdrawal_id.sql`) so the decision settles the exact `pending`
+        payout row the request logged - matching it back by user + kind + coins is ambiguous once a
+        Pal has two same-sized requests open.
+  - [x] 4.28e Frontend: new `AdminWithdrawalsPanel.vue` + a "Payouts" tab in `AdminView.vue`,
+        defaulting to the Awaiting-review filter with a pending count on the chip; the table breaks
+        each request into requested / SquadUp 20% / Pal receives 80%, and the review modal carries
+        Processing / Approve / Decline. `stores/admin.ts` gained the fetch/patch pair with the usual
+        `mocks/admin.ts` fallback, and `stores/wallet.ts`'s `Withdrawal.status` widened to the full
+        four-value enum so `WithdrawView.vue` can label a Pal's own request "Awaiting review".
+  - [x] 4.28f Verification: `ruff check` clean on both backend files, `oxlint` clean on all changed
+        frontend files, `vue-tsc --build` reporting only the pre-existing errors (`playerProfiles.ts`,
+        `stores/players.ts`, `stores/messages.ts`, `become-player/StepGames.vue`). Migrations applied
+        with `bunx supabase db push`; the live `topup_packages` rows read back at the new prices. End
+        to end against the real DB: a seeded `requested` row listed with `payoutCoins` 800 of 1,000,
+        approving set `paid` + `reviewed_at`, a second approve 409'd, and the test rows were deleted
+        afterwards. Manual browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.29 Payout methods became addable (user report, 2026-09-19: "the payment method is
+        disabled")
+  - [x] 4.29a Root cause: `payout_methods` was deliberately read-only - "+ Add payout method" was
+        a disabled stub on both the Withdraw page and Settings > Payments, on the 3.1i convention
+        of not building a form no mockup showed. But `WithdrawView.vue` disables the Withdraw
+        button when the list is empty, so any Pal without a seeded row could never withdraw at
+        all. With 4.28 making withdrawals real, that stub had to become a form.
+  - [x] 4.29b Backend: `POST /wallet/payout-methods`, `PATCH /wallet/payout-methods/{id}/default`
+        and `DELETE /wallet/payout-methods/{id}`, same shape as `routers/settings.py`'s payment
+        cards. Brand is `paypal` or `bank`; the raw account never lands in the table, only the
+        masked `(label, detail)` pair `_mask_account` builds ("Paypal" / "ryun••••@gmail.com",
+        "ABA Bank" / "•••• 6789") - nothing reads the full value back, so storing it would be
+        keeping a secret for no reader. The first method a Pal adds is forced to be the default
+        (otherwise the page still has nothing selected), and deleting the default promotes the
+        oldest remaining one. A queued withdrawal pointing at a deleted method keeps its row via
+        the existing `on delete set null`, so the admin Payouts tab degrades to "No payout
+        method" instead of losing the request.
+  - [x] 4.29c Frontend: shared `modals/AddPayoutMethodModal.vue` (brand picker, PayPal email or
+        bank name + account number, validation mirroring the backend's so the button is only live
+        for input that would be accepted, fields reset on each open). Wired into `WithdrawView.vue`
+        - which selects the new method immediately on `added`, since a first method comes back as
+        the default - and into `SettingsPaymentsTab.vue`, where the hardcoded stub row gave way to
+        the real list with a per-row Set-as-default / Remove menu. `stores/wallet.ts` gained
+        `addPayoutMethod`/`setDefaultPayoutMethod`/`removePayoutMethod`; the remove path refetches
+        rather than guessing which row was promoted.
+  - [x] 4.29d Verification: `ruff check` clean, `oxlint` clean, `vue-tsc --build` adding no new
+        errors (same pre-existing four files). Smoke-tested against the real DB with the auth
+        dependency overridden: PayPal add auto-defaulted and masked, bank add masked to last four,
+        a malformed PayPal email 422'd, setting the bank as default demoted the PayPal row,
+        deleting the default promoted the survivor, and both test rows were removed afterwards.
+        Manual browser walkthrough left to the user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.30 Payout methods narrowed to Card + ABA bank transfer (user request, 2026-09-19)
+  - [x] 4.30a Brands went from `('paypal', 'bank')` to `('card', 'bank')`, and bank transfer means
+        ABA only, so the bank is no longer a free-text field - `PayoutMethodCreateIn` dropped its
+        `bank_name` and `_ABA_BANK_NAME` is a backend constant. `_mask_account` now stores only the
+        last four digits for both brands ("Card" / "•••• 4242", "ABA Bank" / "•••• 3456") instead
+        of 4.29b's per-brand masking, and a new `_digits` helper strips the spaces and dashes
+        people actually type before validating or masking. Validation: 12-19 digits for a card,
+        at least 6 for an ABA account. No data migration needed - `payout_methods` had no rows.
+  - [x] 4.30b Frontend followed: `AddPayoutMethodModal.vue`'s picker is Card / Bank transfer (ABA)
+        with one numeric field and no bank-name input, `mocks/wallet.ts`'s `PayoutMethod.brand`
+        union and fallback rows match, and both the Withdraw page and Settings > Payments render
+        the Visa asset for a card and `PhBank` for ABA. `mocks/admin.ts`'s Payouts rows lost their
+        PayPal labels too, so the admin table does not advertise a brand the app no longer accepts.
+  - [x] 4.30c Verification: `ruff check` clean, `oxlint` clean, `vue-tsc --build` adding no new
+        errors. Against the real DB: a spaced card number stored as "•••• 4242", a dashed ABA
+        number as "•••• 3456", and a too-short card, a too-short ABA account and a now-removed
+        `paypal` brand each 422'd. Test rows deleted afterwards. Manual browser walkthrough left to
+        the user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.31 Payouts are an honest simulation: request -> admin approves -> coins leave the Pal
+        wallet (user request, 2026-09-19, after establishing no real rail exists)
+  - [x] 4.31a Why there is no real rail, so nobody re-litigates it later: the Stripe key is
+        `sk_test_` with `charges_enabled: false`, `payouts_enabled: false` and no capabilities;
+        creating a connected account fails with "you've signed up for Connect"; and Stripe's own
+        country spec for `KH` reports `supported_bank_account_currencies: {}` (vs a populated map
+        for `US`), so Cambodia is a cross-border transfer *recipient* only and has no local payout
+        currency. Card payouts would additionally need Elements tokenization - the add-method form
+        posts a raw number to our backend, which is not something Stripe would accept from a
+        server even in sandbox. So the simulation is the design, not a shortcut.
+  - [x] 4.31b The debit moved from request time to approval time, which is the whole point - the
+        approval is now the moment money visibly leaves. `create_withdrawal` no longer touches
+        `coin_balance`; it logs the payout row as `pending` and the coins go *on hold* instead.
+        `_locked_payout_coins` sums undecided (`requested`/`in_progress`) withdrawals and
+        `WalletOut` carries it as `locked_payout_coins`, separate from order escrow's
+        `pending_clearance_coins`. Without that hold a Pal could queue five full-balance requests,
+        or spend the coins out from under a queued one, and approval would then debit money that
+        is no longer there.
+  - [x] 4.31c `update_withdrawal_status` debits on the first move out of `requested` (so approving
+        straight to `paid` and approving via `in_progress` each take the coins exactly once), and
+        deletes the `pending` hold row rather than completing it - otherwise the Pal's activity
+        would show the same coins leaving twice, once as the hold and once as the real debit.
+        Declining now has nothing to refund: it just releases the hold and marks the row `blocked`.
+        That is strictly simpler than 4.28d's credit-back, which only existed because the debit
+        used to happen too early.
+  - [x] 4.31d Detail that sells it: every payout gets a quotable `PO-XXXXXXXX` reference
+        (`20260919150000_withdrawal_reference.sql`, unique-indexed), shown in the Pal's withdrawal
+        history, used as the admin review modal's title, searchable in the Payouts tab, and named
+        in every notification ("PO-D5A09FAB: 800 SC is on its way to your payout method"). The
+        Withdraw page splits escrow from the payout hold, and the admin modal states the
+        consequence before the click ("Approving debits 1,000 SC from ...'s wallet. Declining
+        releases the hold and takes nothing.").
+  - [x] 4.31e Verification: `ruff check` and `oxlint` clean, `vue-tsc --build` adding no new
+        errors. Full lifecycle against the real DB on a seeded 5,000 SC balance: requesting 1,000
+        left the balance at 5,000 with 1,000 locked; approving dropped it to 4,000, released the
+        lock and left exactly one activity row ("PO-D5A09FAB approved", -1,000, completed);
+        declining a second request left the balance untouched; and a second 3,000 request against
+        1,000 of remaining headroom 409'd. All test rows deleted and the balance restored.
+        Caught in review: the admin modal's new "approving debits" note was first written as a
+        `v-else-if`, which broke the `v-if`/`v-else` chain and hid the action buttons for exactly
+        the `requested` payouts they were for. Manual browser walkthrough left to the user per
+        [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.32 Card numbers get a Luhn check and real network detection (user request, 2026-09-19,
+        after asking whether the number was random - it was: `1111 1111 1111 1111` was accepted)
+  - [x] 4.32a Backend: `_luhn_ok` (the check digit every real card carries) now gates
+        `create_payout_method` alongside the 12-19 digit length rule, and `_card_network` reads the
+        issuer prefix - `4` for Visa, `51-55` or `2221-2720` for Mastercard. It catches a typo or an
+        invented number; it cannot prove a card exists, and nothing here can, since no network is
+        ever contacted (see [[4.31a]]'s note on there being no rail).
+  - [x] 4.32b `payout_methods.brand` now stores the detected network for a card ('visa',
+        'mastercard', or the generic 'card') rather than the literal category the client asked for,
+        which matches `payment_cards.brand`'s existing 'visa'-style values. `_mask_account` returns
+        a `(stored_brand, label, detail)` triple; the request body's `brand` stays the two-value
+        category the picker offers. Only Visa and Mastercard have an icon in `assets/`, so every
+        other network - Amex included, which passes Luhn fine - stores 'card' and renders the
+        `PhCreditCard` fallback rather than being mislabelled as one of the two.
+  - [x] 4.32c Frontend: new `utils/card.ts` mirrors the backend's Luhn and prefix rules so the form
+        only enables the button for input the API would accept. The modal swaps the scheme mark in
+        the field's trailing slot while you type, reflows the number into groups of four, and shows
+        "That card number is not valid." only once twelve digits are in - flagging it at the fourth
+        would be noise. The Withdraw page and Settings > Payments pick their icon off the stored
+        brand via a shared `brandIcon` helper.
+  - [x] 4.32d Verification: `ruff check`, `oxlint` and `vue-tsc --build` clean (no new errors).
+        Against the real DB, seven numbers through `POST /wallet/payout-methods`: the Visa,
+        Mastercard and 2-series Mastercard test numbers stored with the right network and label,
+        Amex stored as generic 'card', and `1111…`, `1234…` and a valid Visa with one digit changed
+        all 422'd. The same seven run through `utils/card.ts` agree with the backend case for case,
+        so the form cannot accept what the API rejects. Manual browser walkthrough left to the user
+        per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.33 One coin-to-USD rate instead of five copies (user report, 2026-09-19: a 900 SC
+        balance read "≈ $9.09" right after a $10 top-up)
+  - [x] 4.33a Root cause, and it was 4.28a's fault: `COINS_PER_USD` was copy-pasted into five
+        views, and the reprice only changed `WithdrawView.vue`. `WalletView.vue`,
+        `SubscriptionsView.vue` and `PlayerDashboardView.vue` kept dividing by the old 99, so the
+        wallet valued a 900 SC balance at $9.09 instead of the $10 that had just been paid for it.
+        Subscriptions and the Pal dashboard were quietly understating their USD figures the same
+        way; nobody had noticed because those numbers have no receipt sitting next to them.
+  - [x] 4.33b Fix: `utils/coins.ts` owns `COINS_PER_USD` and a `coinsToUsd` helper, and all five
+        call sites import it - the duplication was the actual defect, so changing the five copies
+        to 90 would have left the next reprice to half-land the same way. Display only: nothing is
+        charged at this rate (`topup_packages.price_usd` is the real price) and payouts move no
+        money at all (4.31).
+  - [x] 4.33c Verification: `oxlint` and `vue-tsc --build` clean (no new errors), and the helper
+        checked directly - 900 SC now reads $10.00 and 450 SC reads $5.00, matching the $10 and $5
+        tiers exactly. No backend change: the rate was never duplicated there, since the server
+        works in coins and reads real prices from `topup_packages`. Manual browser walkthrough left
+        to the user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.34 Dropped the "Squad Coin Wallet" stub from Settings > Payments (user request,
+        2026-09-19). It was a hardcoded row from the mock era - `mockPlayerProfiles.self.handle`
+        plus `mockCurrentUser.coinBalance`, never the signed-in account - permanently badged
+        "Default". Once 4.29c put the real payout methods above it, the section showed two Default
+        badges at once and a balance that did not match the wallet. Removing it made
+        `coinIcon`/`mockCurrentUser`/`mockPlayerProfiles` and the `profile` const dead, so those
+        went too. The stub had been standing in for the section's empty state, so a Pal with no
+        methods would have been left with a bare heading - it now reads "No payout method on file
+        yet.", matching `WithdrawView.vue`'s wording. `oxlint` and `vue-tsc --build` clean.
+
+  - [x] 4.35 "Your profile" in the feed sidebar pointed a Pal at `/dashboard/player`, duplicating
+        the navbar's Dashboard button. It now links to their public Pal page
+        (`/players/{id}`); non-Pals still go to `/feed/me`. `AppHeader.vue`'s Dashboard link is
+        unchanged, so the two no longer overlap.
+
+  - [x] 4.36 Per-tab layout on the Pal profile page (user request, 2026-09-19). The page shell
+        hardcoded `lg:grid-cols-[280px_1fr]` with `ProfileServiceSidebar` rendered outside the tab
+        `v-if` chain, so the service picker sat next to Feeds, Album and Wish, where it means
+        nothing and steals a column.
+    - [x] 4.36a Sidebar moved inside `ProfileServicesTab.vue`, which now owns the whole
+          `[280px_1fr_320px]` grid and takes `services` + a `select` emit. It cannot leak into
+          another tab any more. Sticky on scroll.
+    - [x] 4.36b Album and Wish are full width now - both are card grids that were being squeezed
+          into `1fr` for no reason.
+    - [x] 4.36c Feeds keeps a left rail, but a useful one: new `ProfileAboutCard.vue` (tagline,
+          the three counts, timezone, languages, rating, price, plus Chat/Book). The sidebar's
+          real value was keeping the CTA reachable, so replacing it beat deleting it. Passed via a
+          new optional `#aside` slot on `ProfileFeedsTab`, which `MyProfileView.vue` (no player
+          row) simply doesn't fill.
+    - [x] 4.36d The Chat button's sign-in redirect / seed-Pal / thread-creation logic was about to
+          be copy-pasted into the About card, so it went to `composables/usePalChat.ts` first and
+          both call sites import it - 4.33a's lesson.
+    - [x] 4.36e Sidebar hidden when the Pal has no services (it was rendering an empty search box
+          over blank space), and Book hidden in the About card for the same case.
+    - [x] 4.36f Active tab now lives in the URL (`?tab=feeds`), so a shared link lands where it was
+          copied from and a refresh stops bouncing to Services.
+    - [x] 4.36g Verification: `vue-tsc --build` reports no new errors in any touched file (the
+          remaining output is the pre-existing `coverImageUrl`/`FeedPost` drift in
+          `mocks/playerProfiles.ts` and `stores/players.ts`). Manual browser walkthrough left to
+          the user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.37 Share button on a feed post did nothing (user request, 2026-09-19). It now shares the
+        post's permalink, and that permalink works for a signed-out visitor.
+    - [x] 4.37a The share icon opens a small dropdown with one item, "Copy link", which copies
+          the permalink and toasts "Link copied" (`composables/useSharePost.ts`). A first pass
+          reached for `navigator.share` with a clipboard fallback; the user asked for the plain
+          popout instead, so the share-sheet path is gone.
+    - [x] 4.37b No new route needed: `/feed/{postId}` (`post-detail`) already existed with no
+          `requiresAuth`, and both `GET /feed/posts/{id}` and its comments endpoint already take
+          an optional bearer token, so an anonymous request returns the post with `liked`/
+          `following` simply false. The permalink was already public - nothing pointed at it.
+    - [x] 4.37c What was missing was the signed-out *state* of that page. `FeedPostThread.vue`
+          fell back to `mockCurrentUser.id`, so a logged-out visitor saw a Follow button and a
+          comment composer that would have 401'd. Like, follow, comment and comment-like now run
+          through a `requireAuth()` that redirects to `/login?redirect=...`, the composer is
+          replaced by a "Log in to like, comment and follow." prompt, and the Follow/Edit action
+          slot is hidden.
+    - [x] 4.37d Verification: `vue-tsc --build` and `oxlint` clean on every touched file. Manual
+          browser walkthrough (share sheet, copy fallback, incognito permalink) left to the user
+          per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.38 Report Player never reached the admin moderation queue (user request, 2026-09-19).
+    - [x] 4.38a Root cause: there was no submit path at all. `ReportProfileModal.vue` emitted
+          `submit` and closed itself; `ProfileHeader.vue`'s handler read only `alsoBlock`, set a
+          local `blocked` ref and dropped the report. No endpoint existed either - `admin_flags`
+          has been in the schema since the initial migration and `GET /admin/flagged-players`
+          has always read it, but nothing wrote to it outside seed data.
+    - [x] 4.38b `POST /players/{id}/report` (`routers/players.py`, auth required) writes the
+          `admin_flags` row. Reports for the same Pal and reason collapse onto one pending row
+          and bump `report_count` - that column's whole point, and it keeps the queue readable
+          ("3 reports of harassment", not three near-identical cards). A reporter repeating their
+          own reason doesn't move the count; a later reporter's details fill an empty details
+          field rather than overwriting the first account. Self-reports 400, unknown players 404.
+    - [x] 4.38c `playersStore.reportPlayer` + `ProfileHeader.submitReport` file the report and
+          toast the result. The modal no longer closes itself: it takes a `submitting` prop and
+          the parent closes it only on success, so a failed request keeps the reason and details
+          the person typed. Anonymous viewers get the login redirect instead of a 401 toast.
+    - [x] 4.38d Dropped the two em dashes in the modal's copy while in there
+          ([[feedback_no_em_dashes_ui_copy]]).
+    - [x] 4.38e Known gap at the time, fixed in 4.39: "Also block" was still local-only. There is no `blocks`
+          table, no endpoint and no enforcement anywhere (messaging, booking, profile reads), and
+          `ProfileHeader`'s `blocked` ref is written but never read. The toggle and the separate
+          Block menu item both claim an effect they don't have. Real blocking is its own feature -
+          flagged to the user rather than half-built here.
+    - [x] 4.38f Verification: `ruff` clean, the route registers as
+          `POST /players/{player_id}/report`, `vue-tsc --build` and `oxlint` clean on every
+          touched file. Submitting a real report and seeing it in the admin queue is left to the
+          user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.39 Real blocking, closing 4.38e (user request, 2026-09-19). "Also block" and the Block
+        menu item both claimed an effect nothing implemented: no table, no endpoint, no
+        enforcement, and a `blocked` ref that was written and never read.
+    - [x] 4.39a `user_blocks` table (migration `20260919160000_user_blocks.sql`, applied via
+          `bunx supabase db push`). One row per direction with a unique (blocker, blocked) pair
+          and a no-self check. Stored one-directional so only the person who blocked can lift it;
+          enforced both ways everywhere else.
+    - [x] 4.39b `core/blocks.py` holds the three shapes every caller needs - `blocked_user_ids`
+          (the set to filter lists by), `has_blocked` (direction matters for reads),
+          `require_not_blocked` (403 guard for writes). Put in `core/` rather than a router
+          because five routers need it; same reasoning as 4.33's `utils/coins.ts`.
+    - [x] 4.39c Enforcement, matching what the modal copy promises. Messaging: `start_thread` and
+          `send_message` 403, and a blocked account's thread drops out of `list_threads` for both
+          sides (rows are kept, so unblocking restores the history). Booking: `create_booking`
+          403s before the balance check, so a blocked buyer gets the real reason instead of an
+          insufficient-funds message. Profiles: `GET /users/{id}/profile` and `GET /players/{id}`
+          403 for the person who was blocked, but stay readable to the blocker - that is where
+          Unblock lives. Feed: `/feed` and `/feed/following` filter both directions out. Follows:
+          blocking drops the follow both ways and resyncs the counts, and `follow_user` 403s.
+    - [x] 4.39d Endpoints: `POST`/`DELETE /users/blocks/{target_id}` and `GET /users/me/blocks`.
+          `PublicProfileOut`/`PlayerDetailOut` gained a `blocked` flag so the profile menu knows
+          to offer Unblock.
+    - [x] 4.39e Frontend: the profile menu flips Block/Unblock, `BlockProfileModal` confirms a
+          real call, and the report modal's "Also block" now actually blocks. Blocking hides the
+          Follow button and the Chat/Book cards on both the Services tab and the About card
+          (4.36c), lifted through a `blocked-change` emit so it lands immediately rather than on
+          the next fetch. The Pal profile page shows an "unavailable" empty state on a 403 -
+          `usePlayerProfileData` used to fall through to the mock fixtures on any error, which
+          would have handed a blocked viewer a fake profile.
+    - [x] 4.39f Settings > Privacy > Blocked accounts is real: live count from
+          `GET /users/me/blocks` and a Manage modal that lists them with Unblock. The block
+          modal has always said "you can unblock them anytime from settings" - now that is true.
+          `mockBlockedAccountsCount` deleted.
+    - [x] 4.39g Verification: `ruff` clean across `src/backend`, `vue-tsc --build` and `oxlint`
+          clean on the frontend (only the pre-existing `coverImageUrl`/`FeedPost` drift remains),
+          migration applied and confirmed as the only pending one. End-to-end walkthrough (block,
+          check messaging/booking/profile/feed from the other account, unblock) left to the user
+          per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.40 "Take action" now does something (user request, 2026-09-19). Dismiss / Reviewing /
+        Take action were all the same `PATCH .../status` call writing a queue label - nothing
+        reached the Pal, so the red button that read as an enforcement action enforced nothing.
+    - [x] 4.40a "Take action" became a dropdown of the concrete things moderation can do: Send a
+          warning (built), Suspend for 7 days (disabled), Ban/Unban player (routes to the ban
+          call that was already there, below in the same modal). Suspension stays visibly
+          disabled rather than pretending - that was 4.38e's mistake.
+    - [x] 4.40b `POST /admin/flagged-players/{id}/warn` sends the Pal a `moderation` notification
+          and marks the flag `actioned` in the same call, so the queue can't drift from what was
+          actually done. The admin gets an editable message prefilled from the report's reason.
+          New `moderation` value on the `notification_type` enum (migration
+          `20260919170000_moderation_notification.sql`, applied via `bunx supabase db push`) with
+          a `PhWarning` icon; none of the existing types fit. A seed Pal with no linked account
+          400s - there is nobody to notify.
+    - [x] 4.40c Report attribution: the review modal named the reporter unconditionally, but
+          `reported_by` only ever holds whoever filed first (4.38b's dedup), so "5 reports ·
+          reported by intmaster" read as one person reporting five times. It names the reporter
+          only for a single report and shows the count alone past that.
+    - [x] 4.40d Empty details no longer render as a blank card - a reporter who left the box empty
+          was giving the modal an empty grey rectangle.
+    - [x] 4.40e Verification: `ruff`, `vue-tsc --build` and `oxlint` clean; migration applied.
+          Sending a real warning and seeing it arrive in the Pal's notifications left to the user
+          per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.41 Admin Overview's "Commission earned" undercounted and showed coins only (user
+        request, 2026-09-19). The user's platform had taken exactly one payout fee and the tile
+        read as if nothing had been earned.
+    - [x] 4.41a Root cause, and it was not a stub: the figure was real, just one of two streams.
+          It summed `bookings.commission_coins` on completed bookings (15% per
+          `platform_commission_pct`) and ignored the 20% withheld on every approved payout
+          (`wallet.py`'s `WITHDRAWAL_FEE_PCT` → `withdrawals.fee_coins`), which on a platform
+          with no completed bookings yet is the only revenue there is.
+    - [x] 4.41b `GET /admin/overview` now returns `bookingCommissionCoins` and `payoutFeeCoins`
+          alongside their total. Payout fees count only for `in_progress`/`paid` withdrawals -
+          `requested` is still awaiting review and `rejected` gave the coins back (4.28b), so
+          neither has earned anything.
+    - [x] 4.41c The tile shows the USD equivalent next to the coin figure via `coinsToUsd`
+          (4.33's single definition, 90 SC = $1) and a breakdown line underneath, so "where did
+          this come from" doesn't need a query to answer.
+    - [x] 4.41d Dropped the mock fallback on `fetchOverview`. The other admin lists fall back to
+          fixtures on a failed request, but a fabricated "41,600 earned" standing in for a failed
+          load is worse than the error state the panel already renders - and it is exactly the
+          number that made this tile look fake. `mockAdminOverviewStats` deleted with it.
+    - [x] 4.41e Verification: `ruff`, `vue-tsc --build` and `oxlint` clean. No migration needed -
+          both figures were already stored. Confirming the payout fee now shows against the real
+          withdrawal is left to the user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.42 Notification dropdown pass, with a "Clear" beside "Mark all read" (user request,
+        2026-09-19). The panel could only ever mark things read, so a list of stale payout and
+        message rows had no way off the screen, and every row wore the same green circle.
+    - [x] 4.42a Backend: `routers/notifications.py` gained `DELETE /notifications/{id}` (per-row
+          dismiss) and `DELETE /notifications` (clear all). Both scope the delete by `user_id`,
+          since the service-role client bypasses RLS - the per-row one 404s on another account's
+          id rather than silently deleting nothing. No migration needed, the rows already exist.
+    - [x] 4.42b `stores/notifications.ts` gained `dismiss(id)` and `clearAll()`. Both mutate local
+          state only after the request lands, and neither falls back to mocks, matching the
+          `markAllRead`/`markRead` convention from 3.10e.
+    - [x] 4.42c `utils/notifications.ts` gained `notificationTone`, a per-type icon tint (money
+          green, conversation blue, social violet, moderation red) so the list is scannable by
+          colour before it is read. Applied in both the panel and `NotificationsView.vue`, which
+          had the same uniform `bg-brand-600` circle.
+    - [x] 4.42d `NotificationPanel.vue`: "Clear" sits next to "Mark all read", behind a two-step
+          inline confirm (the action row swaps to Cancel / Clear all with a one-line warning),
+          because a mis-click is unrecoverable. "Mark all read" now disables at zero unread, the
+          unread count moved up beside the title, and switching tabs disarms a pending confirm.
+    - [x] 4.42e Rows: unread ones get a tinted background plus a brand left edge and bolder text
+          instead of relying on one 8px dot, read ones dim to `text-slate-300`, and each row has a
+          hover/focus X that dismisses just that notification. The row is now a `div` wrapper
+          around the click target so the X is not a button nested inside a button. Added the
+          skeleton the panel never had, an unread-specific empty state, and a "(N more)" count on
+          "See all notifications".
+    - [x] 4.42f Verification: `ruff check` clean and `vue-tsc --build`/`oxlint` clean for the four
+          touched files (`vue-tsc` reports pre-existing errors in `mocks/playerProfiles.ts`,
+          `stores/players.ts`, `stores/messages.ts` and `StepGames.vue` from the in-flight service
+          cover-image work, none in these files). Deliberately did not run `ruff format` on the
+          router: the repo is written at 100 cols with no ruff config, so the default 88 reflows
+          untouched code. Clicking through the real dropdown left to the user per
+          [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.43 Service Detail page hero (user request, 2026-09-19). A service with no uploaded
+        cover rendered a 640px-tall empty picture frame above the fold, and the title card
+        underneath repeated the same header a second time.
+    - [x] 4.43a `lib/covers.ts` gained `gameCoverForName(name)`, so a service with no uploaded
+          cover falls back to its game's cover art. Service titles are the game name the Pal
+          picked during onboarding, so the slug + CDN manifest lookup already used by the game
+          rails works unchanged. Replaces the copy of that lookup in `ProfileServicesTab.vue`
+          and the one added to `PlayerServicesView.vue` (My services had the same empty-frame
+          problem on its cards).
+    - [x] 4.43b `ServiceDetailView.vue`: the cover and the title card are one banner now, the
+          header overlaid on a bottom-weighted scrim when there is art and sitting on the plain
+          panel when there isn't - so no cover means no empty frame at all, rather than an
+          empty frame. Banner is `h-64 sm:h-80 lg:h-96`.
+    - [x] 4.43c Same file, empty states the page had no handling for: the real avatar renders
+          via `resolveAvatarUrl` (it was a hardcoded grey `div`), "About this service" hides
+          when the description is empty, "Avg response" hides when there is no value, and the
+          tag row drops the tag that just repeats the title.
+    - [x] 4.43d Verification: `vue-tsc --build` and `oxlint` clean for the touched files
+          (`vue-tsc`'s pre-existing errors in `mocks/playerProfiles.ts`, `stores/players.ts`,
+          `stores/messages.ts` and `StepGames.vue` are unchanged). Seeing it in the real app is
+          left to the user per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.44 Review highlights + tips stop being UI-only (user request, 2026-09-19). 3.6a parked
+        both as "collected by the modal, dropped on submit", which meant a buyer could pick a
+        200 SC tip and watch it silently vanish. Reviews themselves stay read-only on the service
+        page: `POST /reviews` needs a completed booking, so there is nothing valid a visitor
+        could submit from there.
+    - [x] 4.44a Migration `20260919180000_review_highlights_tip.sql`: `reviews` gains
+          `highlights text[]` and `tip_coins integer`, and `wallet_transaction_kind` gains
+          `tip` so a tip is its own ledger line rather than masquerading as an `order`.
+    - [x] 4.44b Backend `routers/reviews.py`: `ReviewCreateIn` accepts `highlights`/`tipCoins`.
+          Highlights are validated against the modal's six options (unknown values 422 rather
+          than storing arbitrary text that the profile then renders). A tip debits the buyer and
+          credits the Pal through `adjust_coin_balance`, both keyed to the booking; the balance
+          is checked before the review is inserted so a buyer who can't afford the tip doesn't
+          end up with a review and no tip. Tipping a seed Pal with no linked account is a 409.
+    - [x] 4.44c Backend: `ReviewOut` returns both fields, and the Pal's notification names the
+          tip when there is one.
+    - [x] 4.44d Frontend: `PlayerReview`/`ReviewApiOut` carry `highlights`/`tipCoins`
+          (`stores/players.ts`), `ReviewPayload` carries them too (`stores/bookings.ts`), and
+          `MyBookingsView`'s `confirmReview` stops dropping them on the floor.
+    - [x] 4.44e Frontend `ServiceReviewsPanel.vue`: a review renders its highlight chips and a
+          tip badge, and the empty state explains that reviews come from completed orders
+          instead of just saying "No reviews yet."
+    - [x] 4.44f Verification: `ruff check` clean, `vue-tsc --build`/`oxlint`/`eslint` clean for
+          the touched files (`vue-tsc`'s pre-existing errors listed in 4.42f are unchanged).
+          `20260919180000` is written but NOT pushed - applying it to the linked project is the
+          user's call, and until it lands `POST /reviews` will fail on the two new columns.
+          Live smoke test (tip debits the buyer, credits the Pal, shows as `tip` in Wallet) is
+          left to the user per [[feedback_no_build_or_run_skill]], as is 3.6b's replay.
+    - [x] 4.44g Not in scope, noted while here: a tip credits the Pal in full, no
+          `platform_commission_pct` taken, unlike a completed booking. That reads like the right
+          default for a tip but it was never decided anywhere, so it's recorded rather than
+          assumed. `LeaveReviewModal` also doesn't show the buyer's coin balance, so an
+          unaffordable tip is only caught on submit (recoverable now - the modal stays open).
 
 ---
 

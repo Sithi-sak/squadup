@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { PhStar, PhUserCircle } from '@phosphor-icons/vue'
+import coinIcon from '@/assets/squadup-coin.svg'
 import type { PlayerReview } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
@@ -24,7 +25,7 @@ const visibleReviews = computed(() => {
       <UButton
         :color="reviewFilter === 'all' ? 'primary' : 'neutral'"
         :variant="reviewFilter === 'all' ? 'solid' : 'soft'"
-        size="sm"
+        size="md"
         class="rounded-full"
         @click="reviewFilter = 'all'"
       >
@@ -33,7 +34,7 @@ const visibleReviews = computed(() => {
       <UButton
         :color="reviewFilter === 'positive' ? 'primary' : 'neutral'"
         :variant="reviewFilter === 'positive' ? 'solid' : 'soft'"
-        size="sm"
+        size="md"
         class="rounded-full"
         @click="reviewFilter = 'positive'"
       >
@@ -42,7 +43,7 @@ const visibleReviews = computed(() => {
       <UButton
         :color="reviewFilter === 'other' ? 'primary' : 'neutral'"
         :variant="reviewFilter === 'other' ? 'solid' : 'soft'"
-        size="sm"
+        size="md"
         class="rounded-full"
         @click="reviewFilter = 'other'"
       >
@@ -50,7 +51,16 @@ const visibleReviews = computed(() => {
       </UButton>
     </div>
 
-    <p v-if="visibleReviews.length === 0" class="py-8 text-center text-sm text-slate-400">No reviews yet.</p>
+    <!-- Reviews can only come from `POST /reviews`, which needs a completed booking - so there's
+         no input field on this page, and the empty state says why rather than reading as broken. -->
+    <div v-if="visibleReviews.length === 0" class="py-8 text-center">
+      <p class="text-sm text-slate-400">
+        {{ reviews.length === 0 ? 'No reviews yet.' : 'No reviews match this filter.' }}
+      </p>
+      <p v-if="reviews.length === 0" class="mt-1 text-xs text-slate-500">
+        Reviews come from buyers who completed an order.
+      </p>
+    </div>
     <div v-else class="mt-4 flex flex-col divide-y divide-white/10">
       <div v-for="review in visibleReviews" :key="review.id" class="flex gap-3 py-4 first:pt-0 last:pb-0">
         <UAvatar :src="resolveAvatarUrl(review.author)" size="md" class="shrink-0 bg-white/10 text-slate-300">
@@ -65,7 +75,30 @@ const visibleReviews = computed(() => {
             <PhStar :size="12" weight="fill" />
             {{ review.rating }}
           </p>
-          <p class="mt-1.5 text-sm text-slate-300">{{ review.text }}</p>
+          <p v-if="review.text" class="mt-1.5 text-sm text-slate-300">{{ review.text }}</p>
+
+          <div v-if="review.highlights?.length || review.tipCoins" class="mt-2 flex flex-wrap items-center gap-1.5">
+            <UBadge
+              v-for="highlight in review.highlights ?? []"
+              :key="highlight"
+              color="neutral"
+              variant="soft"
+              size="sm"
+              class="rounded-full text-xs"
+            >
+              {{ highlight }}
+            </UBadge>
+            <UBadge
+              v-if="review.tipCoins"
+              color="primary"
+              variant="soft"
+              size="sm"
+              class="inline-flex items-center gap-1 rounded-full text-xs"
+            >
+              <img :src="coinIcon" alt="" class="h-3 w-3" />
+              Tipped {{ review.tipCoins }}
+            </UBadge>
+          </div>
         </div>
       </div>
     </div>

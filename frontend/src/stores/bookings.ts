@@ -55,6 +55,12 @@ export interface Booking {
 export interface ReviewPayload {
   rating: number
   text: string
+  /** Must be values from `LeaveReviewModal`'s own chip list - `POST /reviews` 422s on anything
+   * else, since these render on the Pal's public profile (4.44). */
+  highlights: string[]
+  /** Debits the buyer and credits the Pal on submit, so an unaffordable tip 409s and the review
+   * isn't written either (4.44). */
+  tipCoins: number
 }
 
 /** A "Book a session" selection that hasn't been submitted yet - kept client-side only until
@@ -206,9 +212,8 @@ export const useBookingsStore = defineStore('bookings', () => {
     await api.post(`/bookings/${id}/dispute`, payload)
   }
 
-  /** My Bookings' `LeaveReviewModal` submit (`POST /reviews`). `highlights`/`tipCoins` the modal
-   * collects stay UI-only for now - see `routers/reviews.py`'s docstring. Patches `hasReview`
-   * onto the local booking rather than refetching, same as the other action methods. */
+  /** My Bookings' `LeaveReviewModal` submit (`POST /reviews`). Patches `hasReview` onto the
+   * local booking rather than refetching, same as the other action methods. */
   async function submitReview(bookingId: string, payload: ReviewPayload) {
     await api.post(`/reviews`, { bookingId, ...payload })
     const booking = getBooking(bookingId)

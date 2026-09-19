@@ -60,10 +60,12 @@ function skip() {
   open.value = false
 }
 
+/** Deliberately doesn't close the modal - the parent does that once `POST /reviews` lands, so a
+ * rejected tip (not enough coins) leaves the buyer's rating, chips and comment intact to retry
+ * instead of throwing them away behind an error toast. */
 function submit() {
   if (!rating.value) return
   emit('submit', { rating: rating.value, highlights: highlights.value, comment: comment.value, tipCoins: tipCoins.value })
-  open.value = false
 }
 </script>
 

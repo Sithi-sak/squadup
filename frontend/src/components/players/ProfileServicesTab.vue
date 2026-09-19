@@ -2,63 +2,48 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhStar } from '@phosphor-icons/vue'
-import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
-import type { PlayerReview, PlayerServiceDetail } from '@/stores/players'
-import { useMessagesStore } from '@/stores/messages'
-import { useAuthStore } from '@/stores/auth'
-import { games } from '@/data/games'
-import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
+import type { PlayerReview, PlayerServiceDetail, PlayerServiceListing } from '@/stores/players'
+import { usePalChat } from '@/composables/usePalChat'
+import { gameCoverForName } from '@/lib/covers'
+import ProfileServiceSidebar from '@/components/players/ProfileServiceSidebar.vue'
 import ServiceReviewsPanel from '@/components/players/ServiceReviewsPanel.vue'
 
+/** The service picker lives in this tab, not in the page shell: it only means anything beside a
+ * service detail, and rendering it page-level left it stranded on Feeds/Album/Wish. */
 const props = defineProps<{
   playerId: string
   playerUserId?: string | null
+  services: PlayerServiceListing[]
   serviceId: string
   detail: PlayerServiceDetail
   reviews: PlayerReview[]
   isOwnProfile?: boolean
+  /** Viewer has blocked this Pal (4.39) - Chat and Book would 403, so they don't render. */
+  blocked?: boolean
 }>()
 
+defineEmits<{ select: [id: string] }>()
+
 const router = useRouter()
-const messagesStore = useMessagesStore()
-const authStore = useAuthStore()
-const toast = useToast()
+const startChat = usePalChat()
 
-/** Service titles are the game name the Pal picked during onboarding (`data/games.ts`'s
- * `games` list), so reuse the same slug + CDN manifest lookup as the game rails elsewhere. */
-const coverFilenames = useCoverManifest()
-const coverSrc = computed(() => {
-  if (props.detail.coverImageUrl) return props.detail.coverImageUrl
-  const slug = games.find((g) => g.name === props.detail.title)?.id
-  const filename = slug ? coverFilenames.value.get(slug) : undefined
-  return slug && filename ? gameCoverUrl(slug, filename) : undefined
-})
-
-async function handleMessage() {
-  if (!authStore.isAuthenticated) {
-    router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
-    return
-  }
-  if (!props.playerUserId) {
-    toast.add({ title: "Can't message this Pal yet", color: 'error' })
-    return
-  }
-  try {
-    await messagesStore.startThread(props.playerUserId)
-    router.push('/messages')
-  } catch (err) {
-    toast.add({
-      title: "Couldn't start chat",
-      description: err instanceof Error ? err.message : 'Please try again.',
-      color: 'error',
-    })
-  }
-}
+const coverSrc = computed(() => props.detail.coverImageUrl ?? gameCoverForName(props.detail.title))
 </script>
 
 <template>
-  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+  <div
+    class="grid grid-cols-1 gap-4 lg:items-start"
+    :class="services.length ? 'lg:grid-cols-[280px_1fr_320px]' : 'lg:grid-cols-[1fr_320px]'"
+  >
+    <ProfileServiceSidebar
+      v-if="services.length"
+      :services="services"
+      :selected-id="serviceId"
+      class="lg:sticky lg:top-20"
+      @select="$emit('select', $event)"
+    />
+
     <div class="flex flex-col gap-4">
       <div class="rounded-xl bg-gray-800/70 p-5">
         <h2 class="text-2xl font-bold text-white">{{ detail.title }}</h2>
@@ -111,14 +96,14 @@ async function handleMessage() {
         <img v-if="coverSrc" :src="coverSrc" :alt="detail.title" class="h-full w-full object-cover" />
       </div>
 
-      <div v-if="!isOwnProfile" class="rounded-xl bg-gray-800/70 p-4">
+      <div v-if="!isOwnProfile && !blocked" class="rounded-xl bg-gray-800/70 p-4">
         <UButton
           color="primary"
           variant="outline"
           block
           size="lg"
           class="rounded-full"
-          @click="handleMessage"
+          @click="startChat(playerUserId)"
         >
           Chat
         </UButton>

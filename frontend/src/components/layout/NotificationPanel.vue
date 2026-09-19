@@ -84,12 +84,10 @@ async function markRead(id: string) {
   }
 }
 
+// Chat never reaches this panel (it alerts on the header's messages button), so a row click
+// only settles its unread state.
 function handleClick(notification: AppNotification) {
   markRead(notification.id)
-  if (notification.type === 'message' && notification.threadId) {
-    props.close?.()
-    router.push({ name: 'messages', query: { thread: notification.threadId } })
-  }
 }
 </script>
 

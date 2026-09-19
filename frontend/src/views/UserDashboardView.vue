@@ -9,7 +9,6 @@ import {
   PhCurrencyDollar,
   PhFilmSlate,
   PhGameController,
-  PhPencilSimple,
   PhSmiley,
   PhUserCircle,
 } from '@phosphor-icons/vue'
@@ -19,9 +18,11 @@ import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
 import FollowListPanel from '@/components/feed/FollowListPanel.vue'
+import PostAuthorMenu from '@/components/feed/PostAuthorMenu.vue'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { formatTimeAgo } from '@/utils/timeAgo'
+import { userErrorMessage } from '@/utils/errors'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -91,6 +92,20 @@ function onPostUpdated(updated: FeedPost) {
   if (index !== -1) posts.value[index] = updated
 }
 
+async function deletePost(post: FeedPost) {
+  try {
+    await feedStore.deletePost(post.id)
+    posts.value = posts.value.filter((p) => p.id !== post.id)
+    toast.add({ title: 'Post deleted', color: 'success' })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't delete post",
+      description: userErrorMessage(err, 'Please try again.'),
+      color: 'error',
+    })
+  }
+}
+
 async function toggleLike(post: FeedPost) {
   try {
     const updated = await feedStore.toggleLike(post)
@@ -108,7 +123,12 @@ async function toggleLike(post: FeedPost) {
 
 <template>
   <div class="flex min-w-0 flex-col gap-4">
-    <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
+    <FeedPostThread
+      v-if="activePostId"
+      :post-id="activePostId"
+      @back="activePostId = null"
+      @deleted="posts = posts.filter((p) => p.id !== $event)"
+    />
 
     <FollowListPanel
       v-else-if="followListTab && authStore.user"
@@ -289,16 +309,7 @@ async function toggleLike(post: FeedPost) {
           @open-comments="activePostId = post.id"
         >
           <template v-if="post.kind !== 'status'" #action>
-            <UButton
-              color="neutral"
-              variant="ghost"
-              square
-              :ui="{ base: 'rounded-full' }"
-              aria-label="Edit post"
-              @click="openEdit(post)"
-            >
-              <PhPencilSimple :size="16" />
-            </UButton>
+            <PostAuthorMenu @edit="openEdit(post)" @delete="deletePost(post)" />
           </template>
         </FeedPostCard>
       </template>

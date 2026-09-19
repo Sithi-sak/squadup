@@ -36,8 +36,19 @@ export const useNotificationsStore = defineStore('notifications', () => {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     ),
   )
-  const unread = computed(() => sorted.value.filter((n) => !n.read))
+
+  /** Chat is deliberately kept out of the bell: a new message alerts on the header's messages
+   * button instead, and is retired by opening the conversation. Everything else goes to the
+   * bell, so the two never double-report the same event. */
+  const isChat = (n: AppNotification) => n.type === 'message'
+
+  const alerts = computed(() => sorted.value.filter((n) => !isChat(n)))
+  const unread = computed(() => alerts.value.filter((n) => !n.read))
   const unreadCount = computed(() => unread.value.length)
+
+  const messageUnreadCount = computed(
+    () => sorted.value.filter((n) => isChat(n) && !n.read).length,
+  )
 
   /** Header bell / `/notifications` page (`GET /notifications`). Falls back to
    * `mockNotifications`, same resilience convention as `stores/players.ts`/`bookings.ts`/etc. */
@@ -56,9 +67,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   /** Real mutations only, no mock fallback - matches `feedStore.toggleLike`'s convention. */
   async function markAllRead() {
-    await api.post('/notifications/read-all')
+    await api.post('/notifications/read-all?exclude_type=message')
     notifications.value.forEach((n) => {
-      n.read = true
+      if (!isChat(n)) n.read = true
     })
   }
 
@@ -78,19 +89,35 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   /** Header dropdown's "Clear" - drops every notification for the current user. */
   async function clearAll() {
-    await api.delete('/notifications')
-    notifications.value = []
+    await api.delete('/notifications?exclude_type=message')
+    notifications.value = notifications.value.filter(isChat)
+  }
+
+  /** Opening a conversation clears its chat alerts, which is the only way the messages badge
+   * comes down (chat rows never appear in the bell for the user to read one by one). */
+  async function markThreadRead(threadId: string) {
+    const pending = notifications.value.filter(
+      (n) => isChat(n) && n.threadId === threadId && !n.read,
+    )
+    if (pending.length === 0) return
+    await api.post(`/notifications/threads/${threadId}/read`)
+    pending.forEach((n) => {
+      n.read = true
+    })
   }
 
   return {
-    notifications: sorted,
+    /** Bell list - chat excluded, see `isChat`. */
+    notifications: alerts,
     unread,
     unreadCount,
+    messageUnreadCount,
     loading,
     error,
     fetchNotifications,
     markAllRead,
     markRead,
+    markThreadRead,
     dismiss,
     clearAll,
   }

@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/auth'
 import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayers } from '@/mocks/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { userErrorMessage } from '@/utils/errors'
 
 defineProps<{
   title: string
@@ -36,36 +37,75 @@ function goToProfile(participantId: string) {
 const search = ref('')
 const draft = ref('')
 const sending = ref(false)
+/** `?with=` is still resolving to a thread - the conversation pane has nothing to show yet. */
+const starting = ref(false)
 
 // Falls back to the mock identity when signed out (or on a mock-fallback thread), same
 // resilience convention `stores/messages.ts` uses for the thread/message data itself.
 const currentUserId = computed(() => authStore.user?.id ?? mockCurrentUser.id)
 
-// A notification (or any other deep link) can request a specific thread via `?thread=id` -
-// falls back to the first thread when absent/unknown, same as before.
+// A deep link can request a specific thread via `?thread=id` - falls back to the first thread
+// when absent/unknown, same as before.
 function openThreadFromQuery() {
   const requestedId = route.query.thread
-  if (typeof requestedId === 'string' && store.threads.some((t) => t.id === requestedId)) {
-    store.selectThread(requestedId)
-    return true
+  if (typeof requestedId !== 'string' || !store.threads.some((t) => t.id === requestedId)) {
+    return false
   }
-  return false
+  // `?with=` rewrites the url to `?thread=` once the thread exists, which re-runs the watcher -
+  // without this the conversation would be fetched a second time on arrival.
+  if (requestedId !== store.activeThreadId) store.selectThread(requestedId)
+  return true
 }
 
-onMounted(async () => {
-  await store.fetchThreads()
-  if (openThreadFromQuery()) return
-  const firstThreadId = store.threads[0]?.id
-  if (!store.activeThreadId && firstThreadId) {
-    store.selectThread(firstThreadId)
+/** Every "Chat" button in the app links straight here with `?with=<user id>` rather than
+ * creating the thread first and then navigating - the page opens immediately and the
+ * find-or-create round trip happens under this panel's own loading state. The url is rewritten
+ * to `?thread=<id>` afterwards so a reload (or Back) doesn't re-post. */
+async function openParticipantFromQuery() {
+  const participantId = route.query.with
+  if (typeof participantId !== 'string' || !participantId) return false
+  starting.value = true
+  try {
+    const thread = await store.startThread(participantId)
+    router.replace({ path: route.path, query: { thread: thread.id } })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't start chat",
+      description: userErrorMessage(err, 'Please try again in a moment.'),
+      color: 'error',
+    })
+    router.replace({ path: route.path, query: {} })
+  } finally {
+    starting.value = false
   }
+  return true
+}
+
+onMounted(() => {
+  // Not awaited: opening the requested conversation shouldn't queue behind the whole inbox.
+  const threadsLoaded = store.fetchThreads()
+  if (route.query.with) {
+    void openParticipantFromQuery()
+    return
+  }
+  void threadsLoaded.then(() => {
+    if (openThreadFromQuery()) return
+    const firstThreadId = store.threads[0]?.id
+    if (!store.activeThreadId && firstThreadId) store.selectThread(firstThreadId)
+  })
 })
 
-// Handles clicking a message notification while already on the Messages page, where `onMounted`
-// won't fire again.
+// Handles landing on a different conversation while already on the Messages page, where
+// `onMounted` won't fire again.
 watch(
   () => route.query.thread,
   () => openThreadFromQuery(),
+)
+watch(
+  () => route.query.with,
+  (participantId) => {
+    if (participantId) void openParticipantFromQuery()
+  },
 )
 
 const filteredThreads = computed(() => {
@@ -392,6 +432,13 @@ async function handleSend() {
             Send
           </UButton>
         </div>
+      </div>
+
+      <div
+        v-else-if="starting"
+        class="flex flex-1 items-center justify-center text-sm text-slate-400"
+      >
+        Opening chat...
       </div>
 
       <UEmpty

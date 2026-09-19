@@ -5,17 +5,17 @@ import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload } from '@/stores/bookings'
-import { useMessagesStore } from '@/stores/messages'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
 import LeaveReviewModal from '@/components/modals/LeaveReviewModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { usePalChat } from '@/composables/usePalChat'
 
 const router = useRouter()
 const bookingsStore = useBookingsStore()
-const messagesStore = useMessagesStore()
 const toast = useToast()
+const startChat = usePalChat()
 
 onMounted(() => {
   bookingsStore.fetchList()
@@ -148,21 +148,8 @@ function primaryActionLabel(booking: Booking) {
   return 'View order'
 }
 
-async function handleMessage(booking: Booking) {
-  if (!booking.playerUserId) {
-    toast.add({ title: "Can't message this Pal yet", color: 'error' })
-    return
-  }
-  try {
-    await messagesStore.startThread(booking.playerUserId)
-    router.push('/messages')
-  } catch (err) {
-    toast.add({
-      title: "Couldn't start chat",
-      description: err instanceof Error ? err.message : 'Please try again.',
-      color: 'error',
-    })
-  }
+function handleMessage(booking: Booking) {
+  startChat(booking.playerUserId)
 }
 
 function handlePrimaryAction(booking: Booking) {

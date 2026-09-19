@@ -6,10 +6,12 @@ import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
+import { usePalChat } from '@/composables/usePalChat'
 
 const route = useRoute()
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+const startChat = usePalChat()
 
 const booking = computed(() => bookingsStore.getBooking(String(route.params.bookingId)))
 const player = computed(() => mockPlayers.find((p) => p.id === booking.value?.playerId) ?? null)
@@ -89,7 +91,7 @@ const placedAt = computed(() => {
     </div>
 
     <div class="mt-6 flex w-full gap-3">
-      <UButton color="primary" block size="lg" class="rounded-full" @click="router.push('/messages')">
+      <UButton color="primary" block size="lg" class="rounded-full" @click="startChat(booking.playerUserId)">
         Message your Pal
       </UButton>
       <UButton color="neutral" variant="soft" block size="lg" class="rounded-full" @click="router.push('/bookings')">

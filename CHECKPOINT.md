@@ -3065,6 +3065,91 @@ kind of Stripe id.
           assumed. `LeaveReviewModal` also doesn't show the buyer's coin balance, so an
           unaffordable tip is only caught on submit (recoverable now - the modal stays open).
 
+  - [x] 4.45 Chat alerts move off the notification bell (user request, 2026-09-19). A new
+        message was producing a `message` notification in the dropdown while the messages button
+        sat there silent, so the same event was reported in the wrong place.
+    - [x] 4.45a Frontend `stores/notifications.ts`: an `isChat` split - the exported
+          `notifications`/`unread`/`unreadCount` now cover everything except `message`, and a new
+          `messageUnreadCount` counts the chat ones. `markThreadRead(threadId)` retires a
+          conversation's chat alerts.
+    - [x] 4.45b Backend `routers/notifications.py`: `POST /notifications/read-all` and
+          `DELETE /notifications` take an optional `exclude_type` (the dropdown passes `message`,
+          so "Mark all read"/"Clear" no longer wipe the messages badge), plus
+          `POST /notifications/threads/{thread_id}/read` behind 4.45a's `markThreadRead`.
+    - [x] 4.45c Frontend `AppHeader.vue`: the messages button carries the unread count badge
+          (9+ cap, matching ring treatment as the bell dot) and an aria-label that names the
+          count; the mobile menu's Messages link gets the same count.
+    - [x] 4.45d Frontend `stores/messages.ts`: `selectThread` calls `markThreadRead` so opening
+          the conversation is what clears the badge. Best-effort - a failed call leaves the badge
+          up rather than surfacing a toast. `NotificationPanel`'s row click loses its now-dead
+          message/threadId branch.
+    - [x] 4.45e Verification: `ruff check` clean, `vue-tsc` shows no new errors (the
+          pre-existing set from 4.42f/4.44f is unchanged). Not run live per
+          [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.46 Chat failures stop showing raw error text (user report, 2026-09-19). Clicking
+        "Chat" surfaced `useNotificationsStore(...).markThreadRead is not a function` in a toast
+        - a stale HMR module instance, but the copy would have been unreadable for any internal
+        error, and badge bookkeeping should never have been able to fail the action at all.
+    - [x] 4.46a Frontend `stores/messages.ts`: `selectThread`'s 4.45d `markThreadRead` call is
+          wrapped in try/catch and no longer awaited, so a throw there can't reject
+          `selectThread`/`startThread` and abort opening the chat.
+    - [x] 4.46b Frontend `utils/errors.ts` (new): `userErrorMessage(err, fallback)` passes
+          through an `ApiError` detail under 500 (those are written for a person - "You already
+          have a booking with this Pal") and swaps anything else for the fallback.
+    - [x] 4.46c Frontend: all four "Couldn't start chat" sites use it - `usePalChat.ts`,
+          `ServiceDetailView`, `OrderDetailView`, `MyBookingsView`.
+    - [x] 4.46d Verification: `vue-tsc` shows no new errors, `oxlint`/`eslint` clean on the
+          touched files. Not run live per [[feedback_no_build_or_run_skill]].
+    - [ ] 4.46e Not done: the same `err instanceof Error ? err.message` pattern is used by
+          roughly every other toast in the app (bookings, wallet, admin, settings). Left alone
+          rather than swept in one pass - worth a dedicated pass if the copy matters.
+
+  - [x] 4.47 "Chat" opens Messages immediately (user report, 2026-09-19). Clicking Chat sat on
+        the old page through `POST /messages/threads` and then a full message fetch before it
+        navigated, and `MessagesPanel` then refetched the inbox and re-selected a thread on
+        arrival - four sequential round trips, two of them with no feedback at all. Worse, the
+        panel landed on `threads[0]`, not necessarily the Pal just clicked.
+    - [x] 4.47a Frontend `composables/usePalChat.ts`: no network at all now - it keeps the
+          sign-in redirect and the seed-Pal guard (both local) and pushes
+          `/messages?with=<user id>`. Navigation is instant.
+    - [x] 4.47b Frontend `MessagesPanel.vue`: takes `?with=`, does the find-or-create itself
+          under an "Opening chat..." pane, then `router.replace`s to `?thread=<id>` so a reload
+          or Back doesn't re-post. `onMounted` no longer awaits `fetchThreads` before opening
+          the requested conversation - the inbox loads alongside it. `openThreadFromQuery` skips
+          a thread that is already active, so the `?with=` -> `?thread=` rewrite doesn't fetch
+          the conversation twice.
+    - [x] 4.47c Frontend `stores/messages.ts`: `fetchThreads` keeps the active thread if the
+          response doesn't contain it. 4.47b runs the inbox fetch and the thread creation
+          concurrently, so a thread created after the server read the list would otherwise
+          disappear the moment the list landed, taking the open conversation with it.
+    - [x] 4.47d Frontend: the duplicated `handleMessage` in `ServiceDetailView`,
+          `OrderDetailView` and `MyBookingsView` is gone - all three call `usePalChat` (the
+          copies predate it). Two buttons that only ever pushed `/messages` and dumped you in
+          whatever chat was first now open the right one: `ServiceDetailView`'s "Chat first" and
+          `OrderConfirmationView`'s "Message your Pal".
+    - [x] 4.47e Verification: `vue-tsc` shows no new errors, `eslint`/`oxlint` clean on the
+          touched files. Not run live per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.48 Authors can delete their own posts (user request, 2026-09-19). The own-post action
+        was an edit pencil only, so a post could be rewritten but never removed.
+    - [x] 4.48a Backend `routers/feed.py`: `DELETE /feed/posts/{post_id}`, author-only (403
+          otherwise), 204. Comments, likes and saved rows cascade off the `posts` foreign keys,
+          so the only explicit follow-up is `_refresh_posts_count`. Bucket images are left
+          behind, same as an edit that drops one.
+    - [x] 4.48b Frontend `stores/feed.ts`: `deletePost(postId)` drops the post from `posts`,
+          `following`, `saved` and `current`, clears its cached comments and decrements the
+          signed-in account's posts tally via `bumpMyCounts`.
+    - [x] 4.48c Frontend `components/feed/PostAuthorMenu.vue` (new): the pencil becomes a kebab
+          menu with "Edit post" and a red "Delete post" behind `ConfirmModal`, since the delete
+          takes the comments and likes with it.
+    - [x] 4.48d Frontend: wired into all three own-post surfaces - `FeedView`,
+          `UserDashboardView` and `FeedPostThread` (the thread also emits `deleted` and then
+          `back`, so the permalink view routes away and the parents holding their own post list
+          - `UserDashboardView`, `PublicProfileView`, `ProfileFeedsTab` - prune their copy).
+    - [x] 4.48e Verification: `vue-tsc` shows no new errors, `oxlint`/`prettier` clean on the
+          touched files. Not run live per [[feedback_no_build_or_run_skill]].
+
 ---
 
 ## Cut list (only if time runs out)

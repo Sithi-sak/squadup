@@ -58,7 +58,7 @@ function formatCount(count: number) {
 <template>
   <aside class="flex flex-col gap-5 rounded-xl bg-gray-800/50 p-5">
     <div class="flex flex-col items-center text-center">
-      <UAvatar :src="avatarUrl" size="3xl" class="bg-white/10 text-slate-300">
+      <UAvatar :src="avatarUrl" size="3xl" class="size-20 bg-white/10 text-slate-300">
         <PhUserCircle :size="40" />
       </UAvatar>
       <p class="mt-3 text-lg font-semibold text-white">{{ displayName }}</p>

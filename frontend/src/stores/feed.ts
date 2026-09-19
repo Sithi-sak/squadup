@@ -344,6 +344,20 @@ export const useFeedStore = defineStore('feed', () => {
     return updated
   }
 
+  /** Delete a post (author-only, enforced server-side). Comments, likes and saved entries cascade
+   * on the backend, so this drops the post from every list held here - including `saved`, whose
+   * row is gone too. Callers keeping their own local copy (`UserDashboardView`'s own-posts list)
+   * still prune that copy themselves, same as `updatePost`. */
+  async function deletePost(postId: string) {
+    await api.delete(`/feed/posts/${postId}`)
+    posts.value = posts.value.filter((p) => p.id !== postId)
+    following.value = following.value.filter((p) => p.id !== postId)
+    saved.value = saved.value.filter((item) => !(item.kind === 'post' && item.postId === postId))
+    delete commentsByPost.value[postId]
+    if (current.value?.id === postId) current.value = null
+    bumpMyCounts({ posts: -1 })
+  }
+
   /** Flips `liked`/`likes` locally before the request lands (`patchPost`) so the button responds
    * instantly instead of waiting on the backend's recount-and-refetch round trip, then reconciles
    * with the server's real counts once they arrive - or reverts on failure. Requests for the same
@@ -512,6 +526,7 @@ export const useFeedStore = defineStore('feed', () => {
     getPost,
     createPost,
     updatePost,
+    deletePost,
     toggleLike,
     toggleFollow,
     fetchComments,

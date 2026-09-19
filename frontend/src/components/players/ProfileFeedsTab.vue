@@ -68,7 +68,12 @@ async function toggleLike(post: FeedPost) {
     </div>
 
     <div class="flex flex-col gap-4">
-      <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
+      <FeedPostThread
+        v-if="activePostId"
+        :post-id="activePostId"
+        @back="activePostId = null"
+        @deleted="localFeed = localFeed.filter((p) => p.id !== $event)"
+      />
 
       <template v-else>
         <div v-if="isOwnProfile" class="rounded-xl bg-gray-800/70 p-4">

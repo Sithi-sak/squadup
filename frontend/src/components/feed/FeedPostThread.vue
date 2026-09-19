@@ -1,18 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  PhCaretDown,
-  PhCaretLeft,
-  PhCloudWarning,
-  PhPencilSimple,
-  PhUserCircle,
-} from '@phosphor-icons/vue'
+import { PhCaretDown, PhCaretLeft, PhCloudWarning, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
 import FeedCommentItem from '@/components/feed/FeedCommentItem.vue'
+import PostAuthorMenu from '@/components/feed/PostAuthorMenu.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useFeedStore, type FeedComment, type FeedPost } from '@/stores/feed'
 import { findFeedPost, type FeedPostDetail } from '@/mocks/feed'
@@ -21,9 +16,10 @@ import { mockCurrentUser } from '@/mocks/users'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayersStore } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { userErrorMessage } from '@/utils/errors'
 
 const props = defineProps<{ postId: string }>()
-const emit = defineEmits<{ back: [] }>()
+const emit = defineEmits<{ back: []; deleted: [postId: string] }>()
 
 const route = useRoute()
 const router = useRouter()
@@ -186,6 +182,25 @@ async function toggleLike() {
     })
   }
 }
+
+/** The post this thread *is* is gone once deleted, so hand control back to whatever opened the
+ * thread (the feed panel closes it, the permalink view routes to `/feed`). `deleted` goes out
+ * first for the parents keeping their own post list, which the store can't prune for them. */
+async function deletePost() {
+  if (!post.value) return
+  try {
+    await feedStore.deletePost(post.value.id)
+    toast.add({ title: 'Post deleted', color: 'success' })
+    emit('deleted', post.value.id)
+    emit('back')
+  } catch (err) {
+    toast.add({
+      title: "Couldn't delete post",
+      description: userErrorMessage(err, 'Please try again.'),
+      color: 'error',
+    })
+  }
+}
 </script>
 
 <template>
@@ -234,16 +249,7 @@ async function toggleLike() {
           </UButton>
         </template>
         <template v-else-if="isAuthenticated && post.kind !== 'status'" #action>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            square
-            :ui="{ base: 'rounded-full' }"
-            aria-label="Edit post"
-            @click="editModalOpen = true"
-          >
-            <PhPencilSimple :size="16" />
-          </UButton>
+          <PostAuthorMenu @edit="editModalOpen = true" @delete="deletePost" />
         </template>
       </FeedPostCard>
 

@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, onActivated, ref } from 'vue'
-import { PhCamera, PhFilmSlate, PhPencilSimple, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
+import { PhCamera, PhFilmSlate, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
+import PostAuthorMenu from '@/components/feed/PostAuthorMenu.vue'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
 import { formatTimeAgo } from '@/utils/timeAgo'
 import { mockCurrentUser } from '@/mocks/users'
 import { useAuthStore } from '@/stores/auth'
+import { userErrorMessage } from '@/utils/errors'
 import { usePlayersStore } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
@@ -36,6 +38,19 @@ const editModalOpen = ref(false)
 function openEdit(post: FeedPost) {
   editingPost.value = post
   editModalOpen.value = true
+}
+
+async function deletePost(post: FeedPost) {
+  try {
+    await feedStore.deletePost(post.id)
+    toast.add({ title: 'Post deleted', color: 'success' })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't delete post",
+      description: userErrorMessage(err, 'Please try again.'),
+      color: 'error',
+    })
+  }
 }
 
 async function toggleFollow(post: FeedPost) {
@@ -158,16 +173,7 @@ async function toggleLike(post: FeedPost) {
             </UButton>
           </template>
           <template v-else-if="post.kind !== 'status'" #action>
-            <UButton
-              color="neutral"
-              variant="ghost"
-              square
-              :ui="{ base: 'rounded-full' }"
-              aria-label="Edit post"
-              @click="openEdit(post)"
-            >
-              <PhPencilSimple :size="16" />
-            </UButton>
+            <PostAuthorMenu @edit="openEdit(post)" @delete="deletePost(post)" />
           </template>
         </FeedPostCard>
       </template>

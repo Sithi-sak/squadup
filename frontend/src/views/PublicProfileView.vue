@@ -111,7 +111,12 @@ const followListTab = ref<'followers' | 'following' | null>(null)
 
 <template>
   <div class="flex min-w-0 flex-col gap-4">
-    <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
+    <FeedPostThread
+      v-if="activePostId"
+      :post-id="activePostId"
+      @back="activePostId = null"
+      @deleted="posts = posts.filter((p) => p.id !== $event)"
+    />
 
     <FollowListPanel
       v-else-if="followListTab && profile"

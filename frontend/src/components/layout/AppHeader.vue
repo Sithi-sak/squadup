@@ -190,8 +190,26 @@ function handleSearch() {
             <NotificationPanel :close="close" />
           </template>
         </UPopover>
-        <UButton to="/messages" color="neutral" variant="ghost" :ui="{ base: 'rounded-full' }" square aria-label="Messages">
+        <UButton
+          to="/messages"
+          color="neutral"
+          variant="ghost"
+          :ui="{ base: 'rounded-full' }"
+          square
+          class="relative"
+          :aria-label="
+            notificationsStore.messageUnreadCount > 0
+              ? `Messages, ${notificationsStore.messageUnreadCount} unread`
+              : 'Messages'
+          "
+        >
           <PhChatCircle :size="20" />
+          <span
+            v-if="notificationsStore.messageUnreadCount > 0"
+            class="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-semibold text-white ring-2 ring-squadup-bg"
+          >
+            {{ notificationsStore.messageUnreadCount > 9 ? '9+' : notificationsStore.messageUnreadCount }}
+          </span>
         </UButton>
 
         <UButton :to="dashboardPath" variant="outline" class="rounded-full px-4 text-white bg-brand-600/15 ring-brand-600 hover:bg-brand-600/40 transition-all">
@@ -253,7 +271,15 @@ function handleSearch() {
             <router-link to="/feed" class="text-base text-white">Feed</router-link>
             <router-link to="/players" class="text-base text-white">Browse Players</router-link>
             <router-link to="/estars" class="text-base text-white">eStars</router-link>
-            <router-link to="/messages" class="text-base text-white">Messages</router-link>
+            <router-link to="/messages" class="flex items-center gap-2 text-base text-white">
+              Messages
+              <span
+                v-if="notificationsStore.messageUnreadCount > 0"
+                class="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1.5 text-[11px] font-semibold text-white"
+              >
+                {{ notificationsStore.messageUnreadCount }}
+              </span>
+            </router-link>
             <router-link to="/notifications" class="text-base text-white">Notifications</router-link>
             <router-link :to="myProfilePath" class="text-base text-white">My Profile</router-link>
             <router-link to="/bookings" class="text-base text-white">My Bookings</router-link>

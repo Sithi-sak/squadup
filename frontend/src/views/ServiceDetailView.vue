@@ -2,22 +2,18 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PhCaretLeft, PhCheckCircle, PhStar } from '@phosphor-icons/vue'
-import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { gameCoverForName } from '@/lib/covers'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { fallbackServiceDetail } from '@/mocks/playerProfiles'
 import { usePlayerProfileData } from '@/composables/usePlayerProfileData'
-import { useMessagesStore } from '@/stores/messages'
-import { useAuthStore } from '@/stores/auth'
 import ServiceReviewsPanel from '@/components/players/ServiceReviewsPanel.vue'
 import BookingModal from '@/components/players/BookingModal.vue'
+import { usePalChat } from '@/composables/usePalChat'
 
 const route = useRoute()
 const router = useRouter()
-const messagesStore = useMessagesStore()
-const authStore = useAuthStore()
-const toast = useToast()
+const startChat = usePalChat()
 
 const playerId = computed(() => String(route.params.id))
 const { loading, player, profile } = usePlayerProfileData(playerId)
@@ -57,26 +53,8 @@ const tags = computed(() =>
 
 const bookingOpen = ref(false)
 
-async function handleMessage() {
-  if (!authStore.isAuthenticated) {
-    router.push({ path: '/login', query: { redirect: route.fullPath } })
-    return
-  }
-  const participantId = profile.value.userId
-  if (!participantId) {
-    toast.add({ title: "Can't message this Pal yet", color: 'error' })
-    return
-  }
-  try {
-    await messagesStore.startThread(participantId)
-    router.push('/messages')
-  } catch (err) {
-    toast.add({
-      title: "Couldn't start chat",
-      description: err instanceof Error ? err.message : 'Please try again.',
-      color: 'error',
-    })
-  }
+function handleMessage() {
+  startChat(profile.value.userId)
 }
 </script>
 
@@ -266,7 +244,7 @@ async function handleMessage() {
             block
             size="lg"
             class="mt-2.5 rounded-full"
-            @click="router.push('/messages')"
+            @click="handleMessage"
           >
             Chat first
           </UButton>

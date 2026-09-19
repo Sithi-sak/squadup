@@ -512,6 +512,20 @@ def update_post(
     return _serialize_posts(client, [row], user_id)[0]
 
 
+@router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(post_id: str, user_id: str = Depends(get_current_user_id)) -> None:
+    """Author-only delete. Comments, likes and saved entries all cascade off the `posts` row's
+    foreign keys, so the one explicit follow-up is the author's `posts_count`. Uploaded images
+    are left in the bucket, same as an edit that drops one."""
+    client = get_supabase_client()
+    post = _get_post(client, post_id)
+    if post["author_id"] != user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your post")
+
+    client.table("posts").delete().eq("id", post_id).execute()
+    _refresh_posts_count(client, user_id)
+
+
 @router.get("/posts/{post_id}", response_model=PostOut)
 def get_post(post_id: str, user_id: str | None = Depends(get_optional_user_id)) -> dict:
     client = get_supabase_client()

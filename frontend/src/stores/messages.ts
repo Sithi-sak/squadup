@@ -4,6 +4,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { mockMessagesByThread, mockThreads } from '@/mocks/messages'
+import { useNotificationsStore } from '@/stores/notifications'
 
 export interface MessageThread {
   id: string
@@ -104,7 +105,13 @@ export const useMessagesStore = defineStore('messages', () => {
     threadsLoading.value = true
     threadsError.value = null
     try {
-      threads.value = await api.get<MessageThread[]>('/messages/threads')
+      const fetched = await api.get<MessageThread[]>('/messages/threads')
+      // `MessagesPanel` fires this alongside `?with=`'s `startThread`, so a thread created
+      // after the server had already read the list would otherwise vanish from the inbox the
+      // moment this response lands - and take the open conversation down with it.
+      const active = threads.value.find((t) => t.id === activeThreadId.value)
+      threads.value =
+        active && !fetched.some((t) => t.id === active.id) ? [active, ...fetched] : fetched
     } catch (err) {
       threadsError.value = err instanceof Error ? err.message : 'Failed to load chats'
       threads.value = [...mockThreads]
@@ -136,6 +143,16 @@ export const useMessagesStore = defineStore('messages', () => {
   async function selectThread(id: string) {
     activeThreadId.value = id
     await fetchMessages(id)
+    // Chat alerts live on the header's messages badge rather than the bell, so reading the
+    // conversation is what takes them down. Strictly best-effort and deliberately not awaited:
+    // clearing a badge must never be the reason opening (or starting) a chat fails.
+    try {
+      void useNotificationsStore()
+        .markThreadRead(id)
+        .catch(() => {})
+    } catch {
+      // ignore
+    }
   }
 
   /** Find-or-create a thread with `participantId` and select it (backend dedups regardless of

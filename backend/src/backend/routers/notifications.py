@@ -40,10 +40,36 @@ def list_notifications(user_id: str = Depends(get_current_user_id)) -> list[dict
 
 
 @router.post("/read-all", status_code=status.HTTP_204_NO_CONTENT)
-def mark_all_read(user_id: str = Depends(get_current_user_id)) -> None:
-    get_supabase_client().table("notifications").update({"read": True}).eq("user_id", user_id).eq(
-        "read", False
-    ).execute()
+def mark_all_read(
+    exclude_type: str | None = None, user_id: str = Depends(get_current_user_id)
+) -> None:
+    """`exclude_type` leaves one kind untouched - the header dropdown passes `message`, since
+    chat lives on the messages button's own badge and is cleared by opening the thread."""
+    query = (
+        get_supabase_client()
+        .table("notifications")
+        .update({"read": True})
+        .eq("user_id", user_id)
+        .eq("read", False)
+    )
+    if exclude_type:
+        query = query.neq("type", exclude_type)
+    query.execute()
+
+
+@router.post("/threads/{thread_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+def mark_thread_read(thread_id: str, user_id: str = Depends(get_current_user_id)) -> None:
+    """Opening a conversation clears its chat alerts. Message notifications never reach the
+    header dropdown, so this is what retires them."""
+    (
+        get_supabase_client()
+        .table("notifications")
+        .update({"read": True})
+        .eq("user_id", user_id)
+        .eq("type", "message")
+        .eq("thread_id", thread_id)
+        .execute()
+    )
 
 
 @router.post("/{notification_id}/read", response_model=NotificationOut)
@@ -90,7 +116,13 @@ def dismiss_notification(notification_id: str, user_id: str = Depends(get_curren
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-def clear_notifications(user_id: str = Depends(get_current_user_id)) -> None:
+def clear_notifications(
+    exclude_type: str | None = None, user_id: str = Depends(get_current_user_id)
+) -> None:
     """The dropdown's "Clear" - empties the caller's notification list outright. Read state is
-    irrelevant here: clearing is the user saying they are done with all of it."""
-    get_supabase_client().table("notifications").delete().eq("user_id", user_id).execute()
+    irrelevant here: clearing is the user saying they are done with all of it. `exclude_type`
+    spares one kind, as on `read-all`."""
+    query = get_supabase_client().table("notifications").delete().eq("user_id", user_id)
+    if exclude_type:
+        query = query.neq("type", exclude_type)
+    query.execute()

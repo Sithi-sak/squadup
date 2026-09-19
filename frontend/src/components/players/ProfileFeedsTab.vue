@@ -59,7 +59,14 @@ async function toggleLike(post: FeedPost) {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_300px] lg:items-start">
+  <div
+    class="grid grid-cols-1 gap-4 lg:items-start"
+    :class="$slots.aside ? 'lg:grid-cols-[280px_1fr_300px]' : 'lg:grid-cols-[1fr_300px]'"
+  >
+    <div v-if="$slots.aside" class="hidden lg:block">
+      <slot name="aside" />
+    </div>
+
     <div class="flex flex-col gap-4">
       <FeedPostThread v-if="activePostId" :post-id="activePostId" @back="activePostId = null" />
 
@@ -84,27 +91,51 @@ async function toggleLike(post: FeedPost) {
           </div>
           <div class="mt-3 flex items-center justify-between gap-3">
             <div class="flex items-center gap-2">
-              <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+              <UButton
+                color="neutral"
+                variant="soft"
+                size="sm"
+                class="rounded-full"
+                @click="createPostOpen = true"
+              >
                 <PhCamera :size="16" weight="bold" />
                 Photo
               </UButton>
-              <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+              <UButton
+                color="neutral"
+                variant="soft"
+                size="sm"
+                class="rounded-full"
+                @click="createPostOpen = true"
+              >
                 <PhFilmSlate :size="16" weight="bold" />
                 Clip
               </UButton>
-              <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+              <UButton
+                color="neutral"
+                variant="soft"
+                size="sm"
+                class="rounded-full"
+                @click="createPostOpen = true"
+              >
                 <PhSmiley :size="16" weight="bold" />
                 Emoji
               </UButton>
             </div>
-            <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
+            <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true"
+              >Post</UButton
+            >
           </div>
         </div>
 
-        <CreatePostModal v-if="isOwnProfile" v-model:open="createPostOpen" @created="onPostCreated" />
+        <CreatePostModal
+          v-if="isOwnProfile"
+          v-model:open="createPostOpen"
+          @created="onPostCreated"
+        />
 
         <p v-if="localFeed.length === 0" class="py-10 text-center text-sm text-slate-400">
-          {{ isOwnProfile ? 'You haven\'t' : `${player.displayName} hasn't` }} posted anything yet.
+          {{ isOwnProfile ? "You haven't" : `${player.displayName} hasn't` }} posted anything yet.
         </p>
 
         <FeedPostCard
@@ -121,6 +152,8 @@ async function toggleLike(post: FeedPost) {
           :text="post.text ?? ''"
           :has-image="post.hasImage"
           :image-url="post.imageUrl"
+          :image-urls="post.imageUrls"
+          :tag="post.tag"
           :likes="post.likes"
           :comments="post.comments"
           :liked="post.liked"

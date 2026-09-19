@@ -7,6 +7,7 @@ import {
   PhGameController,
   PhGift,
   PhFire,
+  PhWarning,
 } from '@phosphor-icons/vue'
 import type { NotificationType } from '@/stores/notifications'
 
@@ -19,6 +20,22 @@ export const notificationIcon: Record<NotificationType, typeof PhCheck> = {
   service: PhGameController,
   gift: PhGift,
   streak: PhFire,
+  moderation: PhWarning,
+}
+
+/** Icon tint per type, so a wall of notifications is scannable by colour before it is read.
+ * Money is green, conversation blue, social violet, and anything the user has to act on
+ * (a moderation warning) amber. Full class strings - Tailwind only sees literals. */
+export const notificationTone: Record<NotificationType, string> = {
+  booking: 'bg-brand-500/15 text-brand-300',
+  message: 'bg-sky-500/15 text-sky-300',
+  review: 'bg-amber-500/15 text-amber-300',
+  payout: 'bg-emerald-500/15 text-emerald-300',
+  follow: 'bg-violet-500/15 text-violet-300',
+  service: 'bg-indigo-500/15 text-indigo-300',
+  gift: 'bg-pink-500/15 text-pink-300',
+  streak: 'bg-orange-500/15 text-orange-300',
+  moderation: 'bg-red-500/15 text-red-300',
 }
 
 /** Matches the design's "2m ago" / "1h ago" short form, falling back to "Yesterday" and

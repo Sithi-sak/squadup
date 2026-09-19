@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import Field
 
 from ..core.auth import get_current_user_id
+from ..core.blocks import require_not_blocked
 from ..core.config import get_settings
 from ..core.notify import notify
 from ..core.schema import CamelModel
@@ -194,6 +195,12 @@ def create_booking(payload: BookingCreateIn, user_id: str = Depends(get_current_
     service = client.table("services").select("id, player_id").eq("id", payload.service_id).maybe_single().execute()
     if not service or not service.data or service.data["player_id"] != payload.player_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
+
+    # "They can't message, book, ..." (4.39). Checked before the balance so a blocked buyer gets
+    # the real reason instead of an insufficient-funds message.
+    pal = client.table("players").select("user_id").eq("id", payload.player_id).maybe_single().execute()
+    if pal and pal.data:
+        require_not_blocked(user_id, pal.data.get("user_id"), "book")
 
     # Checked up front, before the booking row exists, so an underfunded buyer never ends up
     # with an orphaned `pending` booking that was never actually paid for.

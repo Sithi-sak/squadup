@@ -1,4 +1,5 @@
 import { computed, ref, watch, type Ref } from 'vue'
+import { ApiError } from '@/lib/api'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import type { FeedPost } from '@/stores/feed'
@@ -25,11 +26,16 @@ export function usePlayerProfileData(id: Ref<string>) {
   const fetchedFeed = ref<FeedPost[]>([])
   const fetchedAlbum = ref<AlbumItem[]>([])
   const fetchedWish = ref<WishItem[]>([])
+  /** The Pal blocked this viewer, so `GET /players/{id}` 403s (4.39). Distinct from a plain
+   * failure: falling through to the mock fixtures here would hand a blocked viewer a fake
+   * profile instead of telling them the page is unavailable. */
+  const forbidden = ref(false)
 
   watch(
     id,
     async (playerId) => {
       loading.value = true
+      forbidden.value = false
       fetchedDetail.value = null
       fetchedReviews.value = {}
       fetchedFeed.value = []
@@ -51,8 +57,9 @@ export function usePlayerProfileData(id: Ref<string>) {
           playersStore.fetchPlayerAlbum(playerId),
           playersStore.fetchPlayerWish(playerId),
         ])
-      } catch {
+      } catch (err) {
         fetchedDetail.value = null
+        forbidden.value = err instanceof ApiError && err.status === 403
       } finally {
         loading.value = false
       }
@@ -81,5 +88,5 @@ export function usePlayerProfileData(id: Ref<string>) {
    * save toggle (3.8b's `wish_items.saved` decision). */
   const isMockProfile = computed(() => !fetchedDetail.value)
 
-  return { loading, player, profile, isMockProfile }
+  return { loading, player, profile, isMockProfile, forbidden }
 }

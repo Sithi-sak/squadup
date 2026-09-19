@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { PhCaretDown, PhCaretLeft, PhCloudWarning, PhPencilSimple, PhUserCircle } from '@phosphor-icons/vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  PhCaretDown,
+  PhCaretLeft,
+  PhCloudWarning,
+  PhPencilSimple,
+  PhUserCircle,
+} from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
@@ -18,12 +25,27 @@ import { resolveAvatarUrl } from '@/utils/avatar'
 const props = defineProps<{ postId: string }>()
 const emit = defineEmits<{ back: [] }>()
 
+const route = useRoute()
+const router = useRouter()
 const feedStore = useFeedStore()
 const authStore = useAuthStore()
 const playersStore = usePlayersStore()
 const toast = useToast()
 const currentUserId = computed(() => authStore.user?.id ?? mockCurrentUser.id)
-const composerAvatarUrl = computed(() => resolveAvatarUrl(currentUserId.value, playersStore.mine?.avatarUrl))
+
+/** A post permalink is public (`/feed/{postId}` has no `requiresAuth`), so a shared link lands a
+ * logged-out visitor here to read the post and its comments. Everything that writes - like,
+ * follow, comment - sends them to login first rather than failing against a 401. */
+const isAuthenticated = computed(() => authStore.isAuthenticated)
+
+function requireAuth() {
+  if (isAuthenticated.value) return true
+  router.push({ path: '/login', query: { redirect: route.fullPath } })
+  return false
+}
+const composerAvatarUrl = computed(() =>
+  resolveAvatarUrl(currentUserId.value, playersStore.mine?.avatarUrl),
+)
 
 const post = ref<FeedPost | null>(null)
 const postLoading = ref(true)
@@ -43,7 +65,9 @@ function postFromMockDetail(detail: FeedPostDetail): FeedPost {
     text: detail.text,
     hasImage: detail.hasImage,
     imageUrl: null,
+    imageUrls: [],
     category: 'games',
+    tag: null,
     kind: 'user',
     likes: detail.likes,
     comments: detail.comments,
@@ -104,6 +128,7 @@ const newComment = ref('')
 const posting = ref(false)
 
 async function postComment() {
+  if (!requireAuth()) return
   if (posting.value) return
   const text = newComment.value.trim()
   if (!text) return
@@ -123,6 +148,7 @@ async function postComment() {
 }
 
 async function toggleCommentLike(comment: FeedComment) {
+  if (!requireAuth()) return
   try {
     await feedStore.toggleCommentLike(props.postId, comment)
   } catch (err) {
@@ -135,7 +161,7 @@ async function toggleCommentLike(comment: FeedComment) {
 }
 
 async function toggleFollow() {
-  if (!post.value) return
+  if (!post.value || !requireAuth()) return
   try {
     const result = await feedStore.toggleFollow(post.value.authorId, post.value.following)
     post.value.following = result.following
@@ -149,7 +175,7 @@ async function toggleFollow() {
 }
 
 async function toggleLike() {
-  if (!post.value) return
+  if (!post.value || !requireAuth()) return
   try {
     post.value = await feedStore.toggleLike(post.value)
   } catch (err) {
@@ -188,13 +214,15 @@ async function toggleLike() {
         :text="post.text ?? ''"
         :has-image="post.hasImage"
         :image-url="post.imageUrl"
+        :image-urls="post.imageUrls"
+        :tag="post.tag"
         :likes="post.likes"
         :comments="post.comments"
         :liked="post.liked"
         :kind="post.kind"
         @toggle-like="toggleLike"
       >
-        <template v-if="post.authorId !== currentUserId" #action>
+        <template v-if="isAuthenticated && post.authorId !== currentUserId" #action>
           <UButton
             :color="post.following ? 'neutral' : 'primary'"
             :variant="post.following ? 'soft' : 'solid'"
@@ -205,7 +233,7 @@ async function toggleLike() {
             {{ post.following ? 'Following' : 'Follow' }}
           </UButton>
         </template>
-        <template v-else-if="post.kind !== 'status'" #action>
+        <template v-else-if="isAuthenticated && post.kind !== 'status'" #action>
           <UButton
             color="neutral"
             variant="ghost"
@@ -224,14 +252,31 @@ async function toggleLike() {
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-bold text-white">Comments</h2>
         <UDropdownMenu :items="sortItems">
-          <button type="button" class="flex items-center gap-1 text-sm text-slate-400 hover:text-white">
+          <button
+            type="button"
+            class="flex items-center gap-1 text-sm text-slate-400 hover:text-white"
+          >
             {{ sort === 'top' ? 'Top' : 'Newest' }}
             <PhCaretDown :size="14" />
           </button>
         </UDropdownMenu>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div
+        v-if="!isAuthenticated"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-800/70 p-4"
+      >
+        <p class="text-sm text-slate-400">Log in to like, comment and follow.</p>
+        <UButton
+          color="primary"
+          class="rounded-full px-6"
+          @click="router.push({ path: '/login', query: { redirect: route.fullPath } })"
+        >
+          Log in
+        </UButton>
+      </div>
+
+      <div v-else class="flex items-center gap-3">
         <UAvatar :src="composerAvatarUrl" size="md" class="shrink-0 bg-white/10 text-slate-300">
           <PhUserCircle :size="20" />
         </UAvatar>

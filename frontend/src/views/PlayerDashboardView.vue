@@ -12,10 +12,11 @@ import { useAuthStore } from '@/stores/auth'
 import { useBookingsStore, type Booking } from '@/stores/bookings'
 import { usePlayersStore } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { COINS_PER_USD } from '@/utils/coins'
 
 /** Squad Coin → USD display rate, same constant used on Wallet/Withdraw/Subscriptions (no
  * backend-decided exchange rate yet, see CHECKPOINT.md's Booking flow note). */
-const COINS_PER_USD = 99
+
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -166,7 +167,7 @@ function formatScheduled(iso: string) {
             v-if="activeOrders.length === 0"
             title="No incoming orders"
             description="New orders from buyers will show up here."
-            class="py-10 text-white"
+            class="py-10 mt-4 text-white"
           />
 
           <div v-else class="mt-3 flex flex-col divide-y divide-white/10">
@@ -250,7 +251,7 @@ function formatScheduled(iso: string) {
           v-if="upcomingSchedule.length === 0"
           title="No upcoming sessions"
           description="Scheduled orders will show up here."
-          class="py-8 text-white"
+          class="py-8 mt-4 text-white"
         />
         <div v-else class="mt-3 flex flex-col divide-y divide-white/10">
           <div

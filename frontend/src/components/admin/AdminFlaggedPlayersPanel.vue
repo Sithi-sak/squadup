@@ -17,6 +17,9 @@ const viewing = ref<AdminFlaggedPlayer | null>(null)
 const search = ref('')
 const statusUpdating = ref(false)
 const banUpdating = ref(false)
+const warnModalOpen = ref(false)
+const warnMessage = ref('')
+const warnSending = ref(false)
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -62,6 +65,60 @@ async function setStatus(status: FlaggedPlayerStatus) {
     })
   } finally {
     statusUpdating.value = false
+  }
+}
+
+/** "Take action" is a menu now (4.40): the queue label on its own never reached the Pal, so it
+ * offers the concrete things moderation can do. Only the warning is built - suspension needs a
+ * `suspended_until` column and an enforcement path of its own, so it stays disabled rather than
+ * pretending, the way "Also block" used to (4.38e). */
+const actionItems = computed(() => [
+  [
+    {
+      label: 'Send a warning',
+      onSelect: (): void => {
+        warnMessage.value = defaultWarning.value
+        warnModalOpen.value = true
+      },
+    },
+    { label: 'Suspend for 7 days', disabled: true },
+  ],
+  [
+    {
+      label: viewing.value?.isBanned ? 'Unban player' : 'Ban player',
+      color: 'error' as const,
+      onSelect: (): void => void toggleBan(),
+    },
+  ],
+])
+
+const defaultWarning = computed(() =>
+  viewing.value
+    ? `Warning from SquadUp moderation: we received a report about ${viewing.value.reason.toLowerCase()}. ` +
+      'Please review our community guidelines - further reports may lead to a suspension.'
+    : '',
+)
+
+async function sendWarning() {
+  if (!viewing.value || warnSending.value) return
+  const id = viewing.value.id
+  warnSending.value = true
+  try {
+    viewing.value = await adminStore.warnFlaggedPlayer(id, warnMessage.value)
+    warnModalOpen.value = false
+    toast.add({
+      title: 'Warning sent',
+      description: 'The Pal was notified and the report is marked actioned.',
+      color: 'success',
+    })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't send the warning",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    warnSending.value = false
   }
 }
 
@@ -203,7 +260,12 @@ async function toggleBan() {
             <UAvatar :src="resolveAvatarUrl(viewing.playerId, viewing.avatarUrl)" size="lg" class="bg-white/10" />
             <div>
               <p class="font-semibold text-white">{{ viewing.displayName }}</p>
-              <p class="text-slate-400">{{ viewing.reportCount }} report{{ viewing.reportCount > 1 ? 's' : '' }} · reported by {{ viewing.reportedBy }}</p>
+              <!-- One reporter is worth naming; past that the count is the useful signal and
+                   `reportedBy` only ever holds whoever filed first (4.38b's dedup). -->
+              <p class="text-slate-400">
+                {{ viewing.reportCount }} report{{ viewing.reportCount > 1 ? 's' : '' }}
+                <template v-if="viewing.reportCount === 1"> · reported by {{ viewing.reportedBy }}</template>
+              </p>
             </div>
           </router-link>
 
@@ -220,13 +282,13 @@ async function toggleBan() {
             <span class="font-medium" :class="statusMeta[viewing.status].class">{{ statusMeta[viewing.status].label }}</span>
           </div>
 
-          <p class="rounded-xl bg-gray-800/70 p-4 text-slate-300">{{ viewing.details }}</p>
+          <p v-if="viewing.details" class="rounded-xl bg-gray-800/70 p-4 text-slate-300">{{ viewing.details }}</p>
 
           <div class="grid grid-cols-3 gap-3 border-t border-white/10 pt-4">
             <UButton
               color="neutral"
               variant="soft"
-              size="sm"
+              size="md"
               block
               class="rounded-full"
               :loading="statusUpdating"
@@ -238,7 +300,7 @@ async function toggleBan() {
             <UButton
               color="primary"
               variant="soft"
-              size="sm"
+              size="md"
               block
               class="rounded-full"
               :loading="statusUpdating"
@@ -249,7 +311,7 @@ async function toggleBan() {
             </UButton>
             <UButton
               color="error"
-              size="sm"
+              size="md"
               block
               class="rounded-full"
               :loading="statusUpdating"
@@ -268,13 +330,53 @@ async function toggleBan() {
             <UButton
               :color="viewing.isBanned ? 'neutral' : 'error'"
               :variant="viewing.isBanned ? 'soft' : 'solid'"
-              size="sm"
+              size="md"
               class="shrink-0 rounded-full"
               :loading="banUpdating"
               :disabled="banUpdating"
               @click="toggleBan"
             >
               {{ viewing.isBanned ? 'Unban' : 'Ban' }}
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="warnModalOpen" title="Send a warning" :ui="{ content: 'max-w-lg rounded-3xl' }">
+      <template #body>
+        <div class="flex flex-col gap-4">
+          <p class="text-sm text-slate-400">
+            This arrives as a notification for the Pal and marks the report as actioned.
+          </p>
+          <UTextarea
+            v-model="warnMessage"
+            :rows="5"
+            variant="subtle"
+            :ui="{ base: 'bg-gray-800/70 px-4 py-3 text-sm ring-0 hover:bg-gray-800' }"
+          />
+          <div class="grid grid-cols-2 gap-3 border-t border-white/10 pt-4">
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="lg"
+              block
+              class="rounded-full"
+              :disabled="warnSending"
+              @click="warnModalOpen = false"
+            >
+              Cancel
+            </UButton>
+            <UButton
+              color="error"
+              size="lg"
+              block
+              class="rounded-full"
+              :loading="warnSending"
+              :disabled="warnSending || !warnMessage.trim()"
+              @click="sendWarning"
+            >
+              Send warning
             </UButton>
           </div>
         </div>

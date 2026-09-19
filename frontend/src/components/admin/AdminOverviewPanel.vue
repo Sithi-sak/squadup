@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import { PhCoins, PhFlag, PhGameController, PhScales, PhUsersThree } from '@phosphor-icons/vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
+import { coinsToUsd } from '@/utils/coins'
 import { useAdminStore } from '@/stores/admin'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
@@ -48,41 +49,49 @@ const openDisputeCount = computed(
     <template v-else-if="adminStore.overview">
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
-          <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
-            <PhUsersThree :size="16" />
+          <p class="inline-flex items-center gap-2 text-sm text-slate-400">
+            <PhUsersThree :size="24" />
             Total users
           </p>
           <p class="mt-2 text-2xl font-bold text-white">{{ adminStore.overview.totalUsers.toLocaleString() }}</p>
         </div>
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
-          <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
-            <PhGameController :size="16" />
+          <p class="inline-flex items-center gap-2 text-sm text-slate-400">
+            <PhGameController :size="24" />
             Total Pals
           </p>
           <p class="mt-2 text-2xl font-bold text-white">{{ adminStore.overview.totalPals.toLocaleString() }}</p>
         </div>
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
-          <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
-            <PhFlag :size="16" />
+          <p class="inline-flex items-center gap-2 text-sm text-slate-400">
+            <PhFlag :size="24" />
             Flagged players
           </p>
           <p class="mt-2 text-2xl font-bold text-white">{{ adminStore.flaggedPlayers.length }}</p>
         </div>
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
-          <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
-            <PhScales :size="16" />
+          <p class="inline-flex items-center gap-2 text-sm text-slate-400">
+            <PhScales :size="24" />
             Open disputes
           </p>
           <p class="mt-2 text-2xl font-bold text-white">{{ openDisputeCount }}</p>
         </div>
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
-          <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
-            <PhCoins :size="16" />
+          <p class="inline-flex items-center gap-2 text-sm text-slate-400">
+            <PhCoins :size="24" />
             Commission earned
           </p>
           <p class="mt-2 inline-flex items-center gap-1.5 text-2xl font-bold text-white">
             <img :src="coinIcon" alt="" class="h-5 w-5" />
             {{ adminStore.overview.totalCommissionCoins.toLocaleString() }}
+            <span class="text-base font-medium text-slate-400">
+              ≈ ${{ coinsToUsd(adminStore.overview.totalCommissionCoins) }}
+            </span>
+          </p>
+          <!-- Two streams, and the tile used to count only the first (4.41). -->
+          <p class="mt-1.5 text-xs text-slate-400">
+            Bookings {{ adminStore.overview.bookingCommissionCoins.toLocaleString() }} · Payout
+            fees {{ adminStore.overview.payoutFeeCoins.toLocaleString() }}
           </p>
         </div>
       </div>

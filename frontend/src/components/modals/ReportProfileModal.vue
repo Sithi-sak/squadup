@@ -4,6 +4,10 @@ import { PhLockSimple } from '@phosphor-icons/vue'
 
 const props = defineProps<{
   handle: string
+  /** Set by the parent while `POST /players/{id}/report` is in flight. The modal no longer
+   * closes itself on submit: the parent closes it once the report has actually been filed, so a
+   * failed request leaves the reason and details the person typed intact. */
+  submitting?: boolean
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -33,9 +37,8 @@ watch(open, (isOpen) => {
 })
 
 function submit() {
-  if (!reason.value) return
+  if (!reason.value || props.submitting) return
   emit('submit', { reason: reason.value, details: details.value, alsoBlock: alsoBlock.value })
-  open.value = false
 }
 </script>
 
@@ -49,7 +52,7 @@ function submit() {
       <div class="flex flex-col gap-5">
         <div class="flex items-start gap-2.5 rounded-2xl bg-brand-900/20 p-3.5 text-sm text-brand-300">
           <PhLockSimple :size="18" weight="fill" class="mt-0.5 shrink-0" />
-          <p>Reports are confidential — {{ props.handle }} won't know who reported them.</p>
+          <p>Reports are confidential. {{ props.handle }} won't know who reported them.</p>
         </div>
 
         <div>
@@ -80,7 +83,7 @@ function submit() {
 
         <UTextarea
           v-model="details"
-          placeholder="Add details (optional) — what happened?"
+          placeholder="Add details (optional). What happened?"
           variant="subtle"
           :rows="2"
           :ui="{ base: 'bg-gray-800/70 px-4 py-3 text-sm ring-0 hover:bg-gray-800' }"
@@ -95,10 +98,26 @@ function submit() {
         </div>
 
         <div class="grid grid-cols-2 gap-3 border-t border-white/10 pt-4">
-          <UButton color="neutral" variant="soft" size="lg" block class="rounded-full" @click="open = false">
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="lg"
+            block
+            class="rounded-full"
+            :disabled="submitting"
+            @click="open = false"
+          >
             Cancel
           </UButton>
-          <UButton color="error" size="lg" block class="rounded-full" :disabled="!reason" @click="submit">
+          <UButton
+            color="error"
+            size="lg"
+            block
+            class="rounded-full"
+            :disabled="!reason || submitting"
+            :loading="submitting"
+            @click="submit"
+          >
             Submit report
           </UButton>
         </div>

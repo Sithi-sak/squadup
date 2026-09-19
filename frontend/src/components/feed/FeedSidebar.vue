@@ -102,7 +102,7 @@ function formatCount(count: number) {
         {{ item.label }}
       </router-link>
       <router-link
-        :to="myPlayerProfile ? '/dashboard/player' : '/feed/me'"
+        :to="myPlayerProfile ? `/players/${myPlayerProfile.id}` : '/feed/me'"
         class="flex items-center gap-3 rounded-full px-3 py-2.5 text-sm transition-colors"
         :class="
           active === 'profile'

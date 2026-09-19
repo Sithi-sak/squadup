@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { mockBlockedAccountsCount } from '@/mocks/settings'
+import { computed, onMounted, ref } from 'vue'
+import { useUsersStore } from '@/stores/users'
+import BlockedAccountsModal from '@/components/modals/BlockedAccountsModal.vue'
 import SettingsSelectRow from './SettingsSelectRow.vue'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 import SettingsActionRow from './SettingsActionRow.vue'
@@ -11,6 +12,22 @@ const showOnlineStatus = ref(true)
 const showActivityStatus = ref(true)
 const appearInSearch = ref(true)
 const personalizedRecommendations = ref(true)
+
+/** Real count from `GET /users/me/blocks` (4.39), replacing `mockBlockedAccountsCount`. */
+const usersStore = useUsersStore()
+const blockedCount = ref(0)
+const blockedModalOpen = ref(false)
+const blockedLabel = computed(() =>
+  blockedCount.value === 1 ? '1 account blocked' : `${blockedCount.value} accounts blocked`,
+)
+
+onMounted(async () => {
+  try {
+    blockedCount.value = (await usersStore.fetchMyBlocks()).length
+  } catch {
+    // Leave the count at 0 rather than blocking the whole tab on it.
+  }
+})
 
 const profileVisibilityOptions = ['Everyone', 'Followers', 'No one']
 const messagePermissionOptions = ['Everyone', 'Followers', 'No one']
@@ -51,8 +68,10 @@ const messagePermissionOptions = ['Everyone', 'Followers', 'No one']
         />
         <SettingsActionRow
           label="Blocked accounts"
-          :value="`${mockBlockedAccountsCount} accounts blocked`"
+          :value="blockedLabel"
           action-label="Manage"
+          :disabled="false"
+          @action="blockedModalOpen = true"
         />
         <SettingsActionRow
           label="Download your data"
@@ -61,5 +80,7 @@ const messagePermissionOptions = ['Everyone', 'Followers', 'No one']
         />
       </div>
     </div>
+
+    <BlockedAccountsModal v-model:open="blockedModalOpen" @changed="blockedCount = $event" />
   </div>
 </template>

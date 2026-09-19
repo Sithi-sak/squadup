@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.auth import get_current_user_id
+from ..core.blocks import blocked_user_ids, require_not_blocked
 from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
@@ -159,6 +160,13 @@ def list_threads(user_id: str = Depends(get_current_user_id)) -> list[dict]:
     )
     state_by_thread = {s["thread_id"]: s for s in states}
     threads = [t for t in threads if not (state_by_thread.get(t["id"]) or {}).get("deleted_at")]
+    # A blocked account's conversation drops out of the inbox for both sides (4.39). The thread
+    # and its messages stay in the database, so unblocking brings the history back.
+    blocked = blocked_user_ids(user_id)
+    if blocked:
+        threads = [
+            t for t in threads if t["user_a_id"] not in blocked and t["user_b_id"] not in blocked
+        ]
     if not threads:
         return []
 
@@ -203,6 +211,7 @@ def start_thread(payload: StartThreadIn, user_id: str = Depends(get_current_user
     participant = client.table("users").select("id").eq("id", payload.participant_id).maybe_single().execute()
     if not participant or not participant.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    require_not_blocked(user_id, payload.participant_id, "message")
 
     user_a_id, user_b_id = _canonical_pair(user_id, payload.participant_id)
     existing = (
@@ -268,6 +277,8 @@ def send_message(thread_id: str, payload: SendMessageIn, user_id: str = Depends(
 
     client = get_supabase_client()
     thread = _get_thread(client, thread_id, user_id)
+    other_id = thread["user_b_id"] if thread["user_a_id"] == user_id else thread["user_a_id"]
+    require_not_blocked(user_id, other_id, "message")
 
     created = (
         client.table("messages")

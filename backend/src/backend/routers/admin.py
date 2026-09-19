@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
 
+from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.storage import create_signed_url
 from ..core.supabase import get_supabase_client
@@ -58,6 +59,10 @@ class AdminFlagStatusIn(CamelModel):
     status: str
 
 
+class AdminFlagWarningIn(CamelModel):
+    message: str | None = None
+
+
 class AdminDisputeOut(CamelModel):
     id: str
     order_number: str
@@ -74,6 +79,26 @@ class AdminDisputeStatusIn(CamelModel):
     status: str
 
 
+class AdminWithdrawalOut(CamelModel):
+    id: str
+    reference: str | None
+    player_id: str
+    display_name: str
+    avatar_url: str | None
+    coins: int
+    fee_coins: int
+    payout_coins: int
+    method_label: str
+    method_detail: str | None
+    status: str
+    requested_at: str
+    reviewed_at: str | None
+
+
+class AdminWithdrawalStatusIn(CamelModel):
+    status: str
+
+
 class AdminReportDayOut(CamelModel):
     day: str
     count: int
@@ -84,6 +109,10 @@ class AdminOverviewOut(CamelModel):
     total_pals: int
     orders_today: int
     coins_in_escrow: int
+    # Platform revenue has two streams and the tile only ever counted the first, so a platform
+    # whose only income so far was a payout fee showed nothing earned (4.41).
+    booking_commission_coins: int
+    payout_fee_coins: int
     total_commission_coins: int
     reports_this_week: list[AdminReportDayOut]
 
@@ -91,11 +120,16 @@ class AdminOverviewOut(CamelModel):
 # Helpers -----------------------------------------------------------------------------------
 
 _ESCROW_STATUSES = ("pending", "accepted")
+# A payout's fee counts as earned once an admin approved it - `in_progress` is with the payment
+# provider, `paid` has settled. `requested`/`rejected` have earned nothing (4.28b).
+_EARNED_PAYOUT_STATUSES = ("in_progress", "paid")
 _WEEKDAY_LABELS = ("M", "T", "W", "T", "F", "S", "S")
 
 _FLAG_SELECT = "*, players(display_name, avatar_url, is_banned), users(display_name)"
 
 _PAL_APPLICATION_SELECT = "*, users(email)"
+
+_WITHDRAWAL_SELECT = "*, players(display_name, avatar_url, user_id), payout_methods(label, detail)"
 
 _DISPUTE_SELECT = (
     "*, bookings(order_number, total_coins, quantity, service_type_label, "
@@ -124,6 +158,24 @@ def _pal_application_out(row: dict) -> dict:
         "id_front_url": create_signed_url("id-documents", row["id_front_url"]) if row.get("id_front_url") else None,
         "id_back_url": create_signed_url("id-documents", row["id_back_url"]) if row.get("id_back_url") else None,
         "submitted_at": row["created_at"],
+    }
+
+
+def _withdrawal_out(row: dict) -> dict:
+    player = row.get("players") or {}
+    method = row.get("payout_methods") or {}
+    return {
+        **row,
+        "display_name": player.get("display_name") or "A Pal",
+        "avatar_url": player.get("avatar_url"),
+        # What actually leaves SquadUp's side: the 80% the Pal keeps after the 20% platform fee
+        # `routers/wallet.py` withheld at request time (`WITHDRAWAL_FEE_PCT`).
+        "payout_coins": row["coins"] - row["fee_coins"],
+        "method_label": method.get("label") or "No payout method",
+        "method_detail": method.get("detail"),
+        "requested_at": row["created_at"],
+        "reviewed_at": row.get("reviewed_at"),
+        "reference": row.get("reference"),
     }
 
 
@@ -239,6 +291,39 @@ def update_flagged_player_status(flag_id: str, payload: AdminFlagStatusIn) -> di
     return _flag_out(result.data)
 
 
+@router.post("/flagged-players/{flag_id}/warn", response_model=AdminFlaggedPlayerOut)
+def warn_flagged_player(flag_id: str, payload: AdminFlagWarningIn) -> dict:
+    """"Take action" > Send a warning (4.40). The other three status buttons are queue labels
+    and nothing more; this one reaches the Pal, as a `moderation` notification, and marks the
+    flag `actioned` in the same call so the queue can't drift from what was actually done."""
+    client = get_supabase_client()
+    flag = client.table("admin_flags").select("*").eq("id", flag_id).maybe_single().execute()
+    if not flag or not flag.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Flag not found")
+
+    player = (
+        client.table("players")
+        .select("user_id, display_name")
+        .eq("id", flag.data["player_id"])
+        .maybe_single()
+        .execute()
+    )
+    pal_user_id = (player.data or {}).get("user_id") if player else None
+    if not pal_user_id:
+        # Seed Pals have no linked account, so there is nobody to warn.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This Pal has no account to warn")
+
+    message = (payload.message or "").strip() or (
+        f"Warning from SquadUp moderation: we received a report about {flag.data['reason'].lower()}. "
+        "Please review our community guidelines - further reports may lead to a suspension."
+    )
+    notify(pal_user_id, "moderation", message)
+
+    client.table("admin_flags").update({"status": "actioned"}).eq("id", flag_id).execute()
+    result = client.table("admin_flags").select(_FLAG_SELECT).eq("id", flag_id).single().execute()
+    return _flag_out(result.data)
+
+
 # Disputes -------------------------------------------------------------------------------
 # Same no-auth posture as flagged players above.
 
@@ -303,6 +388,107 @@ def update_dispute_status(dispute_id: str, payload: AdminDisputeStatusIn) -> dic
     return _dispute_out(result.data)
 
 
+# Withdrawals ----------------------------------------------------------------------------
+# Same no-auth posture as the sections above.
+
+_WITHDRAWAL_DECISIONS = ("in_progress", "paid", "rejected")
+
+
+@router.get("/withdrawals", response_model=list[AdminWithdrawalOut])
+def list_withdrawals() -> list[dict]:
+    """4.28d: the payout queue. Every Pal's request across the platform, newest first - the
+    frontend filters by status rather than this taking a query param, same as Disputes."""
+    rows = (
+        get_supabase_client()
+        .table("withdrawals")
+        .select(_WITHDRAWAL_SELECT)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    return [_withdrawal_out(row) for row in rows]
+
+
+@router.patch("/withdrawals/{withdrawal_id}/status", response_model=AdminWithdrawalOut)
+def update_withdrawal_status(withdrawal_id: str, payload: AdminWithdrawalStatusIn) -> dict:
+    """Approve (`paid`, optionally via `in_progress` while the transfer is "with the provider") or
+    reject a payout request.
+
+    No money actually moves anywhere - there is no payment rail behind this (4.31: Stripe Connect
+    is not enabled, and Cambodia has no Stripe payout currency, so a real card/ABA transfer was
+    never on the table). What this does is make the in-app consequence real: approving is the
+    moment the coins leave the Pal's wallet. The request only put them on hold
+    (`_locked_payout_coins`), so a rejection has nothing to refund - it just releases the hold.
+    """
+    if payload.status not in _WITHDRAWAL_DECISIONS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported withdrawal status")
+
+    client = get_supabase_client()
+    existing = (
+        client.table("withdrawals")
+        .select("id, status, coins, fee_coins, reference, player_id, players(user_id)")
+        .eq("id", withdrawal_id)
+        .maybe_single()
+        .execute()
+    )
+    if not existing or not existing.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Withdrawal not found")
+
+    current = existing.data["status"]
+    if current in ("paid", "rejected"):
+        raise HTTPException(status.HTTP_409_CONFLICT, "This withdrawal has already been reviewed")
+
+    user_id = (existing.data.get("players") or {}).get("user_id")
+    coins = existing.data["coins"]
+    payout_coins = coins - existing.data["fee_coins"]
+    reference = existing.data.get("reference") or "your payout"
+
+    update: dict = {"status": payload.status}
+    if payload.status in ("paid", "rejected"):
+        update["reviewed_at"] = datetime.now(UTC).isoformat()
+
+    # The debit happens once, on the first move out of `requested` - so approving straight to
+    # `paid` and approving via `in_progress` both take the coins exactly once.
+    if current == "requested" and payload.status in ("in_progress", "paid") and user_id:
+        adjust_coin_balance(
+            client,
+            user_id,
+            -coins,
+            kind="payout",
+            label="Withdrawal",
+            detail=f"{reference} approved",
+        )
+
+    client.table("withdrawals").update(update).eq("id", withdrawal_id).execute()
+
+    # Settle the `pending` hold row `create_withdrawal` logged. Approving replaces it with the
+    # real debit above, so the hold is removed rather than completed - otherwise the Pal's
+    # activity would show the same coins leaving twice.
+    hold = client.table("wallet_transactions").select("id").eq("withdrawal_id", withdrawal_id).eq(
+        "status", "pending"
+    ).execute().data or []
+    if hold and payload.status in ("paid", "in_progress"):
+        client.table("wallet_transactions").delete().eq("id", hold[0]["id"]).execute()
+    elif hold and payload.status == "rejected":
+        client.table("wallet_transactions").update(
+            {"status": "blocked", "detail": f"{reference} declined"}
+        ).eq("id", hold[0]["id"]).execute()
+
+    if user_id:
+        message = (
+            f"{reference}: {payout_coins} SC is on its way to your payout method."
+            if payload.status == "paid"
+            else f"{reference} was approved and is being processed."
+            if payload.status == "in_progress"
+            else f"{reference} was declined. The coins are still in your wallet."
+        )
+        notify(user_id, "payout", message)
+
+    result = client.table("withdrawals").select(_WITHDRAWAL_SELECT).eq("id", withdrawal_id).single().execute()
+    return _withdrawal_out(result.data)
+
+
 # Overview -------------------------------------------------------------------------------
 # Same no-auth posture as the sections above.
 
@@ -337,7 +523,21 @@ def get_overview() -> dict:
     commission_rows = (
         client.table("bookings").select("commission_coins").eq("status", "completed").execute().data or []
     )
-    total_commission_coins = sum(row["commission_coins"] for row in commission_rows)
+    booking_commission_coins = sum(row["commission_coins"] for row in commission_rows)
+
+    # The 20% withheld on a payout (`wallet.py`'s `WITHDRAWAL_FEE_PCT`) is platform revenue too.
+    # Only on a withdrawal an admin approved: `requested` is still awaiting review and `rejected`
+    # gave the coins back, so neither has earned anything.
+    fee_rows = (
+        client.table("withdrawals")
+        .select("fee_coins")
+        .in_("status", _EARNED_PAYOUT_STATUSES)
+        .execute()
+        .data
+        or []
+    )
+    payout_fee_coins = sum(row["fee_coins"] for row in fee_rows)
+    total_commission_coins = booking_commission_coins + payout_fee_coins
 
     week_start = today_start.date() - timedelta(days=6)
     flag_rows = (
@@ -364,6 +564,8 @@ def get_overview() -> dict:
         "total_pals": total_pals,
         "orders_today": orders_today,
         "coins_in_escrow": coins_in_escrow,
+        "booking_commission_coins": booking_commission_coins,
+        "payout_fee_coins": payout_fee_coins,
         "total_commission_coins": total_commission_coins,
         "reports_this_week": reports_this_week,
     }

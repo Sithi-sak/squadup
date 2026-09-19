@@ -89,7 +89,6 @@ const rows = computed(() => {
           <h1 class="text-2xl font-bold text-white sm:text-3xl">Orders</h1>
           <p class="mt-1 text-sm text-slate-400">Track active jobs and review your order history</p>
         </div>
-        <UButton color="primary" class="rounded-full" disabled>Export</UButton>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3">

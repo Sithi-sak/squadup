@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from pydantic import BaseModel, ValidationError
 
 from ..core.auth import get_current_user_id, get_optional_user_id
+from ..core.blocks import has_blocked
 from ..core.schema import CamelModel
 from ..core.storage import upload_file, upload_image_as_webp
 from ..core.supabase import get_supabase_client
@@ -116,6 +117,9 @@ class PlayerDetailOut(CamelModel):
     # Whether the requesting viewer follows this Pal - always False for `/players/me` (can't
     # follow yourself) and for an anonymous viewer, same as `feed.py`'s per-viewer `following`.
     following: bool
+    # True when the viewer is the one who blocked this Pal, so the profile menu offers Unblock.
+    # The other direction never reaches here: the Pal's own block makes this read 403 (4.39).
+    blocked: bool = False
 
 
 class RateIn(BaseModel):
@@ -372,9 +376,18 @@ def _fetch_player_by_id(
     # `public_only=False` so a Pal can always see their own profile regardless of status.
     if public_only and (result.data["status"] != "approved" or result.data["is_banned"]):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
+    # "They can't ... view your profile" (4.39). One-directional: whoever placed the block keeps
+    # reading the profile, since that is where Unblock lives.
+    owner_user_id = result.data.get("user_id")
+    if has_blocked(owner_user_id, viewer_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This profile is unavailable.")
     services = _fetch_services(player_id, active_only=active_only)
     player = _serialize_player(_with_social_counts(client, result.data), services)
-    return {**player, "following": _is_following(client, viewer_id, player.get("user_id"))}
+    return {
+        **player,
+        "following": _is_following(client, viewer_id, player.get("user_id")),
+        "blocked": has_blocked(viewer_id, owner_user_id),
+    }
 
 
 def _fetch_player_by_user_id(user_id: str, *, active_only: bool) -> dict:
@@ -384,7 +397,7 @@ def _fetch_player_by_user_id(user_id: str, *, active_only: bool) -> dict:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
     services = _fetch_services(result.data["id"], active_only=active_only)
     player = _serialize_player(_with_social_counts(client, result.data), services)
-    return {**player, "following": False}
+    return {**player, "following": False, "blocked": False}
 
 
 def _require_player_exists(player_id: str) -> None:
@@ -1039,3 +1052,81 @@ def get_player_wish(player_id: str) -> list[dict]:
         .data
         or []
     )
+
+
+class PlayerReportIn(CamelModel):
+    reason: str
+    details: str | None = None
+
+
+class PlayerReportOut(CamelModel):
+    id: str
+    status: str
+    report_count: int
+
+
+@router.post("/{player_id}/report", response_model=PlayerReportOut, status_code=status.HTTP_201_CREATED)
+def report_player(
+    player_id: str,
+    payload: PlayerReportIn,
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """Profile report from `ReportProfileModal.vue`, writing the `admin_flags` row the admin
+    moderation queue (`GET /admin/flagged-players`) reads. Reports for the same Pal and reason
+    collapse onto one pending row and bump `report_count`, which is what that column was always
+    for - the queue should show "3 reports of harassment", not three near-identical cards. A
+    reporter who submits the same reason twice doesn't move the count."""
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A reason is required")
+
+    client = get_supabase_client()
+    player = (
+        client.table("players").select("id, user_id").eq("id", player_id).maybe_single().execute()
+    )
+    if not player or not player.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player not found")
+    if player.data.get("user_id") == user_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't report your own profile")
+
+    details = (payload.details or "").strip() or None
+
+    existing = (
+        client.table("admin_flags")
+        .select("id, report_count, details, reported_by")
+        .eq("player_id", player_id)
+        .eq("reason", reason)
+        .eq("status", "pending")
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if existing:
+        row = existing[0]
+        if row.get("reported_by") == user_id:
+            return {"id": row["id"], "status": "pending", "report_count": row["report_count"]}
+        update: dict = {"report_count": row["report_count"] + 1}
+        # Keep the first reporter's account of what happened, but don't lose a later one just
+        # because the first person left the details box empty.
+        if details and not row.get("details"):
+            update["details"] = details
+        client.table("admin_flags").update(update).eq("id", row["id"]).execute()
+        return {"id": row["id"], "status": "pending", "report_count": update["report_count"]}
+
+    created = (
+        client.table("admin_flags")
+        .insert(
+            {
+                "player_id": player_id,
+                "reason": reason,
+                "details": details,
+                "reported_by": user_id,
+                "report_count": 1,
+                "status": "pending",
+            }
+        )
+        .execute()
+        .data[0]
+    )
+    return {"id": created["id"], "status": created["status"], "report_count": created["report_count"]}

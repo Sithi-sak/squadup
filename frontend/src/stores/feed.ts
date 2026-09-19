@@ -3,7 +3,11 @@ import { defineStore } from 'pinia'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayersStore } from '@/stores/players'
-import type { FeedComment as MockFeedComment, FeedPost as MockFeedPost, SavedItem as MockSavedItem } from '@/mocks/feed'
+import type {
+  FeedComment as MockFeedComment,
+  FeedPost as MockFeedPost,
+  SavedItem as MockSavedItem,
+} from '@/mocks/feed'
 import { mockFeedPosts, mockFollowingPosts, mockPostComments, mockSavedItems } from '@/mocks/feed'
 
 export interface FeedPost {
@@ -19,8 +23,14 @@ export interface FeedPost {
   online: boolean
   text: string | null
   hasImage: boolean
+  /** First image, kept for every caller that only ever shows one; `imageUrls` has the full set. */
   imageUrl: string | null
+  imageUrls: string[]
   category: string
+  /** Free-text tag picked in the composer ("Tag a game or service"): a game from `data/games.ts`
+   * or one of the author's own service names. Separate from `category`, which is the fixed
+   * `feed_category` enum ('games' | 'chilling' | 'clips') describing the *kind* of post. */
+  tag: string | null
   /** `'status'` posts are system-generated (booking completed, review left, new follower, Pal
    * approved, ...) rather than composed by the author - `FeedPostCard.vue` renders them in a
    * compact, visually distinct style so they don't read as fake user content. */
@@ -83,8 +93,9 @@ export interface FollowUser {
 
 export interface CreatePostPayload {
   text?: string
-  image?: File
+  images?: File[]
   category?: string
+  tag?: string
 }
 
 /** Fallback fixtures (`mocks/feed.ts`) predate this store and don't carry `authorId`/`liked`/
@@ -104,7 +115,9 @@ function feedPostFromMock(post: MockFeedPost): FeedPost {
     text: post.text,
     hasImage: post.hasImage,
     imageUrl: null,
+    imageUrls: [],
     category: post.category,
+    tag: null,
     kind: 'user',
     likes: post.likes,
     comments: post.comments,
@@ -206,7 +219,8 @@ export const useFeedStore = defineStore('feed', () => {
     for (const stats of [authStore.user, playersStore.mine]) {
       if (!stats) continue
       if (delta.posts) stats.postsCount = Math.max(0, stats.postsCount + delta.posts)
-      if (delta.following) stats.followingCount = Math.max(0, stats.followingCount + delta.following)
+      if (delta.following)
+        stats.followingCount = Math.max(0, stats.followingCount + delta.following)
     }
   }
 
@@ -289,14 +303,16 @@ export const useFeedStore = defineStore('feed', () => {
     return posts.value.find((p) => p.id === id) ?? following.value.find((p) => p.id === id)
   }
 
-  /** Feed composer (`CreatePostModal.vue`) - multipart, not JSON, so an attached image rides
-   * along as a real file (see `lib/api.ts`'s `FormData` handling); the backend re-encodes it to
-   * WebP before storing it. */
+  /** Feed composer (`CreatePostModal.vue`) - multipart, not JSON, so attached images ride
+   * along as real files (see `lib/api.ts`'s `FormData` handling); the backend re-encodes each to
+   * WebP before storing it. `images` repeats the same field name, which is how the backend's
+   * `list[UploadFile]` receives a set. */
   async function createPost(payload: CreatePostPayload) {
     const formData = new FormData()
     if (payload.text) formData.append('text', payload.text)
     if (payload.category) formData.append('category', payload.category)
-    if (payload.image) formData.append('image', payload.image)
+    if (payload.tag) formData.append('tag', payload.tag)
+    for (const image of payload.images ?? []) formData.append('images', image)
 
     const post = await api.post<FeedPost>('/feed/posts', formData)
     posts.value.unshift(post)
@@ -304,17 +320,24 @@ export const useFeedStore = defineStore('feed', () => {
     return post
   }
 
-/** Edit a post's text and/or image (author-only, enforced server-side). `removeImage` clears
-   * an existing image with no replacement - ignored if `image` is also given. Multipart like
+  /** Edit a post's text and/or images (author-only, enforced server-side). `keepImageUrls` is the
+   * existing images that survive the edit, in display order, and `images` is appended to them as
+   * new uploads - so an empty `keepImageUrls` with no `images` clears them. Multipart like
    * `createPost`, for the same reason (an attached image rides as a real file). Patches the same
    * shared lists `toggleLike` does via `patchPost`; callers keeping their own local copy
    * (`UserDashboardView`'s own-posts list, same convention as `ProfileFeedsTab.vue`) still need to
    * reconcile that copy themselves off the returned post. */
-  async function updatePost(postId: string, payload: { text: string; image?: File; removeImage?: boolean }) {
+  async function updatePost(
+    postId: string,
+    payload: { text: string; images?: File[]; keepImageUrls?: string[] },
+  ) {
     const formData = new FormData()
     formData.append('text', payload.text)
-    if (payload.image) formData.append('image', payload.image)
-    else if (payload.removeImage) formData.append('remove_image', 'true')
+    // `manage_images` tells the backend `keep_image_urls` is authoritative, so an empty list
+    // clears the post's images instead of reading as "field omitted, leave them alone".
+    formData.append('manage_images', 'true')
+    for (const url of payload.keepImageUrls ?? []) formData.append('keep_image_urls', url)
+    for (const image of payload.images ?? []) formData.append('images', image)
 
     const updated = await api.patch<FeedPost>(`/feed/posts/${postId}`, formData)
     patchPost(updated)
@@ -332,11 +355,13 @@ export const useFeedStore = defineStore('feed', () => {
     patchPost({ ...post, liked: !wasLiked, likes: post.likes + (wasLiked ? -1 : 1) })
 
     const previous = likeRequestChains[post.id] ?? Promise.resolve()
-    const request = previous.catch(() => {}).then(() =>
-      wasLiked
-        ? api.delete<FeedPost>(`/feed/posts/${post.id}/like`)
-        : api.post<FeedPost>(`/feed/posts/${post.id}/like`),
-    )
+    const request = previous
+      .catch(() => {})
+      .then(() =>
+        wasLiked
+          ? api.delete<FeedPost>(`/feed/posts/${post.id}/like`)
+          : api.post<FeedPost>(`/feed/posts/${post.id}/like`),
+      )
     likeRequestChains[post.id] = request
     try {
       const updated = await request
@@ -379,7 +404,9 @@ export const useFeedStore = defineStore('feed', () => {
       commentsByPost.value[postId] = await api.get<FeedComment[]>(`/feed/posts/${postId}/comments`)
     } catch (err) {
       commentsError.value = err instanceof Error ? err.message : 'Failed to load comments'
-      commentsByPost.value[postId] = (mockPostComments[postId] ?? []).map((c) => feedCommentFromMock(postId, c))
+      commentsByPost.value[postId] = (mockPostComments[postId] ?? []).map((c) =>
+        feedCommentFromMock(postId, c),
+      )
     } finally {
       commentsLoading.value = false
     }
@@ -437,7 +464,9 @@ export const useFeedStore = defineStore('feed', () => {
 
   function findSaved(kind: 'post' | 'service', id: string) {
     return saved.value.find((item) =>
-      kind === 'post' ? item.kind === 'post' && item.postId === id : item.kind === 'service' && item.serviceId === id,
+      kind === 'post'
+        ? item.kind === 'post' && item.postId === id
+        : item.kind === 'service' && item.serviceId === id,
     )
   }
 

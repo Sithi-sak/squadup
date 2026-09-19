@@ -13,6 +13,7 @@ from fastapi import (
 from pydantic import Field
 
 from ..core.auth import get_current_user_id, get_optional_user_id
+from ..core.blocks import blocked_user_ids, require_not_blocked
 from ..core.schema import CamelModel
 from ..core.storage import upload_image_as_webp
 from ..core.supabase import get_supabase_client
@@ -35,7 +36,9 @@ class PostOut(CamelModel):
     text: str | None
     has_image: bool
     image_url: str | None
+    image_urls: list[str]
     category: str
+    tag: str | None
     kind: str
     likes: int
     comments: int
@@ -110,6 +113,8 @@ class SavedItemOut(CamelModel):
 
 # Helpers -----------------------------------------------------------------------------------
 
+_MAX_POST_IMAGES = 10
+
 _POST_SELECT = "*"
 _COMMENT_SELECT = "*, users!comments_author_id_fkey(display_name)"
 _SAVED_SELECT = (
@@ -158,6 +163,13 @@ def _resolve_author(client, author_id: str | None) -> tuple[dict | None, dict | 
     return users_by_id.get(author_id), players_by_user_id.get(author_id)
 
 
+def _collect_uploads(image: UploadFile | None, images: list[UploadFile] | None) -> list[UploadFile]:
+    """Multipart clients send either the single legacy `image` field or a repeated `images` one;
+    an empty repeated field arrives as a one-item list with no filename, which is not a file."""
+    candidates = ([image] if image else []) + list(images or [])
+    return [upload for upload in candidates if upload and upload.filename][:_MAX_POST_IMAGES]
+
+
 def _post_out(row: dict, author: dict | None, player: dict | None, *, liked: bool, following: bool) -> dict:
     author = author or {}
     player = player or {}
@@ -173,7 +185,9 @@ def _post_out(row: dict, author: dict | None, player: dict | None, *, liked: boo
         "text": row["text"],
         "has_image": row["image_url"] is not None,
         "image_url": row["image_url"],
+        "image_urls": row.get("image_urls") or ([row["image_url"]] if row["image_url"] else []),
         "category": row["category"],
+        "tag": row.get("tag"),
         "kind": row["kind"],
         "likes": row["likes_count"],
         "comments": row["comments_count"],
@@ -372,6 +386,11 @@ def list_feed(
     if author_id:
         query = query.eq("author_id", author_id)
     rows = query.execute().data or []
+    # Neither side of a block sees the other's posts (4.39). Filtered here rather than in
+    # `_serialize_posts` so a direct permalink still resolves - that read has its own rules.
+    blocked = blocked_user_ids(user_id)
+    if blocked:
+        rows = [row for row in rows if row.get("author_id") not in blocked]
     return _serialize_posts(client, rows, user_id)
 
 
@@ -381,7 +400,8 @@ def list_following_feed(user_id: str | None = Depends(get_optional_user_id)) -> 
         return []
     client = get_supabase_client()
     followed = client.table("follows").select("followed_id").eq("follower_id", user_id).execute().data or []
-    author_ids = [f["followed_id"] for f in followed]
+    blocked = blocked_user_ids(user_id)
+    author_ids = [f["followed_id"] for f in followed if f["followed_id"] not in blocked]
     if not author_ids:
         return []
     rows = (
@@ -401,21 +421,26 @@ def list_following_feed(user_id: str | None = Depends(get_optional_user_id)) -> 
 def create_post(
     text: str | None = Form(None),
     category: str = Form("games"),
+    tag: str | None = Form(None),
     image: UploadFile | None = File(None),  # noqa: B008
+    images: list[UploadFile] | None = File(None),  # noqa: B008
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     """The Feed composer (`CreatePostModal.vue`) - any signed-in account can post (3.18), Pal or
     plain buyer, so this just needs the caller's own user id, no `players` lookup. Multipart
-    (not JSON) so an attached image can ride along as a real file - re-encoded to WebP and
+    (not JSON) so attached images can ride along as real files - each is re-encoded to WebP and
     downscaled by `upload_image_as_webp` before it lands in the `post-images` bucket, so a
-    multi-MB phone photo doesn't get stored at full size for a feed-card thumbnail."""
+    multi-MB phone photo doesn't get stored at full size for a feed-card thumbnail. `images`
+    takes the whole set (up to `_MAX_POST_IMAGES`); the single `image` field predates it and
+    still works, counting as one more."""
     client = get_supabase_client()
 
+    uploads = _collect_uploads(image, images)
     clean_text = (text or "").strip() or None
-    if not clean_text and not image:
+    if not clean_text and not uploads:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Post must have text or an image")
 
-    image_url = upload_image_as_webp("post-images", f"{user_id}/{uuid4()}", image) if image else None
+    image_urls = [upload_image_as_webp("post-images", f"{user_id}/{uuid4()}", upload) for upload in uploads]
 
     post_id = str(uuid4())
     client.table("posts").insert(
@@ -423,8 +448,10 @@ def create_post(
             "id": post_id,
             "author_id": user_id,
             "text": clean_text,
-            "image_url": image_url,
+            "image_url": image_urls[0] if image_urls else None,
+            "image_urls": image_urls,
             "category": category,
+            "tag": (tag or "").strip() or None,
         }
     ).execute()
     _refresh_posts_count(client, user_id)
@@ -438,29 +465,49 @@ def update_post(
     post_id: str,
     text: str = Form(""),
     image: UploadFile | None = File(None),  # noqa: B008
+    images: list[UploadFile] | None = File(None),  # noqa: B008
+    keep_image_urls: list[str] | None = Form(None),  # noqa: B008
+    manage_images: bool = Form(False),
     remove_image: bool = Form(False),
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
-    """Author-only edit - category stays fixed once posted (never was editable, same as before),
-    but text and the image can both change: a new `image` replaces the existing one, or
-    `remove_image` clears it with no replacement, matching the composer's own multipart shape."""
+    """Author-only edit - category and tag stay fixed once posted (never were editable, same as
+    before), but text and images can both change. With `manage_images`, `keep_image_urls` is the
+    authoritative list of existing images that survive the edit, in display order, and
+    `images`/`image` is appended to it as new uploads - an empty list with no uploads clears them.
+    Without it the old single-image callers still behave exactly as they used to (`image`
+    replaces, `remove_image` clears, neither leaves the post's images alone)."""
     client = get_supabase_client()
     post = _get_post(client, post_id)
     if post["author_id"] != user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your post")
 
-    clean_text = text.strip() or None
-    if image:
-        image_url = upload_image_as_webp("post-images", f"{user_id}/{uuid4()}", image)
-    elif remove_image:
-        image_url = None
-    else:
-        image_url = post["image_url"]
+    existing = post.get("image_urls") or ([post["image_url"]] if post["image_url"] else [])
+    uploads = _collect_uploads(image, images)
 
-    if not clean_text and not image_url:
+    if manage_images:
+        kept = [url for url in (keep_image_urls or []) if url in existing]
+    elif remove_image and not uploads:
+        kept = []
+    elif uploads:
+        kept = []  # Legacy single-image replace.
+    else:
+        kept = existing
+
+    new_urls = [upload_image_as_webp("post-images", f"{user_id}/{uuid4()}", upload) for upload in uploads]
+    image_urls = (kept + new_urls)[:_MAX_POST_IMAGES]
+
+    clean_text = text.strip() or None
+    if not clean_text and not image_urls:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Post must have text or an image")
 
-    client.table("posts").update({"text": clean_text, "image_url": image_url}).eq("id", post_id).execute()
+    client.table("posts").update(
+        {
+            "text": clean_text,
+            "image_url": image_urls[0] if image_urls else None,
+            "image_urls": image_urls,
+        }
+    ).eq("id", post_id).execute()
     row = _get_post(client, post_id)
     return _serialize_posts(client, [row], user_id)[0]
 
@@ -589,6 +636,7 @@ def follow_user(target_id: str, user_id: str = Depends(get_current_user_id)) -> 
     if target_id == user_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot follow yourself")
     _require_user_exists(client, target_id)
+    require_not_blocked(user_id, target_id, "follow")
     client.table("follows").upsert({"follower_id": user_id, "followed_id": target_id}).execute()
     return _refresh_follow(client, target_id, user_id, following=True)
 

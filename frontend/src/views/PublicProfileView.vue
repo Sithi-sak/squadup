@@ -52,7 +52,8 @@ async function load() {
     // The route guard already fetched this and would have redirected a Pal straight to
     // `/players/{id}`, so reaching here with a hand-off means it's already the plain profile -
     // only a direct param change (no guard re-run) falls through to fetching it here instead.
-    profile.value = usersStore.takePrefetchedProfile(id) ?? (await usersStore.fetchPublicProfile(id))
+    profile.value =
+      usersStore.takePrefetchedProfile(id) ?? (await usersStore.fetchPublicProfile(id))
     if (profile.value.playerId) {
       router.replace(`/players/${profile.value.playerId}`)
       return
@@ -146,11 +147,17 @@ const followListTab = ref<'followers' | 'following' | null>(null)
       <div class="rounded-xl bg-gray-800/70 p-5">
         <div class="flex items-start justify-between gap-4">
           <div class="flex items-start gap-4">
-            <UAvatar :src="resolveAvatarUrl(profile.id, profile.avatarUrl)" size="3xl" class="shrink-0 bg-white/10 text-slate-300">
+            <UAvatar
+              :src="resolveAvatarUrl(profile.id, profile.avatarUrl)"
+              size="3xl"
+              class="shrink-0 bg-white/10 text-slate-300"
+            >
               <PhUserCircle :size="40" />
             </UAvatar>
             <div>
-              <h1 class="text-2xl font-bold text-white">{{ profile.displayName ?? 'SquadUp user' }}</h1>
+              <h1 class="text-2xl font-bold text-white">
+                {{ profile.displayName ?? 'SquadUp user' }}
+              </h1>
               <p v-if="profile.handle" class="mt-1 text-sm text-slate-400">{{ profile.handle }}</p>
             </div>
           </div>
@@ -167,7 +174,9 @@ const followListTab = ref<'followers' | 'following' | null>(null)
           </UButton>
         </div>
 
-        <div class="mt-5 grid w-full max-w-xs grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4">
+        <div
+          class="mt-5 grid w-full max-w-xs grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4"
+        >
           <div class="pr-4">
             <p class="font-semibold text-white">{{ formatCount(profile.postsCount) }}</p>
             <p class="text-xs text-slate-400">Posts</p>
@@ -208,6 +217,8 @@ const followListTab = ref<'followers' | 'following' | null>(null)
         :text="post.text ?? ''"
         :has-image="post.hasImage"
         :image-url="post.imageUrl"
+        :image-urls="post.imageUrls"
+        :tag="post.tag"
         :likes="post.likes"
         :comments="post.comments"
         :liked="post.liked"

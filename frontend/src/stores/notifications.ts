@@ -12,6 +12,8 @@ export type NotificationType =
   | 'service'
   | 'gift'
   | 'streak'
+  /** Moderation warning sent from the admin Flagged Players panel (4.40). */
+  | 'moderation'
 
 /** Mirrors `NotificationOut` (`routers/notifications.py`). */
 export interface AppNotification {
@@ -67,6 +69,19 @@ export const useNotificationsStore = defineStore('notifications', () => {
     notification.read = true
   }
 
+  /** Header dropdown's per-row dismiss. Removes the row locally only once the delete lands, so a
+   * failed request leaves the list as the server still has it. */
+  async function dismiss(id: string) {
+    await api.delete(`/notifications/${id}`)
+    notifications.value = notifications.value.filter((n) => n.id !== id)
+  }
+
+  /** Header dropdown's "Clear" - drops every notification for the current user. */
+  async function clearAll() {
+    await api.delete('/notifications')
+    notifications.value = []
+  }
+
   return {
     notifications: sorted,
     unread,
@@ -76,5 +91,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     fetchNotifications,
     markAllRead,
     markRead,
+    dismiss,
+    clearAll,
   }
 })

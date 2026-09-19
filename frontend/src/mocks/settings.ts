@@ -34,4 +34,3 @@ export const mockAccountDetails = {
   memberSince: 'June 2024',
 }
 
-export const mockBlockedAccountsCount = 3

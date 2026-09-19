@@ -1,26 +1,74 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import { PhAppleLogo, PhDotsThree } from '@phosphor-icons/vue'
-import coinIcon from '@/assets/squadup-coin.svg'
+import { PhAppleLogo, PhBank, PhCreditCard, PhDotsThree } from '@phosphor-icons/vue'
 import visaIcon from '@/assets/visa.svg'
-import { mockCurrentUser } from '@/mocks/users'
-import { mockPlayerProfiles } from '@/mocks/playerProfiles'
+import mastercardIcon from '@/assets/mastercard.svg'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
+import { useWalletStore } from '@/stores/wallet'
+import AddPayoutMethodModal from '@/components/modals/AddPayoutMethodModal.vue'
 import SettingsSelectRow from './SettingsSelectRow.vue'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 
-const profile = mockPlayerProfiles.self!
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
+const walletStore = useWalletStore()
 const toast = useToast()
 
 const isPal = computed(() => Boolean(authStore.user?.playerId))
 
 onMounted(() => {
   settingsStore.fetchPaymentCards()
+  if (isPal.value) walletStore.fetchPayoutMethods()
 })
+
+/** `payout_methods.brand` stores the detected card network (4.32). */
+function brandIcon(brand: string) {
+  if (brand === 'visa') return visaIcon
+  if (brand === 'mastercard') return mastercardIcon
+  return null
+}
+
+const addingPayoutMethod = ref(false)
+const busyMethodId = ref<string | null>(null)
+
+const payoutMenuItems = (methodId: string) => [
+  [
+    { label: 'Set as default', onSelect: () => setDefaultPayoutMethod(methodId) },
+    { label: 'Remove', onSelect: () => removePayoutMethod(methodId) },
+  ],
+]
+
+async function setDefaultPayoutMethod(methodId: string) {
+  busyMethodId.value = methodId
+  try {
+    await walletStore.setDefaultPayoutMethod(methodId)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't set default payout method",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    busyMethodId.value = null
+  }
+}
+
+async function removePayoutMethod(methodId: string) {
+  busyMethodId.value = methodId
+  try {
+    await walletStore.removePayoutMethod(methodId)
+  } catch (err) {
+    toast.add({
+      title: "Couldn't remove payout method",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    busyMethodId.value = null
+  }
+}
 
 const payoutSchedule = ref('Weekly')
 const currencyDisplay = ref('USD ($)')
@@ -74,26 +122,53 @@ async function removeCard(cardId: string) {
     <div v-if="isPal" class="rounded-xl bg-gray-800/70 p-5">
       <h2 class="text-lg font-semibold text-white">Payout method</h2>
 
-      <div class="mt-3 flex items-center justify-between gap-3 rounded-xl bg-gray-700/50 px-4 py-3">
-        <div class="flex items-center gap-3">
-          <img :src="coinIcon" alt="" class="h-8 w-8" />
-          <div>
-            <p class="font-semibold text-white">Squad Coin Wallet</p>
-            <p class="text-sm text-slate-400">
-              {{ profile.handle }} · Balance {{ mockCurrentUser.coinBalance.toLocaleString() }} SC
-            </p>
+      <div v-if="walletStore.payoutMethods.length" class="mt-3 flex flex-col gap-3">
+        <div
+          v-for="method in walletStore.payoutMethods"
+          :key="method.id"
+          class="flex items-center justify-between gap-3 rounded-xl bg-gray-700/50 px-4 py-3"
+        >
+          <div class="flex items-center gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
+              <img v-if="brandIcon(method.brand)" :src="brandIcon(method.brand)!" alt="" class="h-7 w-7" />
+              <PhBank v-else-if="method.brand === 'bank'" :size="20" weight="fill" class="text-gray-800" />
+              <PhCreditCard v-else :size="20" weight="fill" class="text-gray-800" />
+            </div>
+            <div>
+              <p class="font-semibold text-white">{{ method.label }}</p>
+              <p class="text-sm text-slate-400">{{ method.detail }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <UBadge v-if="method.isDefault" color="primary" variant="soft" size="md" class="rounded-full">
+              Default
+            </UBadge>
+            <UDropdownMenu :items="payoutMenuItems(method.id)">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                square
+                :disabled="busyMethodId === method.id"
+                aria-label="Payout method options"
+              >
+                <PhDotsThree :size="20" weight="bold" />
+              </UButton>
+            </UDropdownMenu>
           </div>
         </div>
-        <UBadge color="primary" variant="soft" size="md" class="rounded-full">Default</UBadge>
       </div>
+
+      <p v-else class="mt-3 text-sm text-slate-400">No payout method on file yet.</p>
 
       <button
         type="button"
-        disabled
-        class="mt-3 w-full cursor-not-allowed rounded-xl border border-dashed border-white/15 py-3 text-sm font-medium text-brand-400"
+        class="mt-3 w-full cursor-pointer rounded-xl border border-dashed border-white/15 py-3 text-sm font-medium text-brand-400 transition-colors hover:border-brand-400/50 hover:bg-white/5"
+        @click="addingPayoutMethod = true"
       >
         + Add payout method
       </button>
+
+      <AddPayoutMethodModal v-model:open="addingPayoutMethod" />
 
       <div class="flex flex-col divide-y divide-white/10">
         <SettingsSelectRow v-model="payoutSchedule" label="Payout schedule" :items="scheduleOptions" />

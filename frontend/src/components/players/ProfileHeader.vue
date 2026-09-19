@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { PhCopy, PhDotsThree, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import type { PlayerProfile, PlayerSummary } from '@/stores/players'
+import { usePlayersStore, type PlayerProfile, type PlayerSummary } from '@/stores/players'
 import { useSubscriptionsStore } from '@/stores/subscriptions'
+import { useAuthStore } from '@/stores/auth'
+import { useUsersStore } from '@/stores/users'
 import { useFeedStore } from '@/stores/feed'
 import SubscriptionModal from './SubscriptionModal.vue'
 import ReportProfileModal from '@/components/modals/ReportProfileModal.vue'
 import BlockProfileModal from '@/components/modals/BlockProfileModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
+
+const route = useRoute()
 
 const props = defineProps<{
   player: PlayerSummary
@@ -16,7 +21,15 @@ const props = defineProps<{
   isOwnProfile?: boolean
 }>()
 
+/** Lifted so the Services tab and the About card can drop their Chat/Book buttons the moment a
+ * block lands, instead of offering actions the API would 403. */
+const emit = defineEmits<{ 'blocked-change': [boolean] }>()
+
 const feedStore = useFeedStore()
+const playersStore = usePlayersStore()
+const authStore = useAuthStore()
+const usersStore = useUsersStore()
+const router = useRouter()
 const toast = useToast()
 
 const following = ref(props.profile.following)
@@ -62,22 +75,104 @@ const subscriptionModalOpen = ref(false)
 
 const reportModalOpen = ref(false)
 const blockModalOpen = ref(false)
-const blocked = ref(false)
+/** Seeded from the profile read: `blocked` is true only when *this viewer* is the one who
+ * blocked the Pal. The reverse never gets here - the Pal's block 403s the profile read. */
+const blocked = ref(props.profile.blocked ?? false)
+watch(
+  () => props.profile.blocked,
+  (value) => (blocked.value = value ?? false),
+)
+const reportSubmitting = ref(false)
+const blockPending = ref(false)
+
+/** `users.id`, which is what a block keys on - null for a seed Pal with no linked account, and
+ * there is nothing to block in that case. */
+const palUserId = computed(() => props.profile.userId ?? props.player.userId)
 
 const profileMenuItems = computed(() => [
   [
     { label: 'Report', onSelect: (): void => { reportModalOpen.value = true } },
-    { label: 'Block', color: 'error' as const, onSelect: (): void => { blockModalOpen.value = true } },
+    ...(palUserId.value
+      ? [
+          blocked.value
+            ? { label: 'Unblock', onSelect: (): void => void setBlocked(false) }
+            : {
+                label: 'Block',
+                color: 'error' as const,
+                onSelect: (): void => { blockModalOpen.value = true },
+              },
+        ]
+      : []),
   ],
 ])
 
-function submitReport(payload: { alsoBlock: boolean }) {
-  if (payload.alsoBlock) blocked.value = true
+/** Block/unblock (4.39). Blocking drops the follow in both directions server-side, so the
+ * Follow button is reset here rather than left claiming a relationship that no longer exists. */
+async function setBlocked(next: boolean) {
+  const targetId = palUserId.value
+  if (!targetId || blockPending.value) return
+  if (!authStore.isAuthenticated) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  blockPending.value = true
+  try {
+    if (next) await usersStore.blockUser(targetId)
+    else await usersStore.unblockUser(targetId)
+    blocked.value = next
+    emit('blocked-change', next)
+    if (next) following.value = false
+    blockModalOpen.value = false
+    toast.add({
+      title: next ? `Blocked ${props.profile.handle}` : `Unblocked ${props.profile.handle}`,
+      description: next
+        ? "They can't message, book, or view your profile."
+        : 'They can interact with you again.',
+      color: 'success',
+    })
+  } catch (err) {
+    toast.add({
+      title: next ? 'Could not block' : 'Could not unblock',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    blockPending.value = false
+  }
+}
+
+/** The modal used to only emit into this handler, which set a local `blocked` flag and dropped
+ * the report on the floor - nothing ever reached `admin_flags`, so the admin moderation queue
+ * had nothing to show. It now files the report before closing. */
+async function submitReport(payload: { reason: string; details: string; alsoBlock: boolean }) {
+  if (reportSubmitting.value) return
+  if (!authStore.isAuthenticated) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  reportSubmitting.value = true
+  try {
+    await playersStore.reportPlayer(props.player.id, payload)
+    reportModalOpen.value = false
+    if (payload.alsoBlock) await setBlocked(true)
+    toast.add({
+      title: 'Report submitted',
+      description: 'Our moderation team will review it.',
+      color: 'success',
+    })
+  } catch (err) {
+    toast.add({
+      title: 'Could not submit report',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    reportSubmitting.value = false
+  }
 }
 
 function confirmBlock() {
-  blocked.value = true
-  blockModalOpen.value = false
+  void setBlocked(true)
 }
 </script>
 
@@ -140,7 +235,7 @@ function confirmBlock() {
         <PhCopy :size="24" weight="regular" />
       </UButton>
       <UButton
-        v-if="!isOwnProfile && (profile.userId ?? player.userId)"
+        v-if="!isOwnProfile && !blocked && (profile.userId ?? player.userId)"
         :color="following ? 'neutral' : 'primary'"
         :variant="following ? 'soft' : 'solid'"
         class="rounded-full"
@@ -171,7 +266,12 @@ function confirmBlock() {
       :subscriber-count="profile.followersCount"
     />
 
-    <ReportProfileModal v-model:open="reportModalOpen" :handle="profile.handle" @submit="submitReport" />
+    <ReportProfileModal
+      v-model:open="reportModalOpen"
+      :handle="profile.handle"
+      :submitting="reportSubmitting"
+      @submit="submitReport"
+    />
 
     <BlockProfileModal v-model:open="blockModalOpen" :handle="profile.handle" @confirm="confirmBlock" />
   </div>

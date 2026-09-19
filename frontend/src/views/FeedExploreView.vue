@@ -3,7 +3,7 @@ import { computed, onActivated, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { PhHeart, PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { exploreCategories } from '@/mocks/feed'
-import { useFeedStore } from '@/stores/feed'
+import { useFeedStore, type FeedPost } from '@/stores/feed'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
 const route = useRoute()
@@ -16,7 +16,9 @@ onActivated(() => {
 const search = ref('')
 // Deep-linkable from `FeedRightRail.vue`'s "Trending now" (`?category=`), e.g. clicking a real
 // post category there. Falls back to the "Trending" (unfiltered) tab otherwise.
-const activeCategory = ref(typeof route.query.category === 'string' ? route.query.category : 'Trending')
+const activeCategory = ref(
+  typeof route.query.category === 'string' ? route.query.category : 'Trending',
+)
 watch(
   () => route.query.category,
   (category) => {
@@ -24,16 +26,22 @@ watch(
   },
 )
 
+/** A post is reachable by its `category` (the feed_category enum) and by its composer `tag`
+ * (a game or service name), since `FeedPostCard.vue`'s hashtag links here with the tag. */
+function topicsOf(post: FeedPost) {
+  return [post.category, post.tag].filter((t): t is string => !!t).map((t) => t.toLowerCase())
+}
+
 const visiblePosts = computed(() => {
   const filtered =
     activeCategory.value === 'Trending'
       ? feedStore.posts
-      : feedStore.posts.filter((p) => p.category.toLowerCase() === activeCategory.value.toLowerCase())
+      : feedStore.posts.filter((p) => topicsOf(p).includes(activeCategory.value.toLowerCase()))
 
   if (!search.value) return filtered
   const q = search.value.toLowerCase()
   return filtered.filter(
-    (p) => p.category.toLowerCase().includes(q) || p.author.toLowerCase().includes(q),
+    (p) => topicsOf(p).some((topic) => topic.includes(q)) || p.author.toLowerCase().includes(q),
   )
 })
 
@@ -48,7 +56,9 @@ function formatCount(count: number) {
   <div class="flex min-w-0 flex-col gap-4">
     <div>
       <h1 class="text-2xl font-bold text-white">Explore</h1>
-      <p class="mt-1 text-sm text-slate-400">Discover trending posts, clips and creators across SquadUp</p>
+      <p class="mt-1 text-sm text-slate-400">
+        Discover trending posts, clips and creators across SquadUp
+      </p>
     </div>
 
     <UInput
@@ -89,12 +99,23 @@ function formatCount(count: number) {
         :to="`/feed/${post.id}`"
         class="relative aspect-square overflow-hidden rounded-lg bg-white/5"
       >
-        <UBadge color="neutral" variant="solid" size="sm" class="absolute top-2 left-2 rounded-full bg-black/50 text-xs">
+        <UBadge
+          color="neutral"
+          variant="solid"
+          size="sm"
+          class="absolute top-2 left-2 rounded-full bg-black/50 text-xs"
+        >
           {{ post.category }}
         </UBadge>
-        <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-black/70 to-transparent p-2.5">
+        <div
+          class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-black/70 to-transparent p-2.5"
+        >
           <div class="flex min-w-0 items-center gap-1.5">
-            <UAvatar :src="resolveAvatarUrl(post.authorId, post.avatarUrl)" size="sm" class="shrink-0 bg-white/10 text-slate-300">
+            <UAvatar
+              :src="resolveAvatarUrl(post.authorId, post.avatarUrl)"
+              size="sm"
+              class="shrink-0 bg-white/10 text-slate-300"
+            >
               <PhUserCircle :size="20" />
             </UAvatar>
             <span class="truncate text-sm font-medium text-white">{{ post.author }}</span>

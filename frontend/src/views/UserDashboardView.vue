@@ -31,9 +31,21 @@ const toast = useToast()
 const avatarUrl = computed(() => resolveAvatarUrl(authStore.user?.id ?? '', null))
 
 const perks = [
-  { icon: PhCurrencyDollar, label: 'Set your own rates', description: 'Price every service the way you want, per game or per hour.' },
-  { icon: PhClockAfternoon, label: 'Play on your schedule', description: 'Go online whenever you have time, pause anytime.' },
-  { icon: PhChatCircleDots, label: 'Chat before you play', description: 'Buyers message you first, no surprises when a session starts.' },
+  {
+    icon: PhCurrencyDollar,
+    label: 'Set your own rates',
+    description: 'Price every service the way you want, per game or per hour.',
+  },
+  {
+    icon: PhClockAfternoon,
+    label: 'Play on your schedule',
+    description: 'Go online whenever you have time, pause anytime.',
+  },
+  {
+    icon: PhChatCircleDots,
+    label: 'Chat before you play',
+    description: 'Buyers message you first, no surprises when a session starts.',
+  },
 ]
 
 function formatCount(count: number) {
@@ -113,14 +125,22 @@ async function toggleLike(post: FeedPost) {
             <PhUserCircle :size="40" />
           </UAvatar>
           <div>
-            <h1 class="text-2xl font-bold text-white">{{ authStore.user?.displayName ?? 'Account' }}</h1>
-            <p v-if="authStore.user?.handle" class="mt-1 text-sm text-slate-400">{{ authStore.user.handle }}</p>
+            <h1 class="text-2xl font-bold text-white">
+              {{ authStore.user?.displayName ?? 'Account' }}
+            </h1>
+            <p v-if="authStore.user?.handle" class="mt-1 text-sm text-slate-400">
+              {{ authStore.user.handle }}
+            </p>
           </div>
         </div>
 
-        <div class="mt-5 grid w-full max-w-xs grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4">
+        <div
+          class="mt-5 grid w-full max-w-xs grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4"
+        >
           <div class="pr-4">
-            <p class="font-semibold text-white">{{ formatCount(authStore.user?.postsCount ?? 0) }}</p>
+            <p class="font-semibold text-white">
+              {{ formatCount(authStore.user?.postsCount ?? 0) }}
+            </p>
             <p class="text-xs text-slate-400">Posts</p>
           </div>
           <button
@@ -128,7 +148,9 @@ async function toggleLike(post: FeedPost) {
             class="block w-full px-4 text-left transition-opacity hover:opacity-80"
             @click="followListTab = 'followers'"
           >
-            <p class="font-semibold text-white">{{ formatCount(authStore.user?.followersCount ?? 0) }}</p>
+            <p class="font-semibold text-white">
+              {{ formatCount(authStore.user?.followersCount ?? 0) }}
+            </p>
             <p class="text-xs text-slate-400">Followers</p>
           </button>
           <button
@@ -136,26 +158,42 @@ async function toggleLike(post: FeedPost) {
             class="block w-full pl-4 text-left transition-opacity hover:opacity-80"
             @click="followListTab = 'following'"
           >
-            <p class="font-semibold text-white">{{ formatCount(authStore.user?.followingCount ?? 0) }}</p>
+            <p class="font-semibold text-white">
+              {{ formatCount(authStore.user?.followingCount ?? 0) }}
+            </p>
             <p class="text-xs text-slate-400">Following</p>
           </button>
         </div>
       </div>
 
-      <div class="flex items-center justify-between gap-4 rounded-xl bg-linear-to-br from-brand-900/50 to-squadup-bg p-4">
+      <div
+        class="flex items-center justify-between gap-4 rounded-xl bg-linear-to-br from-brand-900/50 to-squadup-bg p-4"
+      >
         <div>
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-xs font-medium text-brand-300 ring-1 ring-inset ring-brand-700">
+          <span
+            class="inline-flex items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-xs font-medium text-brand-300 ring-1 ring-inset ring-brand-700"
+          >
             <PhGameController :size="14" weight="fill" />
             Become a Pal
           </span>
-          <p class="mt-2 text-sm text-slate-300">Turn your game time into Squad Coin. Set your own rates and get discovered by buyers.</p>
+          <p class="mt-2 text-sm text-slate-300">
+            Turn your game time into Squad Coin. Set your own rates and get discovered by buyers.
+          </p>
         </div>
-        <UButton color="primary" class="shrink-0 rounded-full px-5" @click="router.push('/become-player')">
+        <UButton
+          color="primary"
+          class="shrink-0 rounded-full px-5"
+          @click="router.push('/become-player')"
+        >
           Become a Pal
         </UButton>
       </div>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div v-for="perk in perks" :key="perk.label" class="rounded-xl bg-linear-to-br from-brand-900/50 to-squadup-bg p-3">
+        <div
+          v-for="perk in perks"
+          :key="perk.label"
+          class="rounded-xl bg-linear-to-br from-brand-900/50 to-squadup-bg p-3"
+        >
           <div class="flex items-center gap-2 mb-2">
             <component :is="perk.icon" :size="20" class="text-brand-300" />
             <p class="text-xs font-semibold text-white">{{ perk.label }}</p>
@@ -180,20 +218,40 @@ async function toggleLike(post: FeedPost) {
         </div>
         <div class="mt-3 flex items-center justify-between gap-3">
           <div class="flex items-center gap-2">
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="sm"
+              class="rounded-full"
+              @click="createPostOpen = true"
+            >
               <PhCamera :size="16" weight="bold" />
               Photo
             </UButton>
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="sm"
+              class="rounded-full"
+              @click="createPostOpen = true"
+            >
               <PhFilmSlate :size="16" weight="bold" />
               Clip
             </UButton>
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full" @click="createPostOpen = true">
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="sm"
+              class="rounded-full"
+              @click="createPostOpen = true"
+            >
               <PhSmiley :size="16" weight="bold" />
               Emoji
             </UButton>
           </div>
-          <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true">Post</UButton>
+          <UButton color="primary" class="rounded-full px-6" @click="createPostOpen = true"
+            >Post</UButton
+          >
         </div>
       </div>
 
@@ -221,6 +279,8 @@ async function toggleLike(post: FeedPost) {
           :text="post.text ?? ''"
           :has-image="post.hasImage"
           :image-url="post.imageUrl"
+          :image-urls="post.imageUrls"
+          :tag="post.tag"
           :likes="post.likes"
           :comments="post.comments"
           :liked="post.liked"

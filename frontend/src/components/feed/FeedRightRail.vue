@@ -18,12 +18,14 @@ function formatCount(count: number) {
   return `${thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1)}k`
 }
 
-/** Real "Trending now" (was mock-only per CHECKPOINT 3.8a) - top post categories by volume,
- * since there's no dedicated hashtag/topic table. */
+/** Real "Trending now" (was mock-only per CHECKPOINT 3.8a) - top topics by volume, since there's
+ * no dedicated hashtag/topic table. A post counts under its composer `tag` when it has one (a
+ * game or service name, the more interesting topic) and under its `category` otherwise. */
 const trendingTopics = computed(() => {
   const counts = new Map<string, number>()
   for (const post of feedStore.posts) {
-    counts.set(post.category, (counts.get(post.category) ?? 0) + 1)
+    const topic = post.tag || post.category
+    counts.set(topic, (counts.get(topic) ?? 0) + 1)
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -40,10 +42,17 @@ function exploreCategory(category: string) {
   <div class="flex flex-col gap-4">
     <SuggestedPalsCard />
 
-    <div v-if="feedStore.postsLoading && !feedStore.posts.length" class="rounded-xl bg-gray-800/70 p-5">
+    <div
+      v-if="feedStore.postsLoading && !feedStore.posts.length"
+      class="rounded-xl bg-gray-800/70 p-5"
+    >
       <USkeleton class="h-5 w-28" />
       <div class="mt-3 flex flex-col divide-y divide-white/10">
-        <div v-for="n in 5" :key="n" class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+        <div
+          v-for="n in 5"
+          :key="n"
+          class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+        >
           <div class="space-y-1.5">
             <USkeleton class="h-4 w-24" />
             <USkeleton class="h-3 w-14" />

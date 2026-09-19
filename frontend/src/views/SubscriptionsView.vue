@@ -7,9 +7,10 @@ import coinIcon from '@/assets/squadup-coin.svg'
 import CancelSubscriptionModal from '@/components/modals/CancelSubscriptionModal.vue'
 import { useSubscriptionsStore, type Subscription } from '@/stores/subscriptions'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { COINS_PER_USD } from '@/utils/coins'
 
 /** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
-const COINS_PER_USD = 99
+
 
 const router = useRouter()
 const subscriptionsStore = useSubscriptionsStore()

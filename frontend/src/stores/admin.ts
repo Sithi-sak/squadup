@@ -4,8 +4,8 @@ import { api } from '@/lib/api'
 import {
   mockAdminFlaggedPlayers,
   mockAdminDisputes,
-  mockAdminOverviewStats,
   mockAdminPalApplications,
+  mockAdminWithdrawals,
   type AdminFlaggedPlayer,
   type FlaggedPlayerStatus,
   type AdminDispute,
@@ -13,6 +13,8 @@ import {
   type AdminOverviewStats,
   type AdminPalApplication,
   type PalApplicationStatus,
+  type AdminWithdrawal,
+  type AdminWithdrawalStatus,
 } from '@/mocks/admin'
 
 /** Mock-only PIN, known solely to the admin, standing in until real admin auth ships (Phase 2
@@ -56,6 +58,10 @@ export const useAdminStore = defineStore('admin', () => {
   const overviewLoading = ref(false)
   const overviewError = ref<string | null>(null)
 
+  const withdrawals = ref<AdminWithdrawal[]>([])
+  const withdrawalsLoading = ref(false)
+  const withdrawalsError = ref<string | null>(null)
+
   const palApplications = ref<AdminPalApplication[]>([])
   const palApplicationsLoading = ref(false)
   const palApplicationsError = ref<string | null>(null)
@@ -79,6 +85,18 @@ export const useAdminStore = defineStore('admin', () => {
    * the row back into `flaggedPlayers` in place rather than refetching the whole list. */
   async function updateFlaggedPlayerStatus(id: string, status: FlaggedPlayerStatus) {
     const updated = await api.patch<AdminFlaggedPlayer>(`/admin/flagged-players/${id}/status`, { status })
+    const index = flaggedPlayers.value.findIndex((flag) => flag.id === id)
+    if (index !== -1) flaggedPlayers.value[index] = updated
+    return updated
+  }
+
+  /** "Take action" > Send a warning (`POST /admin/flagged-players/{id}/warn`, 4.40). Unlike the
+   * status buttons this one reaches the Pal, as a `moderation` notification, and the server
+   * marks the flag `actioned` in the same call. */
+  async function warnFlaggedPlayer(id: string, message?: string) {
+    const updated = await api.post<AdminFlaggedPlayer>(`/admin/flagged-players/${id}/warn`, {
+      message: message?.trim() || null,
+    })
     const index = flaggedPlayers.value.findIndex((flag) => flag.id === id)
     if (index !== -1) flaggedPlayers.value[index] = updated
     return updated
@@ -113,8 +131,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       overview.value = await api.get<AdminOverviewStats>('/admin/overview')
     } catch (err) {
+      // No mock fallback here, unlike the lists above: these are money figures, and a fabricated
+      // "41,600 earned" standing in for a failed request is worse than the error state (4.41).
       overviewError.value = err instanceof Error ? err.message : 'Failed to load overview'
-      overview.value = mockAdminOverviewStats
     } finally {
       overviewLoading.value = false
     }
@@ -129,6 +148,31 @@ export const useAdminStore = defineStore('admin', () => {
       const index = flaggedPlayers.value.findIndex((flag) => flag.id === updated.id)
       if (index !== -1) flaggedPlayers.value[index] = updated
     }
+    return updated
+  }
+
+  /** Payouts tab (`GET /admin/withdrawals`, 4.28d). Same fallback convention as the lists
+   * above. */
+  async function fetchWithdrawals() {
+    withdrawalsLoading.value = true
+    withdrawalsError.value = null
+    try {
+      withdrawals.value = await api.get<AdminWithdrawal[]>('/admin/withdrawals')
+    } catch (err) {
+      withdrawalsError.value = err instanceof Error ? err.message : 'Failed to load withdrawals'
+      withdrawals.value = [...mockAdminWithdrawals]
+    } finally {
+      withdrawalsLoading.value = false
+    }
+  }
+
+  /** Approve/Reject buttons (`PATCH /admin/withdrawals/{id}/status`). A rejection credits the
+   * Pal's coins back server-side, so the row is patched in place and the decision is final -
+   * the backend 409s on a second review of the same request. */
+  async function updateWithdrawalStatus(id: string, status: AdminWithdrawalStatus) {
+    const updated = await api.patch<AdminWithdrawal>(`/admin/withdrawals/${id}/status`, { status })
+    const index = withdrawals.value.findIndex((withdrawal) => withdrawal.id === id)
+    if (index !== -1) withdrawals.value[index] = updated
     return updated
   }
 
@@ -166,12 +210,18 @@ export const useAdminStore = defineStore('admin', () => {
     flaggedPlayersError,
     fetchFlaggedPlayers,
     updateFlaggedPlayerStatus,
+    warnFlaggedPlayer,
     banPlayer,
     disputes,
     disputesLoading,
     disputesError,
     fetchDisputes,
     updateDisputeStatus,
+    withdrawals,
+    withdrawalsLoading,
+    withdrawalsError,
+    fetchWithdrawals,
+    updateWithdrawalStatus,
     overview,
     overviewLoading,
     overviewError,

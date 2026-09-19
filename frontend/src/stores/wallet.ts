@@ -45,14 +45,16 @@ export interface PayoutMethod {
   isDefault: boolean
 }
 
-/** Mirrors `WithdrawalOut` - `withdrawal_status` is `'paid' | 'in_progress'`, not the mock era's
- * hyphenated `'in-progress'`. */
+/** Mirrors `WithdrawalOut` - `withdrawal_status` is the underscored enum, not the mock era's
+ * hyphenated `'in-progress'`. `requested` is 4.28b's new default: a payout waiting on an admin. */
 export interface Withdrawal {
   id: string
+  reference: string | null
   coins: number
   feeCoins: number
-  status: 'paid' | 'in_progress'
+  status: 'requested' | 'in_progress' | 'paid' | 'rejected'
   createdAt: string
+  reviewedAt: string | null
   payoutMethodId: string | null
 }
 
@@ -109,8 +111,10 @@ function withdrawalFromMock(entry: MockWithdrawalHistoryEntry): Withdrawal {
     id: entry.id,
     coins: entry.coins,
     feeCoins: Math.round((entry.coins * mockWithdrawalPlatformFeePct) / 100),
-    status: entry.status === 'paid' ? 'paid' : 'in_progress',
+    reference: `PO-${entry.id.slice(-8).toUpperCase()}`,
+    status: entry.status === 'paid' ? 'paid' : 'requested',
     createdAt: entry.date,
+    reviewedAt: null,
     payoutMethodId: null,
   }
 }
@@ -118,6 +122,9 @@ function withdrawalFromMock(entry: MockWithdrawalHistoryEntry): Withdrawal {
 export const useWalletStore = defineStore('wallet', () => {
   const balance = ref(0)
   const pendingClearanceCoins = ref(0)
+  /** Coins spoken for by payout requests an admin has not decided yet (4.31). They are still in
+   * the balance - the debit only lands on approval - but cannot be withdrawn again. */
+  const lockedPayoutCoins = ref(0)
   const activity = ref<WalletActivity[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -144,15 +151,18 @@ export const useWalletStore = defineStore('wallet', () => {
       const result = await api.get<{
         balanceCoins: number
         pendingClearanceCoins: number
+        lockedPayoutCoins: number
         activity: WalletActivity[]
       }>('/wallet/me')
       balance.value = result.balanceCoins
       pendingClearanceCoins.value = result.pendingClearanceCoins
+      lockedPayoutCoins.value = result.lockedPayoutCoins
       activity.value = result.activity
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load wallet'
       balance.value = mockCurrentUser.coinBalance
       pendingClearanceCoins.value = mockPendingCoins
+      lockedPayoutCoins.value = 0
       activity.value = mockWalletActivity.map(walletActivityFromMock)
     } finally {
       loading.value = false
@@ -191,10 +201,12 @@ export const useWalletStore = defineStore('wallet', () => {
     const result = await api.post<{
       balanceCoins: number
       pendingClearanceCoins: number
+      lockedPayoutCoins: number
       activity: WalletActivity[]
     }>('/wallet/topup', { packageId, paymentIntentId })
     balance.value = result.balanceCoins
     pendingClearanceCoins.value = result.pendingClearanceCoins
+    lockedPayoutCoins.value = result.lockedPayoutCoins
     activity.value = result.activity
     return result
   }
@@ -220,10 +232,12 @@ export const useWalletStore = defineStore('wallet', () => {
     const result = await api.post<{
       balanceCoins: number
       pendingClearanceCoins: number
+      lockedPayoutCoins: number
       activity: WalletActivity[]
     }>(`/wallet/topup/khqr/${sessionId}/complete`)
     balance.value = result.balanceCoins
     pendingClearanceCoins.value = result.pendingClearanceCoins
+    lockedPayoutCoins.value = result.lockedPayoutCoins
     activity.value = result.activity
     return result
   }
@@ -240,6 +254,34 @@ export const useWalletStore = defineStore('wallet', () => {
     } finally {
       payoutMethodsLoading.value = false
     }
+  }
+
+  /** "+ Add payout method" on the Withdraw page and Settings > Payments (4.29). The backend
+   * masks the account itself and forces the first method to be the default, so the created row
+   * comes back ready to render. No mock fallback - a real mutation only. */
+  async function addPayoutMethod(payload: {
+    brand: 'card' | 'bank'
+    account: string
+    isDefault?: boolean
+  }) {
+    const method = await api.post<PayoutMethod>('/wallet/payout-methods', payload)
+    // A new default demotes the others server-side; mirror that locally instead of refetching.
+    if (method.isDefault) payoutMethods.value = payoutMethods.value.map((m) => ({ ...m, isDefault: false }))
+    payoutMethods.value.push(method)
+    return method
+  }
+
+  async function setDefaultPayoutMethod(methodId: string) {
+    const method = await api.patch<PayoutMethod>(`/wallet/payout-methods/${methodId}/default`)
+    payoutMethods.value = payoutMethods.value.map((m) => ({ ...m, isDefault: m.id === method.id }))
+    return method
+  }
+
+  /** Deleting the default promotes the oldest remaining method server-side, so this refetches
+   * rather than guessing which row took over. */
+  async function removePayoutMethod(methodId: string) {
+    await api.delete(`/wallet/payout-methods/${methodId}`)
+    await fetchPayoutMethods()
   }
 
   /** Withdrawal history (`/wallet/withdrawals`, Pal only). Falls back to `mockWithdrawalHistory`. */
@@ -269,6 +311,7 @@ export const useWalletStore = defineStore('wallet', () => {
   return {
     balance,
     pendingClearanceCoins,
+    lockedPayoutCoins,
     activity,
     loading,
     error,
@@ -289,6 +332,9 @@ export const useWalletStore = defineStore('wallet', () => {
     getKhqrStatus,
     completeKhqrTopup,
     fetchPayoutMethods,
+    addPayoutMethod,
+    setDefaultPayoutMethod,
+    removePayoutMethod,
     fetchWithdrawals,
     requestWithdrawal,
   }

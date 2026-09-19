@@ -80,7 +80,9 @@ async function toggleLike(post: FeedPost) {
             <UButton color="primary" class="rounded-full px-6" @click="router.push('/players')">
               Discover Pals
             </UButton>
-            <UButton color="neutral" variant="soft" class="rounded-full px-6">Create a post</UButton>
+            <UButton color="neutral" variant="soft" class="rounded-full px-6"
+              >Create a post</UButton
+            >
           </template>
         </EmptyState>
       </div>
@@ -103,6 +105,8 @@ async function toggleLike(post: FeedPost) {
           :text="post.text ?? ''"
           :has-image="post.hasImage"
           :image-url="post.imageUrl"
+          :image-urls="post.imageUrls"
+          :tag="post.tag"
           :likes="post.likes"
           :comments="post.comments"
           :liked="post.liked"
@@ -111,7 +115,9 @@ async function toggleLike(post: FeedPost) {
           @open-comments="activePostId = post.id"
         >
           <template #action>
-            <UButton color="neutral" variant="soft" size="sm" class="rounded-full">Following</UButton>
+            <UButton color="neutral" variant="soft" size="sm" class="rounded-full"
+              >Following</UButton
+            >
           </template>
         </FeedPostCard>
       </template>

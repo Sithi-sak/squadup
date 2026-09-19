@@ -21,9 +21,9 @@ import KhqrCard from '@/components/wallet/KhqrCard.vue'
 import { stripePromise } from '@/lib/stripe'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore, type WalletActivity } from '@/stores/wallet'
+import { coinsToUsd } from '@/utils/coins'
 
-/** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
-const COINS_PER_USD = 99
+
 
 const walletStore = useWalletStore()
 const authStore = useAuthStore()
@@ -43,7 +43,7 @@ onBeforeUnmount(() => {
 })
 
 const balance = computed(() => walletStore.balance)
-const usdBalance = computed(() => (balance.value / COINS_PER_USD).toFixed(2))
+const usdBalance = computed(() => coinsToUsd(balance.value))
 
 const paymentSectionRef = ref<HTMLDivElement | null>(null)
 function scrollToPayment() {

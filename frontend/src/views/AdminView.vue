@@ -7,6 +7,7 @@ import AdminOverviewPanel from '@/components/admin/AdminOverviewPanel.vue'
 import AdminPalApplicationsPanel from '@/components/admin/AdminPalApplicationsPanel.vue'
 import AdminFlaggedPlayersPanel from '@/components/admin/AdminFlaggedPlayersPanel.vue'
 import AdminDisputesPanel from '@/components/admin/AdminDisputesPanel.vue'
+import AdminWithdrawalsPanel from '@/components/admin/AdminWithdrawalsPanel.vue'
 import { useAdminStore } from '@/stores/admin'
 
 const admin = useAdminStore()
@@ -36,6 +37,7 @@ const tabs = [
   { key: 'applications', label: 'Pal applications' },
   { key: 'flagged', label: 'Flagged players' },
   { key: 'disputes', label: 'Disputes' },
+  { key: 'payouts', label: 'Payouts' },
 ] as const
 
 const activeTab = ref<(typeof tabs)[number]['key']>('overview')
@@ -121,11 +123,12 @@ const activeTab = ref<(typeof tabs)[number]['key']>('overview')
         </button>
       </nav>
 
-      <div class="mx-auto w-full max-w-5xl flex-1 p-6 md:p-8">
+      <div class="mx-auto w-full max-w-full flex-1 p-6 md:p-8">
         <AdminOverviewPanel v-if="activeTab === 'overview'" @view-all="activeTab = $event" />
         <AdminPalApplicationsPanel v-else-if="activeTab === 'applications'" />
         <AdminFlaggedPlayersPanel v-else-if="activeTab === 'flagged'" />
-        <AdminDisputesPanel v-else />
+        <AdminDisputesPanel v-else-if="activeTab === 'disputes'" />
+        <AdminWithdrawalsPanel v-else />
       </div>
     </div>
   </div>

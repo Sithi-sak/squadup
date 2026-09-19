@@ -2,7 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { useNotificationsStore } from '@/stores/notifications'
-import { notificationIcon, formatNotificationTime, isNotificationToday } from '@/utils/notifications'
+import {
+  notificationIcon,
+  notificationTone,
+  formatNotificationTime,
+  isNotificationToday,
+} from '@/utils/notifications'
 
 const store = useNotificationsStore()
 const toast = useToast()
@@ -94,8 +99,11 @@ async function markAllRead() {
             :key="notification.id"
             class="flex items-start gap-3 border-b border-white/5 px-5 py-4 last:border-b-0 hover:bg-white/5"
           >
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600">
-              <component :is="notificationIcon[notification.type]" :size="20" weight="bold" class="text-white" />
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+              :class="notificationTone[notification.type]"
+            >
+              <component :is="notificationIcon[notification.type]" :size="20" weight="bold" />
             </span>
             <div class="min-w-0 flex-1">
               <p class="text-white">{{ notification.message }}</p>
@@ -112,8 +120,11 @@ async function markAllRead() {
             :key="notification.id"
             class="flex items-start gap-3 border-b border-white/5 px-5 py-4 last:border-b-0 hover:bg-white/5"
           >
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600">
-              <component :is="notificationIcon[notification.type]" :size="20" weight="bold" class="text-white" />
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+              :class="notificationTone[notification.type]"
+            >
+              <component :is="notificationIcon[notification.type]" :size="20" weight="bold" />
             </span>
             <div class="min-w-0 flex-1">
               <p class="text-white">{{ notification.message }}</p>

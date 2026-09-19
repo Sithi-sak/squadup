@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { fallbackServiceDetail } from '@/mocks/playerProfiles'
 import { usePlayerProfileData } from '@/composables/usePlayerProfileData'
 import { useAuthStore } from '@/stores/auth'
+import { PhProhibit } from '@phosphor-icons/vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import ProfileHeader from '@/components/players/ProfileHeader.vue'
-import ProfileServiceSidebar from '@/components/players/ProfileServiceSidebar.vue'
+import ProfileAboutCard from '@/components/players/ProfileAboutCard.vue'
 import ProfileServicesTab from '@/components/players/ProfileServicesTab.vue'
 import ProfileFeedsTab from '@/components/players/ProfileFeedsTab.vue'
 import ProfileAlbumTab from '@/components/players/ProfileAlbumTab.vue'
 import ProfileWishTab from '@/components/players/ProfileWishTab.vue'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const playerId = computed(() => String(route.params.id))
-const { loading, player, profile, isMockProfile } = usePlayerProfileData(playerId)
+const { loading, player, profile, isMockProfile, forbidden } = usePlayerProfileData(playerId)
 
 const isOwnProfile = computed(() => !!authStore.user?.playerId && authStore.user.playerId === playerId.value)
 
@@ -25,7 +28,25 @@ const tabItems = [
   { label: 'Album', value: 'album' },
   { label: 'Wish', value: 'wish' },
 ]
-const activeTab = ref('services')
+/** Kept in the URL (`?tab=feeds`) so a shared link lands on the tab it was copied from and a
+ * refresh doesn't bounce back to Services. */
+const tabValues = tabItems.map((t) => t.value)
+const activeTab = ref(tabValues.includes(String(route.query.tab)) ? String(route.query.tab) : 'services')
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab: tab === 'services' ? undefined : tab } })
+})
+watch(
+  () => route.query.tab,
+  (tab) => {
+    const next = tabValues.includes(String(tab)) ? String(tab) : 'services'
+    if (next !== activeTab.value) activeTab.value = next
+  },
+)
+
+/** Mirrors `profile.blocked` but stays live: `ProfileHeader` owns the block action, and the
+ * tabs need to drop Chat/Book as soon as it lands rather than on the next profile fetch. */
+const viewerBlocked = ref(profile.value.blocked ?? false)
+watch(profile, (p) => (viewerBlocked.value = p.blocked ?? false))
 
 const selectedServiceId = ref(profile.value.highlightedServiceId)
 watch(profile, (p) => (selectedServiceId.value = p.highlightedServiceId))
@@ -126,8 +147,22 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
       </div>
     </div>
 
+    <EmptyState
+      v-else-if="forbidden"
+      :icon="PhProhibit"
+      badge="Unavailable"
+      title="This profile is unavailable"
+      description="You can't view this profile."
+      class="py-20"
+    />
+
     <template v-else>
-      <ProfileHeader :player="player" :profile="profile" :is-own-profile="isOwnProfile" />
+      <ProfileHeader
+        :player="player"
+        :profile="profile"
+        :is-own-profile="isOwnProfile"
+        @blocked-change="viewerBlocked = $event"
+      />
 
       <UTabs
         v-model="activeTab"
@@ -138,21 +173,18 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
         :ui="{ label: 'text-white' }"
       />
 
-      <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
-        <ProfileServiceSidebar
-          :services="profile.services"
-          :selected-id="selectedServiceId"
-          @select="selectedServiceId = $event"
-        />
-
+      <div class="mt-4">
         <ProfileServicesTab
           v-if="activeTab === 'services'"
           :player-id="player.id"
           :player-user-id="profile.userId"
+          :services="profile.services"
           :service-id="selectedServiceId"
           :detail="selectedDetail"
           :reviews="selectedReviews"
           :is-own-profile="isOwnProfile"
+          :blocked="viewerBlocked"
+          @select="selectedServiceId = $event"
         />
         <ProfileFeedsTab
           v-else-if="activeTab === 'feeds'"
@@ -160,7 +192,16 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
           :handle="profile.handle"
           :feed="profile.feed"
           :is-own-profile="isOwnProfile"
-        />
+        >
+          <template #aside>
+            <ProfileAboutCard
+              :player="player"
+              :profile="profile"
+              :is-own-profile="isOwnProfile"
+              :blocked="viewerBlocked"
+            />
+          </template>
+        </ProfileFeedsTab>
         <ProfileAlbumTab v-else-if="activeTab === 'album'" :album="profile.album" />
         <ProfileWishTab
           v-else-if="activeTab === 'wish'"

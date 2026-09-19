@@ -8,6 +8,9 @@ import { generatedAvatarUrl } from '@/utils/avatar'
 export type FlaggedPlayerStatus = 'pending' | 'reviewing' | 'actioned' | 'dismissed'
 export type DisputeStatus = 'open' | 'investigating' | 'resolved' | 'refunded'
 export type PalApplicationStatus = 'pending_review' | 'approved' | 'rejected'
+/** Mirrors the `withdrawal_status` enum (4.28b). `requested` is what a Pal's payout lands as; an
+ * admin moves it to `paid` (or `in_progress` first) or `rejected`. */
+export type AdminWithdrawalStatus = 'requested' | 'in_progress' | 'paid' | 'rejected'
 
 export interface AdminFlaggedPlayer {
   id: string
@@ -53,30 +56,34 @@ export interface AdminDispute {
   status: DisputeStatus
 }
 
+/** Mirrors `AdminWithdrawalOut` (`routers/admin.py`). `payoutCoins` is the 80% the Pal keeps
+ * after SquadUp's 20% cut, which is the figure the admin is actually approving. */
+export interface AdminWithdrawal {
+  id: string
+  reference: string | null
+  playerId: string
+  displayName: string
+  avatarUrl: string | null
+  coins: number
+  feeCoins: number
+  payoutCoins: number
+  methodLabel: string
+  methodDetail: string | null
+  status: AdminWithdrawalStatus
+  requestedAt: string
+  reviewedAt: string | null
+}
+
 export interface AdminOverviewStats {
   totalUsers: number
   totalPals: number
   ordersToday: number
   coinsInEscrow: number
+  /** Platform revenue, split by where it came from (4.41). */
+  bookingCommissionCoins: number
+  payoutFeeCoins: number
   totalCommissionCoins: number
   reportsThisWeek: { day: string; count: number }[]
-}
-
-export const mockAdminOverviewStats: AdminOverviewStats = {
-  totalUsers: 8420,
-  totalPals: 1180,
-  ordersToday: 246,
-  coinsInEscrow: 58400,
-  totalCommissionCoins: 41600,
-  reportsThisWeek: [
-    { day: 'M', count: 2 },
-    { day: 'T', count: 4 },
-    { day: 'W', count: 1 },
-    { day: 'T', count: 5 },
-    { day: 'F', count: 3 },
-    { day: 'S', count: 7 },
-    { day: 'S', count: 3 },
-  ],
 }
 
 export const mockAdminFlaggedPlayers: AdminFlaggedPlayer[] = [
@@ -239,5 +246,54 @@ export const mockAdminPalApplications: AdminPalApplication[] = [
     idBackUrl: null,
     submittedAt: '2026-09-03T18:40:00.000Z',
     status: 'pending_review',
+  },
+]
+
+/** Fallback rows for the Payouts tab (4.28e), same offline convention as the lists above. */
+export const mockAdminWithdrawals: AdminWithdrawal[] = [
+  {
+    id: 'withdrawal-1',
+    reference: 'PO-4F2A9C31',
+    playerId: 'p2',
+    displayName: 'VelvetAce',
+    avatarUrl: generatedAvatarUrl('p2'),
+    coins: 4500,
+    feeCoins: 900,
+    payoutCoins: 3600,
+    methodLabel: 'Card',
+    methodDetail: '•••• 4242',
+    status: 'requested',
+    requestedAt: '2026-09-18T09:12:00',
+    reviewedAt: null,
+  },
+  {
+    id: 'withdrawal-2',
+    reference: 'PO-9B17E6C0',
+    playerId: 'p3',
+    displayName: 'NovaStrike',
+    avatarUrl: generatedAvatarUrl('p3'),
+    coins: 1800,
+    feeCoins: 360,
+    payoutCoins: 1440,
+    methodLabel: 'ABA Bank',
+    methodDetail: '•••• 3356',
+    status: 'requested',
+    requestedAt: '2026-09-17T16:40:00',
+    reviewedAt: null,
+  },
+  {
+    id: 'withdrawal-3',
+    reference: 'PO-2D80A5F4',
+    playerId: 'p4',
+    displayName: 'KiraByte',
+    avatarUrl: generatedAvatarUrl('p4'),
+    coins: 9000,
+    feeCoins: 1800,
+    payoutCoins: 7200,
+    methodLabel: 'ABA Bank',
+    methodDetail: '•••• 8810',
+    status: 'paid',
+    requestedAt: '2026-09-12T11:05:00',
+    reviewedAt: '2026-09-13T08:30:00',
   },
 ]

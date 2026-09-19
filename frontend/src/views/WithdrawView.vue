@@ -2,21 +2,27 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import { PhCaretLeft, PhPaypalLogo, PhCheck } from '@phosphor-icons/vue'
+import { PhCaretLeft, PhBank, PhCheck, PhCreditCard } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import visaIcon from '@/assets/visa.svg'
+import mastercardIcon from '@/assets/mastercard.svg'
 import { mockWithdrawalPlatformFeePct } from '@/mocks/wallet'
-import { useWalletStore } from '@/stores/wallet'
+import { useWalletStore, type Withdrawal } from '@/stores/wallet'
+import AddPayoutMethodModal from '@/components/modals/AddPayoutMethodModal.vue'
+import { coinsToUsd } from '@/utils/coins'
 
-/** $1 = 99 SC, matching the base top-up package (990 SC / $10). */
-const COINS_PER_USD = 99
+
 
 const router = useRouter()
 const walletStore = useWalletStore()
 const toast = useToast()
 
-const availableCoins = computed(() => Math.max(0, walletStore.balance - walletStore.pendingClearanceCoins))
-const usdAvailable = computed(() => (availableCoins.value / COINS_PER_USD).toFixed(2))
+/** Coins already spoken for by an undecided payout are still in the balance - the debit lands on
+ * approval (4.31) - but they cannot be withdrawn a second time. */
+const availableCoins = computed(() =>
+  Math.max(0, walletStore.balance - walletStore.pendingClearanceCoins - walletStore.lockedPayoutCoins),
+)
+const usdAvailable = computed(() => coinsToUsd(availableCoins.value))
 
 const amount = ref(0)
 const selectedMethodId = ref<string | null>(null)
@@ -30,7 +36,24 @@ onMounted(async () => {
 
 const feeCoins = computed(() => Math.round((amount.value * mockWithdrawalPlatformFeePct) / 100))
 const receiveCoins = computed(() => amount.value - feeCoins.value)
-const receiveUsd = computed(() => (receiveCoins.value / COINS_PER_USD).toFixed(2))
+const receiveUsd = computed(() => coinsToUsd(receiveCoins.value))
+
+/** Mirrors the `withdrawal_status` enum (4.28b) - `requested` is a payout waiting on an admin,
+ * `in_progress` one they approved that is with the payment provider. */
+const withdrawalStatusMeta: Record<Withdrawal['status'], { label: string; class: string }> = {
+  requested: { label: 'Awaiting review', class: 'text-amber-400' },
+  in_progress: { label: 'In progress', class: 'text-sky-400' },
+  paid: { label: 'Paid', class: 'text-brand-400' },
+  rejected: { label: 'Declined', class: 'text-red-400' },
+}
+
+/** `payout_methods.brand` stores the detected card network (4.32), so the row can show the real
+ * scheme mark instead of a Visa glyph on every card. */
+function brandIcon(brand: string) {
+  if (brand === 'visa') return visaIcon
+  if (brand === 'mastercard') return mastercardIcon
+  return null
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -40,6 +63,15 @@ function methodLabel(payoutMethodId: string | null) {
   return walletStore.payoutMethods.find((m) => m.id === payoutMethodId)?.label ?? 'Withdrawal'
 }
 
+const addingMethod = ref(false)
+
+/** A freshly added method comes back as the default when it is the Pal's first one, so select it
+ * straight away - otherwise they would add a method and still have nothing chosen. */
+function onMethodAdded() {
+  selectedMethodId.value =
+    walletStore.payoutMethods.find((m) => m.isDefault)?.id ?? walletStore.payoutMethods.at(-1)?.id ?? null
+}
+
 const submitting = ref(false)
 
 async function submitWithdrawal() {
@@ -47,7 +79,11 @@ async function submitWithdrawal() {
   submitting.value = true
   try {
     await walletStore.requestWithdrawal(amount.value, selectedMethodId.value ?? undefined)
-    toast.add({ title: 'Withdrawal requested', description: 'Funds are on their way.', color: 'success' })
+    toast.add({
+      title: 'Withdrawal requested',
+      description: 'The coins are on hold until an admin approves it.',
+      color: 'success',
+    })
     amount.value = availableCoins.value
   } catch (err) {
     toast.add({
@@ -87,7 +123,12 @@ async function submitWithdrawal() {
           </p>
           <p class="mt-1 text-sm text-slate-400">≈ ${{ usdAvailable }} USD</p>
         </div>
-        <p class="text-sm text-white">Pending: {{ walletStore.pendingClearanceCoins.toLocaleString() }}</p>
+        <div class="flex flex-col gap-1 text-sm">
+          <p class="text-white">In escrow: {{ walletStore.pendingClearanceCoins.toLocaleString() }}</p>
+          <p v-if="walletStore.lockedPayoutCoins > 0" class="text-amber-400">
+            On hold for payout: {{ walletStore.lockedPayoutCoins.toLocaleString() }}
+          </p>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -117,6 +158,12 @@ async function submitWithdrawal() {
               Max
             </button>
           </div>
+
+          <p class="mt-4 text-sm text-slate-400">
+            Payouts are reviewed by the SquadUp team first. The coins stay in your wallet on hold
+            until it is approved, and you keep {{ 100 - mockWithdrawalPlatformFeePct }}% of every
+            withdrawal.
+          </p>
 
           <div class="mt-4 flex flex-col gap-2 text-sm">
             <div class="flex items-center justify-between">
@@ -151,8 +198,9 @@ async function submitWithdrawal() {
             >
               <div class="flex items-center gap-3">
                 <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                  <PhPaypalLogo v-if="method.brand === 'paypal'" :size="20" weight="fill" class="text-[#003087]" />
-                  <img v-else :src="visaIcon" alt="" class="h-7 w-7" />
+                  <img v-if="brandIcon(method.brand)" :src="brandIcon(method.brand)!" alt="" class="h-7 w-7" />
+                  <PhBank v-else-if="method.brand === 'bank'" :size="20" weight="fill" class="text-gray-800" />
+                  <PhCreditCard v-else :size="20" weight="fill" class="text-gray-800" />
                 </div>
                 <div>
                   <p class="font-medium text-white">{{ method.label }}</p>
@@ -170,15 +218,15 @@ async function submitWithdrawal() {
 
           <button
             type="button"
-            disabled
-            class="mt-3 w-full cursor-not-allowed rounded-xl border border-dashed border-white/15 py-3 text-sm font-medium text-brand-400"
+            class="mt-3 w-full cursor-pointer rounded-xl border border-dashed border-white/15 py-3 text-sm font-medium text-brand-400 transition-colors hover:border-brand-400/50 hover:bg-white/5"
+            @click="addingMethod = true"
           >
             + Add payout method
           </button>
 
           <p class="mt-4 text-sm">
             <span class="font-medium text-brand-400">Platform fee: {{ mockWithdrawalPlatformFeePct }}%</span>
-            <span class="text-slate-400"> · Arrives in 1-3 business days</span>
+            <span class="text-slate-400"> · Arrives in 1-3 business days once approved</span>
           </p>
 
           <UButton
@@ -209,17 +257,19 @@ async function submitWithdrawal() {
                 <p class="text-sm text-slate-400">
                   {{ formatDate(withdrawal.createdAt) }} · {{ methodLabel(withdrawal.payoutMethodId) }}
                 </p>
+                <p v-if="withdrawal.reference" class="font-mono text-xs text-slate-500">
+                  {{ withdrawal.reference }}
+                </p>
               </div>
-              <span
-                class="shrink-0 text-sm font-medium"
-                :class="withdrawal.status === 'paid' ? 'text-brand-400' : 'text-amber-400'"
-              >
-                {{ withdrawal.status === 'paid' ? 'Paid' : 'In progress' }}
+              <span class="shrink-0 text-sm font-medium" :class="withdrawalStatusMeta[withdrawal.status].class">
+                {{ withdrawalStatusMeta[withdrawal.status].label }}
               </span>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <AddPayoutMethodModal v-model:open="addingMethod" @added="onMethodAdded" />
   </div>
 </template>

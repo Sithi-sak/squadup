@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { PhCamera, PhFilmSlate, PhSmiley, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import CreatePostModal from '@/components/modals/CreatePostModal.vue'
 import FeedPostCard from '@/components/feed/FeedPostCard.vue'
 import FeedPostThread from '@/components/feed/FeedPostThread.vue'
+import PostAuthorMenu from '@/components/feed/PostAuthorMenu.vue'
 import SuggestedPalsCard from '@/components/feed/SuggestedPalsCard.vue'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
+import { useAuthStore } from '@/stores/auth'
+import { userErrorMessage } from '@/utils/errors'
 import type { PlayerSummary } from '@/stores/players'
 import { formatTimeAgo } from '@/utils/timeAgo'
 import { resolveAvatarUrl } from '@/utils/avatar'
@@ -22,10 +25,13 @@ const props = defineProps<{
 
 /** Re-emitted for the own-profile pages that show a post count in their own header
  * (`MyProfileView`) - the tab owns the composer, but not the header. */
-const emit = defineEmits<{ created: [post: FeedPost] }>()
+const emit = defineEmits<{ created: [post: FeedPost]; deleted: [postId: string] }>()
 
 const feedStore = useFeedStore()
+const authStore = useAuthStore()
 const toast = useToast()
+
+const currentUserId = computed(() => authStore.user?.id ?? null)
 
 /** Local copy so a like toggle can patch in place without the parent's `profile.feed` (loaded
  * once via `usePlayerProfileData`) needing its own mutation path. */
@@ -38,9 +44,41 @@ watch(
 const createPostOpen = ref(false)
 const activePostId = ref<string | null>(null)
 
+const editingPost = ref<FeedPost | null>(null)
+const editModalOpen = ref(false)
+
 function onPostCreated(post: FeedPost) {
   localFeed.value.unshift(post)
   emit('created', post)
+}
+
+function openEdit(post: FeedPost) {
+  editingPost.value = post
+  editModalOpen.value = true
+}
+
+function onPostUpdated(updated: FeedPost) {
+  const index = localFeed.value.findIndex((p) => p.id === updated.id)
+  if (index !== -1) localFeed.value[index] = updated
+}
+
+function onPostDeleted(postId: string) {
+  localFeed.value = localFeed.value.filter((p) => p.id !== postId)
+  emit('deleted', postId)
+}
+
+async function deletePost(post: FeedPost) {
+  try {
+    await feedStore.deletePost(post.id)
+    onPostDeleted(post.id)
+    toast.add({ title: 'Post deleted', color: 'success' })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't delete post",
+      description: userErrorMessage(err, 'Please try again.'),
+      color: 'error',
+    })
+  }
 }
 
 async function toggleLike(post: FeedPost) {
@@ -72,7 +110,7 @@ async function toggleLike(post: FeedPost) {
         v-if="activePostId"
         :post-id="activePostId"
         @back="activePostId = null"
-        @deleted="localFeed = localFeed.filter((p) => p.id !== $event)"
+        @deleted="onPostDeleted"
       />
 
       <template v-else>
@@ -138,6 +176,7 @@ async function toggleLike(post: FeedPost) {
           v-model:open="createPostOpen"
           @created="onPostCreated"
         />
+        <CreatePostModal v-model:open="editModalOpen" :post="editingPost" @updated="onPostUpdated" />
 
         <p v-if="localFeed.length === 0" class="py-10 text-center text-sm text-slate-400">
           {{ isOwnProfile ? "You haven't" : `${player.displayName} hasn't` }} posted anything yet.
@@ -165,7 +204,11 @@ async function toggleLike(post: FeedPost) {
           :kind="post.kind"
           @toggle-like="toggleLike(post)"
           @open-comments="activePostId = post.id"
-        />
+        >
+          <template v-if="post.authorId === currentUserId && post.kind !== 'status'" #action>
+            <PostAuthorMenu @edit="openEdit(post)" @delete="deletePost(post)" />
+          </template>
+        </FeedPostCard>
       </template>
     </div>
 

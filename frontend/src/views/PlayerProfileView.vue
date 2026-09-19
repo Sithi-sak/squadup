@@ -192,6 +192,7 @@ const selectedReviews = computed(() => profile.value.reviews[selectedServiceId.v
           :handle="profile.handle"
           :feed="profile.feed"
           :is-own-profile="isOwnProfile"
+          @deleted="profile.postsCount = Math.max(0, profile.postsCount - 1)"
         >
           <template #aside>
             <ProfileAboutCard

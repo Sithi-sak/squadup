@@ -156,6 +156,7 @@ function copyUsername() {
           :feed="posts"
           is-own-profile
           @created="profile.postsCount += 1"
+          @deleted="profile.postsCount = Math.max(0, profile.postsCount - 1)"
         />
         <EmptyState
           v-else-if="activeTab === 'album'"

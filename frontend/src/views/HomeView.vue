@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   PhStar,
@@ -12,6 +12,10 @@ import { usePlayersStore } from '@/stores/players'
 import { useEstarsStore } from '@/stores/estars'
 import PlayerCard from '@/components/players/PlayerCard.vue'
 import homeSpotlightImage from '@/assets/home-rec.jpg'
+import heroImage1 from '@/assets/hero-1.jpg'
+import heroImage2 from '@/assets/hero-2.jpg'
+import heroImage3 from '@/assets/hero-3.jpg'
+import heroImage4 from '@/assets/hero-4.jpg'
 import gamesTileImage from '@/assets/game.jpg'
 import chillingTileImage from '@/assets/chilling.jpg'
 import allServiceTileImage from '@/assets/all_service.jpg'
@@ -40,6 +44,29 @@ const tiles = [
   { label: 'Chilling', to: { path: '/services', query: { tab: 'chilling' } }, image: chillingTileImage },
   { label: 'All Services', to: '/services', image: allServiceTileImage },
 ]
+
+const heroSlides = [homeSpotlightImage, heroImage1, heroImage2, heroImage3, heroImage4]
+const heroIndex = ref(0)
+const heroPaused = ref(false)
+let heroTimer: ReturnType<typeof setInterval> | undefined
+
+function goToSlide(index: number) {
+  heroIndex.value = (index + heroSlides.length) % heroSlides.length
+  restartHeroTimer()
+}
+
+function restartHeroTimer() {
+  if (heroTimer) clearInterval(heroTimer)
+  heroTimer = setInterval(() => {
+    if (!heroPaused.value) heroIndex.value = (heroIndex.value + 1) % heroSlides.length
+  }, 5000)
+}
+
+onMounted(restartHeroTimer)
+
+onBeforeUnmount(() => {
+  if (heroTimer) clearInterval(heroTimer)
+})
 
 const eStars = computed(() =>
   [...allPlayers.value].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 4),
@@ -83,16 +110,30 @@ function goToProfile(id: string) {
     <section v-if="spotlight" class="px-4 pt-8 md:px-6">
       <div class="mx-auto max-w-4/5">
         <div
-          class="grid overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900/50 to-squadup-bg ring-0 ring-inset ring-white/10 md:grid-cols-2"
+          class="relative grid overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900/60 via-squadup-bg to-squadup-bg ring-1 ring-inset ring-white/10 md:grid-cols-2"
         >
-          <div class="flex flex-col justify-center gap-4 p-8 md:p-10">
-            <span
-              class="inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-sm font-medium text-brand-300"
+          <div
+            class="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-brand-500/20 blur-3xl"
+          />
+          <div class="relative flex flex-col justify-center gap-4 p-8 md:p-10">
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                class="inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-sm font-medium text-brand-300 ring-1 ring-inset ring-brand-500/30"
+              >
+                <PhStar :size="16" weight="fill" />
+                eStar of the Week
+              </span>
+              <span
+                v-if="spotlight.rating"
+                class="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-sm font-medium text-slate-200 ring-1 ring-inset ring-white/10"
+              >
+                <PhStar :size="14" weight="fill" class="text-amber-400" />
+                {{ spotlight.rating }}
+              </span>
+            </div>
+            <h1
+              class="bg-gradient-to-r from-white to-brand-200 bg-clip-text text-4xl font-extrabold text-transparent md:text-5xl"
             >
-              <PhStar :size="16" weight="fill" />
-              eStar of the Week
-            </span>
-            <h1 class="text-4xl font-extrabold text-white md:text-5xl">
               {{ spotlight.displayName }}
             </h1>
             <p class="max-w-120 text-md leading-relaxed text-slate-300">
@@ -101,18 +142,55 @@ function goToProfile(id: string) {
             </p>
             <UButton
               color="primary"
-              class="w-fit rounded-full px-5"
+              class="w-fit rounded-full px-5 shadow-lg shadow-brand-900/40 transition-transform hover:scale-105"
               @click="goToProfile(spotlight.id)"
             >
               Check profile
             </UButton>
           </div>
-          <div class="min-h-50">
+          <div
+            class="group relative min-h-50 overflow-hidden"
+            @mouseenter="heroPaused = true"
+            @mouseleave="heroPaused = false"
+          >
             <img
-              :src="homeSpotlightImage"
-              alt="Featured Pals streaming a Valorant duo session"
-              class="h-full w-full object-cover"
+              v-for="(slide, index) in heroSlides"
+              :key="slide"
+              :src="slide"
+              alt="Featured Pals streaming a gaming session"
+              class="absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ease-in-out"
+              :class="index === heroIndex ? 'opacity-100' : 'opacity-0'"
             />
+            <div
+              class="pointer-events-none absolute inset-0 bg-gradient-to-r from-squadup-bg/80 via-transparent to-transparent md:block hidden"
+            />
+            <button
+              type="button"
+              aria-label="Previous image"
+              class="absolute left-3 top-1/2 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-squadup-dark/60 text-white opacity-0 transition-opacity hover:bg-squadup-dark/80 group-hover:opacity-100"
+              @click="goToSlide(heroIndex - 1)"
+            >
+              <PhCaretLeft :size="16" weight="bold" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next image"
+              class="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-squadup-dark/60 text-white opacity-0 transition-opacity hover:bg-squadup-dark/80 group-hover:opacity-100"
+              @click="goToSlide(heroIndex + 1)"
+            >
+              <PhCaretRight :size="16" weight="bold" />
+            </button>
+            <div class="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2">
+              <button
+                v-for="(slide, index) in heroSlides"
+                :key="`dot-${slide}`"
+                type="button"
+                :aria-label="`Show image ${index + 1}`"
+                class="h-1.5 cursor-pointer rounded-full transition-all"
+                :class="index === heroIndex ? 'w-6 bg-brand-400' : 'w-1.5 bg-white/50 hover:bg-white/80'"
+                @click="goToSlide(index)"
+              />
+            </div>
           </div>
         </div>
       </div>

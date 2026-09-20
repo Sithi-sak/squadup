@@ -115,7 +115,7 @@ function goToProfile(id: string) {
           <div
             class="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-brand-500/20 blur-3xl"
           />
-          <div class="relative flex flex-col justify-center gap-4 p-8 md:p-10">
+          <div class="relative flex flex-col justify-center gap-4 p-8 md:p-12">
             <div class="flex flex-wrap items-center gap-2">
               <span
                 class="inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-900/60 px-3 py-1 text-sm font-medium text-brand-300 ring-1 ring-inset ring-brand-500/30"
@@ -149,7 +149,7 @@ function goToProfile(id: string) {
             </UButton>
           </div>
           <div
-            class="group relative min-h-50 overflow-hidden"
+            class="group relative min-h-96 overflow-hidden"
             @mouseenter="heroPaused = true"
             @mouseleave="heroPaused = false"
           >

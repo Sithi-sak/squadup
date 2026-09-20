@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import {
@@ -7,8 +7,8 @@ import {
   PhDotsThree,
   PhMagnifyingGlass,
   PhPaperclip,
-  PhSmiley,
   PhUserCircle,
+  PhX,
 } from '@phosphor-icons/vue'
 import { useMessagesStore, type MessageThread } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
@@ -16,6 +16,11 @@ import { mockCurrentUser } from '@/mocks/users'
 import { mockPlayers } from '@/mocks/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { userErrorMessage } from '@/utils/errors'
+import { compressImage } from '@/utils/image'
+
+/** Rejected before any decode work - the `message-images` bucket caps uploads at 8MB, and
+ * compression only shrinks what it can actually read. */
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 defineProps<{
   title: string
@@ -182,13 +187,99 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
+// Attachment ------------------------------------------------------------------------------
+
+const fileInput = ref<HTMLInputElement | null>(null)
+/** The picked image, already downscaled - `compressImage` runs at pick time rather than at send
+ * time so the wait lands while the user is still typing, not after they hit Send. */
+const attachment = ref<File | null>(null)
+const attachmentPreview = ref<string | null>(null)
+const compressing = ref(false)
+
+function clearAttachment() {
+  if (attachmentPreview.value) URL.revokeObjectURL(attachmentPreview.value)
+  attachmentPreview.value = null
+  attachment.value = null
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+onBeforeUnmount(clearAttachment)
+
+async function onFilePicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.add({ title: 'Only images can be attached', color: 'error' })
+    return
+  }
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    toast.add({
+      title: 'That image is too large',
+      description: 'Pick one under 25MB.',
+      color: 'error',
+    })
+    return
+  }
+
+  clearAttachment()
+  compressing.value = true
+  try {
+    const compressed = await compressImage(file)
+    attachment.value = compressed
+    attachmentPreview.value = URL.createObjectURL(compressed)
+  } finally {
+    compressing.value = false
+  }
+}
+
+// Transcript ------------------------------------------------------------------------------
+
+const transcript = ref<HTMLElement | null>(null)
+
+function scrollToBottom() {
+  const el = transcript.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+// Covers the first paint of a conversation, every incoming realtime message and every sent one.
+// `loadEarlier` prepends instead of appending, so it deliberately isn't in this count.
+watch(
+  () => [store.activeThreadId, store.activeMessages.length],
+  () => {
+    void nextTick(scrollToBottom)
+  },
+)
+
+async function handleLoadEarlier() {
+  const el = transcript.value
+  const before = el?.scrollHeight ?? 0
+  try {
+    await store.loadEarlier()
+  } catch (err) {
+    toast.add({
+      title: "Couldn't load earlier messages",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+    return
+  }
+  // Keeps the message the user was reading where it was, instead of yanking the view to the top
+  // of the newly prepended page.
+  await nextTick()
+  if (el) el.scrollTop = el.scrollHeight - before
+}
+
 async function handleSend() {
-  if (!draft.value.trim() || sending.value) return
-  const body = draft.value
+  const body = draft.value.trim()
+  const image = attachment.value
+  if ((!body && !image) || sending.value || compressing.value) return
   sending.value = true
   try {
-    await store.sendMessage(body)
+    await store.sendMessage({ body, image })
     draft.value = ''
+    clearAttachment()
   } catch (err) {
     toast.add({
       title: "Couldn't send message",
@@ -249,7 +340,9 @@ async function handleSend() {
             class="py-10 text-white"
           >
             <template #actions>
-              <UButton color="primary" class="rounded-full" @click="store.fetchThreads()">Retry</UButton>
+              <UButton color="primary" class="rounded-full" @click="store.fetchThreads()"
+                >Retry</UButton
+              >
             </template>
           </UEmpty>
 
@@ -271,7 +364,12 @@ async function handleSend() {
                 @click.stop="goToProfile(thread.participantId)"
               >
                 <UAvatar
-                  :src="resolveAvatarUrl(thread.participantId, participant(thread.participantId)?.avatarUrl)"
+                  :src="
+                    resolveAvatarUrl(
+                      thread.participantId,
+                      participant(thread.participantId)?.avatarUrl,
+                    )
+                  "
                   size="md"
                   class="bg-white/10 text-slate-300"
                 >
@@ -297,7 +395,10 @@ async function handleSend() {
               <div class="flex shrink-0 flex-col items-end gap-1.5">
                 <div class="flex items-center gap-1">
                   <span class="text-xs text-slate-500">{{ formatRelative(thread.updatedAt) }}</span>
-                  <UDropdownMenu :items="threadMenuItems(thread)" :content="{ side: 'bottom', align: 'end' }">
+                  <UDropdownMenu
+                    :items="threadMenuItems(thread)"
+                    :content="{ side: 'bottom', align: 'end' }"
+                  >
                     <UButton
                       color="neutral"
                       variant="ghost"
@@ -345,28 +446,29 @@ async function handleSend() {
             class="flex items-center gap-3"
           >
             <UAvatar
-              :src="resolveAvatarUrl(store.activeThread.participantId, activeParticipant?.avatarUrl)"
+              :src="
+                resolveAvatarUrl(store.activeThread.participantId, activeParticipant?.avatarUrl)
+              "
               size="md"
               class="bg-white/10 text-slate-300"
             >
               <PhUserCircle :size="22" />
             </UAvatar>
             <div>
-              <p class="font-semibold text-white hover:underline">{{ store.activeThread.participantDisplayName }}</p>
+              <p class="font-semibold text-white hover:underline">
+                {{ store.activeThread.participantDisplayName }}
+              </p>
               <p class="text-sm text-slate-400">
-                <span v-if="activeParticipant?.games?.[0]">{{ activeParticipant.games[0] }} · </span>
+                <span v-if="activeParticipant?.games?.[0]"
+                  >{{ activeParticipant.games[0] }} ·
+                </span>
                 {{ activeParticipant?.online ? 'Online' : 'Offline' }}
               </p>
             </div>
           </router-link>
-          <div class="flex items-center gap-1.5">
-            <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="More">
-              <PhDotsThree :size="24" />
-            </UButton>
-          </div>
         </div>
 
-        <div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <div ref="transcript" class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div
             v-if="store.messagesLoading && store.activeMessages.length === 0"
             class="py-10 text-center text-sm text-slate-400"
@@ -382,26 +484,60 @@ async function handleSend() {
             class="py-10 text-white"
           >
             <template #actions>
-              <UButton color="primary" class="rounded-full" @click="store.selectThread(store.activeThread.id)">
+              <UButton
+                color="primary"
+                class="rounded-full"
+                @click="store.selectThread(store.activeThread.id)"
+              >
                 Retry
               </UButton>
             </template>
           </UEmpty>
 
           <template v-else>
+            <div v-if="store.activeHasMore" class="flex justify-center">
+              <UButton
+                color="neutral"
+                variant="soft"
+                size="sm"
+                class="rounded-full"
+                :loading="store.loadingEarlier"
+                @click="handleLoadEarlier"
+              >
+                Load earlier messages
+              </UButton>
+            </div>
+
             <div
               v-for="message in store.activeMessages"
               :key="message.id"
               class="flex flex-col"
               :class="message.senderId === currentUserId ? 'items-end' : 'items-start'"
             >
+              <a
+                v-if="message.imageUrl"
+                :href="message.imageUrl"
+                target="_blank"
+                rel="noopener"
+                class="max-w-[75%] overflow-hidden rounded-2xl ring-1 ring-white/10"
+              >
+                <img
+                  :src="message.imageUrl"
+                  alt="Shared image"
+                  loading="lazy"
+                  class="max-h-80 w-full object-cover"
+                  @load="scrollToBottom"
+                />
+              </a>
               <div
+                v-if="message.body"
                 class="max-w-[75%] rounded-full px-4 py-2.5 text-sm"
-                :class="
+                :class="[
                   message.senderId === currentUserId
                     ? 'bg-brand-600 text-white'
-                    : 'bg-white/10 text-slate-100'
-                "
+                    : 'bg-white/10 text-slate-100',
+                  message.imageUrl ? 'mt-1.5' : '',
+                ]"
               >
                 {{ message.body }}
               </div>
@@ -410,27 +546,73 @@ async function handleSend() {
           </template>
         </div>
 
-        <div class="flex items-center gap-2 border-t border-white/10 px-4 py-3">
-          <UButton color="neutral" variant="ghost" square :ui="{ base: 'rounded-full' }" aria-label="Attach">
-            <PhPaperclip :size="24" />
-          </UButton>
-          <UInput
-            v-model="draft"
-            :placeholder="`Message ${store.activeThread.participantDisplayName}...`"
-            variant="subtle"
-            size="lg"
-            class="flex-1 rounded-full"
-            :ui="{ base: 'rounded-full' }"
-            :disabled="sending"
-            @keyup.enter="handleSend"
-          >
-            <template #trailing>
-              <PhSmiley :size="24" class="text-slate-400" />
-            </template>
-          </UInput>
-          <UButton color="primary" size="lg" class="rounded-full px-5" :loading="sending" @click="handleSend">
-            Send
-          </UButton>
+        <div class="border-t border-white/10 px-4 py-3">
+          <div v-if="compressing || attachmentPreview" class="mb-2 flex items-center gap-3">
+            <div class="relative">
+              <div
+                v-if="compressing"
+                class="flex h-16 w-16 items-center justify-center rounded-lg bg-white/5 text-xs text-slate-400"
+              >
+                Resizing
+              </div>
+              <img
+                v-else-if="attachmentPreview"
+                :src="attachmentPreview"
+                alt="Attachment preview"
+                class="h-16 w-16 rounded-lg object-cover ring-1 ring-white/10"
+              />
+              <button
+                v-if="attachmentPreview"
+                type="button"
+                class="absolute -top-1.5 -right-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-gray-900 text-slate-300 ring-1 ring-white/20 hover:text-white"
+                aria-label="Remove attachment"
+                @click="clearAttachment"
+              >
+                <PhX :size="12" />
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input
+              ref="fileInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="onFilePicked"
+            />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              square
+              :ui="{ base: 'rounded-full' }"
+              aria-label="Attach an image"
+              :disabled="compressing"
+              @click="fileInput?.click()"
+            >
+              <PhPaperclip :size="24" />
+            </UButton>
+            <UInput
+              v-model="draft"
+              :placeholder="`Message ${store.activeThread.participantDisplayName}...`"
+              variant="subtle"
+              size="lg"
+              class="flex-1 rounded-full"
+              :ui="{ base: 'rounded-full' }"
+              :disabled="sending"
+              @keyup.enter="handleSend"
+            />
+            <UButton
+              color="primary"
+              size="lg"
+              class="rounded-full px-5"
+              :loading="sending"
+              :disabled="compressing"
+              @click="handleSend"
+            >
+              Send
+            </UButton>
+          </div>
         </div>
       </div>
 

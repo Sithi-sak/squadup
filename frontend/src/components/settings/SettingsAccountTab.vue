@@ -19,11 +19,9 @@ const username = ref(authStore.user?.handle ?? '')
 const email = computed(() => authStore.user?.email ?? mockCurrentUser.email)
 const phone = ref(authStore.user?.phone ?? '')
 const country = ref(authStore.user?.country ?? '')
-const language = ref(profile.value?.language ?? 'English')
 const timezone = ref(profile.value?.timezone ?? 'GMT+07:00 · Phnom Penh')
 
 const countryOptions = ['Cambodia', 'Vietnam', 'Philippines', 'Singapore', 'Indonesia', 'Malaysia']
-const languageOptions = ['English', 'Khmer', 'Vietnamese']
 const timezoneOptions = ['GMT+06:30', 'GMT+07:00 · Phnom Penh', 'GMT+08:00', 'GMT+09:00']
 
 const accountType = computed(() =>
@@ -70,8 +68,17 @@ async function saveAccountDetails() {
         </div>
         <div class="flex flex-col gap-2">
           <label for="account-email" class="text-sm text-slate-300">Email</label>
-          <UInput id="account-email" :model-value="email" type="email" disabled variant="subtle" size="lg" />
-          <p class="text-xs text-slate-500">Changing your email requires verification, coming soon.</p>
+          <UInput
+            id="account-email"
+            :model-value="email"
+            type="email"
+            disabled
+            variant="subtle"
+            size="lg"
+          />
+          <p class="text-xs text-slate-500">
+            Changing your email requires verification, coming soon.
+          </p>
         </div>
         <div class="flex flex-col gap-2">
           <label for="account-phone" class="text-sm text-slate-300">Phone</label>
@@ -79,21 +86,33 @@ async function saveAccountDetails() {
         </div>
         <div class="flex flex-col gap-2">
           <label for="account-country" class="text-sm text-slate-300">Country / Region</label>
-          <USelect id="account-country" v-model="country" :items="countryOptions" variant="subtle" size="lg" />
+          <USelect
+            id="account-country"
+            v-model="country"
+            :items="countryOptions"
+            variant="subtle"
+            size="lg"
+          />
         </div>
         <div class="flex flex-col gap-2">
-          <label for="account-language" class="text-sm text-slate-300">Language</label>
-          <USelect id="account-language" v-model="language" :items="languageOptions" variant="subtle" size="lg" />
+          <label for="account-timezone" class="text-sm text-slate-300">Timezone</label>
+          <USelect
+            id="account-timezone"
+            v-model="timezone"
+            :items="timezoneOptions"
+            variant="subtle"
+            size="lg"
+          />
         </div>
-      </div>
-
-      <div class="mt-5 flex flex-col gap-2 sm:w-[calc(50%-0.625rem)]">
-        <label for="account-timezone" class="text-sm text-slate-300">Timezone</label>
-        <USelect id="account-timezone" v-model="timezone" :items="timezoneOptions" variant="subtle" size="lg" />
       </div>
 
       <div class="mt-5 flex justify-end">
-        <UButton color="primary" :loading="savingAccount" class="rounded-full px-6" @click="saveAccountDetails">
+        <UButton
+          color="primary"
+          :loading="savingAccount"
+          class="rounded-full px-6"
+          @click="saveAccountDetails"
+        >
           Save changes
         </UButton>
       </div>

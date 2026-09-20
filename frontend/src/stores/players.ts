@@ -109,6 +109,9 @@ export interface PlayerProfile {
    * in `stores/messages.ts`). Absent on mock/seed profiles that don't back a real account. */
   userId?: string | null
   handle: string
+  /** The Pal's "About" paragraph (4.50). Optional so the authored mock fixtures, which only
+   * ever carried the one-line `tagline`, don't each have to add one. */
+  bio?: string | null
   timezone: string
   language: string
   tier: string
@@ -156,6 +159,8 @@ export interface MyPlayerProfile {
   displayName: string
   avatarUrl: string | null
   tagline: string | null
+  /** The longer "About" paragraph under the tagline, edited on Settings' Profile tab (4.50). */
+  bio: string | null
   timezone: string | null
   language: string | null
   tier: string | null
@@ -225,6 +230,7 @@ export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
     id: p.id,
     userId: p.userId,
     handle: p.handle ?? `@${p.id.slice(0, 10)}`,
+    bio: p.bio,
     timezone: p.timezone ?? 'GMT+00:00',
     language: p.language ?? p.languages[0] ?? 'English',
     tier: p.tier ?? 'Pal 1',
@@ -246,9 +252,8 @@ export function playerProfileFromDetail(p: MyPlayerProfile): PlayerProfile {
 }
 
 /** `GET /players/me/earnings` response shape (backend's `EarningsOut`, 3.7) - everything
- * derivable from the Pal's own completed bookings. Payout method/schedule/history/pending
- * clearance stay on `mocks/dashboardStats.ts` for now since those need a real payout ledger
- * (3.9), not just booking history. */
+ * derivable from the Pal's own completed bookings, plus their stored `payoutSchedule` and the
+ * next run it implies (4.51). Payout method and history come from the wallet store (3.9). */
 export interface PlayerEarnings {
   lifetimeEarnedCoins: number
   lifetimeEarnedChangePct: number | null
@@ -259,6 +264,10 @@ export interface PlayerEarnings {
   responseRatePct: number
   earningsThisWeek: { label: string; coins: number }[]
   earningsOverview: { label: string; coins: number }[]
+  /** Enum value as stored: 'weekly' | 'bi_weekly' | 'monthly'. */
+  payoutSchedule: string
+  /** ISO date of the next payout run implied by `payoutSchedule`. */
+  nextPayoutDate: string
 }
 
 /** `GET /reviews/player/{id}` response shape (backend's `ReviewOut`, grouped by `serviceId`). */
@@ -397,6 +406,23 @@ export const usePlayersStore = defineStore('players', () => {
   /** Settings' Profile tab "Change photo" (`PATCH /players/me/avatar`, multipart). Response
    * replaces `mine` directly (no `fetchMine` refetch needed) so every place reading
    * `playersStore.mine.avatarUrl` (feed sidebar, dashboards, post composer) updates at once. */
+  /** Settings' Profile tab "Save changes" (`PATCH /players/me`). Display name is not part of
+   * this - it belongs to the Account tab's `PATCH /users/me`, which mirrors it onto the player
+   * row. Response replaces `mine` the same way `updateAvatar` does. */
+  async function updateMine(updates: {
+    tagline?: string
+    bio?: string
+    languages?: string[]
+    payoutSchedule?: string
+  }) {
+    mine.value = await api.patch<MyPlayerProfile>('/players/me', updates)
+    // `payoutSchedule` isn't on `PlayerDetailOut` (it would ride along on every public profile
+    // response) - it lives on the earnings payload, together with the `nextPayoutDate` it
+    // implies, so a schedule change refetches that rather than patching one field of it.
+    if (updates.payoutSchedule && earnings.value) await fetchEarnings()
+    return mine.value
+  }
+
   async function updateAvatar(file: File) {
     const formData = new FormData()
     formData.append('avatar', file)
@@ -520,6 +546,7 @@ export const usePlayersStore = defineStore('players', () => {
     mineError,
     fetchMine,
     createMine,
+    updateMine,
     updateAvatar,
     createService,
     updateService,

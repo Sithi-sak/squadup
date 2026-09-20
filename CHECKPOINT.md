@@ -3150,6 +3150,140 @@ kind of Stripe id.
     - [x] 4.48e Verification: `vue-tsc` shows no new errors, `oxlint`/`prettier` clean on the
           touched files. Not run live per [[feedback_no_build_or_run_skill]].
 
+  - [x] 4.49 Chat composer cleanup, image messages and Messages load-speed pass (user request,
+        2026-09-20). The composer's emoji button and the conversation header's kebab were both
+        dead decoration, the paperclip did nothing, and both Messages endpoints read far more
+        rows than the page renders.
+    - [x] 4.49a Migration `20260920090000_message_images.sql`: `messages.image_url` (nullable)
+          plus a relaxed `body` so an image-only message is a real row, a public
+          `message-images` bucket (webp only, same posture as `post-images`), and the two
+          indexes the summaries RPC needs - `(thread_id, created_at desc)` and a partial unread
+          index.
+    - [x] 4.49b Migration `20260920091000_message_thread_summaries.sql`: RPC collapsing
+          `GET /messages/threads`' four round-trips (threads, per-user states, blocks, every
+          message ever sent in any of them) into one - `distinct on` for each thread's last
+          message and a grouped count for unread, with the deleted/blocked filtering done in
+          SQL.
+    - [x] 4.49c Backend `routers/messages.py`: `list_threads` runs the RPC; `list_messages`
+          takes `limit`/`before` and returns the newest page in chronological order, checks
+          membership without the display-name join, and defers the read-marking UPDATE to a
+          background task; `send_message` becomes multipart so an image can ride along, storing
+          it as WebP via `upload_image_as_webp`.
+    - [x] 4.49d Frontend `utils/image.ts` (new): canvas downscale + re-encode before upload, so
+          a phone photo leaves the device at roughly its display size instead of several MB.
+    - [x] 4.49e Frontend `stores/messages.ts`: `sendMessage({ body, image })` posts multipart,
+          `fetchMessages` pages, `loadEarlier` prepends, `selectThread` keeps the cached
+          conversation on screen while it refreshes, and realtime carries `imageUrl`.
+    - [x] 4.49f Frontend `components/messages/MessagesPanel.vue`: emoji button and header kebab
+          removed, paperclip opens a real picker with a removable preview, image bubbles render
+          in the transcript, the pane auto-scrolls to the newest message and a "Load earlier
+          messages" button sits above the first one.
+    - [x] 4.49g Verification: both migrations applied with `bunx supabase db push` and the RPC
+          smoke-tested against the live project through the service-role client (one thread
+          back, correct preview and unread count); the FastAPI app imports and its OpenAPI
+          shows the multipart POST plus the new `limit`/`before` query params. `vue-tsc` shows
+          the same 16 pre-existing errors and no new ones, `oxlint`/`prettier` clean on the
+          touched frontend files, `ruff` clean on `routers/messages.py`. Not run live per
+          [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.50 Settings rename propagation and the Profile/Account tab overlap (user request,
+        2026-09-20). Renaming on the Account tab left the Pal profile page showing the old name,
+        and the Profile tab repeated the same "Display name" input with no Save button under it.
+    - [x] 4.50a Backend `routers/users.py`: `PATCH /users/me` mirrors a `display_name` change
+          onto the Pal's `players` row. `players.display_name` is a second copy that browse
+          cards, search and the profile header all read directly, so a rename that only touched
+          `users` never reached the marketplace. `handle` needs no mirror - it was unified onto
+          `users` back in 4.14.
+    - [x] 4.50b Migration `20260920140000_players_bio.sql`: `players.bio`, the longer About
+          paragraph. Settings has shown a Bio textarea since Phase 1 with no column behind it -
+          `tagline` stays the one-liner on browse cards, `bio` is the paragraph under it.
+    - [x] 4.50c Backend `routers/players.py`: `PATCH /players/me` (tagline, bio, languages) for
+          the Profile tab's save; `display_name` is deliberately not accepted, so renaming has
+          exactly one home. A `languages` edit re-derives the legacy singular `language` column
+          the About card and browse filters still read, same as creation does.
+    - [x] 4.50d Frontend `stores/players.ts`: `bio` on `MyPlayerProfile`/`PlayerProfile` and
+          `updateMine()`, which replaces `mine` from the response like `updateAvatar` does.
+          `ProfileAboutCard.vue` renders the bio under the tagline.
+    - [x] 4.50e Frontend `SettingsProfileTab.vue`: rebuilt as the public-profile editor only -
+          photo, headline, bio, languages (add/remove chips) and a Save changes button that is
+          disabled until something actually changes. The duplicate Display name input is gone,
+          replaced by a line pointing at the Account tab (`@navigate` up to `SettingsView.vue`).
+          The Preferences card (online status, email/push notifications - already owned by the
+          Privacy and Notifications tabs) and the Account & security card (email, region,
+          password, 2FA - already owned by Account and Security) both go; "Instant booking" went
+          with them, never having been wired to anything.
+    - [x] 4.50f Frontend `SettingsAccountTab.vue`: the mock-only "Language" select is dropped
+          now that the Profile tab owns languages for real; Timezone moves up into the grid.
+    - [x] 4.50g Verification: migration applied with `bunx supabase db push`; OpenAPI shows
+          `PATCH /players/me` and `bio` on `PlayerDetailOut`; `ruff` clean on both routers;
+          `vue-tsc` shows the same 16 pre-existing errors and no new ones;
+          `oxlint`/`prettier` clean on the touched frontend files. Not run live per
+          [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.51 "Change payout settings" was a dead disabled button, and the payout schedule next
+        to it was mock text (user request, 2026-09-20).
+    - [x] 4.51a Frontend `views/SettingsView.vue`: the open tab moved from a local `ref` into
+          `?tab=`, so other pages can deep-link into it. Unknown keys and keys the current user
+          has no tab for fall back to the first tab; switching uses `router.replace` so tabs
+          don't pile up in history.
+    - [x] 4.51b Frontend `views/PlayerEarningsView.vue`: the button is enabled and points at
+          `/settings?tab=payments`, which has had a full payout-method manager (add, set
+          default, remove) since 4.32.
+    - [x] 4.51c Backend `routers/players.py`: `_normalize_payout_schedule` maps the hyphenated
+          "bi-weekly" the wizard and the Settings select speak onto the `payout_schedule` enum's
+          `bi_weekly`. This also fixes Become-a-Pal: picking Bi-weekly sent a value the enum
+          rejects, so the insert failed. No migration - `players.payout_schedule` has existed
+          since the initial schema, nothing had ever read it back.
+    - [x] 4.51d Backend `routers/players.py`: `PATCH /players/me` accepts `payout_schedule`, and
+          `EarningsOut` carries `payout_schedule` plus the `next_payout_date` it implies
+          (`_next_payout_date`: Mondays for weekly, even-ISO-week Mondays for bi-weekly, the 1st
+          for monthly). The date is derived backend-side so the Dashboard and Earnings pages
+          can't drift. It stays off `PlayerDetailOut` deliberately - that shape is also the
+          public `GET /players/{id}` response.
+    - [x] 4.51e Frontend `stores/players.ts`: `payoutSchedule`/`nextPayoutDate` on
+          `PlayerEarnings`, and `updateMine()` takes `payoutSchedule` and refetches earnings
+          after one (the next payout date moves with it).
+    - [x] 4.51f Frontend `SettingsPaymentsTab.vue`: the Payout schedule select reads through to
+          the saved value instead of a hardcoded "Weekly" and persists on change with a toast on
+          either outcome. The "Daily" option is gone - the enum has no such value.
+          `PlayerEarningsView.vue`'s Schedule and Next payout rows now read the API instead of
+          `mocks/dashboardStats.ts`, which this page no longer imports.
+    - [x] 4.51g Verification: `_next_payout_date`/`_normalize_payout_schedule` smoke-tested
+          directly over all three schedules either side of a Monday; `ruff` clean on
+          `routers/players.py`; `vue-tsc` shows the same 16 pre-existing errors and no new ones;
+          `oxlint`/`prettier` clean on the touched frontend files (`PlayerEarningsView.vue` was
+          not prettier-clean at HEAD, so its diff carries a whole-file reindent). Not run live
+          per [[feedback_no_build_or_run_skill]].
+
+  - [x] 4.52 Account deletion left every uploaded file behind in Storage (user request,
+        2026-09-20). `DELETE /users/me` relied entirely on the 3.13c FK cascade, which is
+        complete for rows but never reaches `storage.objects`.
+    - [x] 4.52a Audit first: every FK into `users`/`players` across all migrations does cascade
+          (or `set null` on `admin_flags.reported_by`, deliberately), and `auth.admin.delete_user`
+          defaults to a hard delete, so the row side needed no change. The gap was five buckets -
+          `avatars`, `post-images`, `message-images`, `service-covers` (all public, so their URLs
+          kept serving after the account was gone) and the private `id-documents`, which holds
+          the KYC ID scans.
+    - [x] 4.52b Backend `core/storage.py`: `remove_prefix(bucket, prefix)` deletes everything one
+          level under `prefix/` and returns the count. Every upload path in the app is
+          `{owner_id}/{file}`, so one listing per prefix covers it; it re-lists after each batch
+          because Storage caps a listing at 100 rows. An empty prefix or one containing `/` is a
+          `ValueError` - the empty prefix would list the bucket root and delete every account's
+          files, so that can't be reachable by accident.
+    - [x] 4.52c Backend `routers/users.py`: `delete_me` sweeps the four user-keyed buckets plus
+          `service-covers` under the Pal's `player_id` (covers belong to the player row, not the
+          account), then deletes the auth user. Per-bucket failures are logged and skipped rather
+          than raised - being unable to delete your account because of one stray file is the
+          worse outcome, and the rows naming those files are gone either way.
+    - [x] 4.52d No other account is affected: only `{owner_id}/` prefixes are ever passed in, and
+          every file removed is one whose owning row (post, message, service, player) the cascade
+          deletes in the same request, so nothing that survives can point at a missing image.
+    - [x] 4.52e Verification: `remove_prefix` exercised live against the `avatars` bucket on the
+          linked project with a throwaway `zz-selftest-<uuid>` prefix - 3 files uploaded, 3
+          removed, prefix empty afterwards, and both guard cases (`''`, `'a/b'`) raise. OpenAPI
+          still shows `DELETE /users/me`; `ruff` clean on `core/storage.py` and `routers/users.py`.
+          Not run live in the app per [[feedback_no_build_or_run_skill]].
+
 ---
 
 ## Cut list (only if time runs out)

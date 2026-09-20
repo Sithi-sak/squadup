@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import SettingsNav from '@/components/settings/SettingsNav.vue'
 import SettingsProfileTab from '@/components/settings/SettingsProfileTab.vue'
 import SettingsAccountTab from '@/components/settings/SettingsAccountTab.vue'
@@ -21,7 +22,23 @@ const tabs = computed(() => [
   { key: 'security', label: 'Security' },
 ])
 
-const activeTab = ref(isPal.value ? 'profile' : 'account')
+const route = useRoute()
+const router = useRouter()
+
+/** The open tab lives in `?tab=` so other pages can deep-link into it (e.g. the Earnings page's
+ * "Change payout settings" button -> `/settings?tab=payments`). An unknown or missing key falls
+ * back to the first tab the current user has. */
+const activeTab = computed({
+  get() {
+    const key = route.query.tab
+    const fallback = isPal.value ? 'profile' : 'account'
+    if (typeof key !== 'string') return fallback
+    return tabs.value.some((t) => t.key === key) ? key : fallback
+  },
+  set(key: string) {
+    router.replace({ query: { ...route.query, tab: key } })
+  },
+})
 </script>
 
 <template>
@@ -35,7 +52,7 @@ const activeTab = ref(isPal.value ? 'profile' : 'account')
       <SettingsNav v-model:active="activeTab" :tabs="tabs" />
 
       <div class="min-w-0">
-        <SettingsProfileTab v-if="activeTab === 'profile'" />
+        <SettingsProfileTab v-if="activeTab === 'profile'" @navigate="activeTab = $event" />
         <SettingsAccountTab v-else-if="activeTab === 'account'" />
         <SettingsNotificationsTab v-else-if="activeTab === 'notifications'" />
         <SettingsPaymentsTab v-else-if="activeTab === 'payments'" />

@@ -17,6 +17,7 @@ import {
   createReviewStepData,
   createVerifyStepData,
 } from '@/components/become-player/types'
+import { compressImage } from '@/utils/image'
 import { usePlayersStore } from '@/stores/players'
 import { useAuthStore } from '@/stores/auth'
 
@@ -54,9 +55,27 @@ function handleStepBack() {
   currentStep.value = Math.max(currentStep.value - 1, 1)
 }
 
-async function handleSubmit() {
-  submitting.value = true
-  submitError.value = null
+/** A phone camera shot is routinely bigger than the `avatars` bucket's 5MB limit, and the
+ * backend re-encodes everything anyway - compressing here keeps the upload off a slow connection
+ * for minutes and out of that limit. ID photos go out as JPEG (the `id-documents` bucket takes
+ * png/jpeg/pdf only) and keep more resolution, since a reviewer has to read the card. */
+async function compressUploads() {
+  const [avatar, idFront, idBack] = await Promise.all([
+    accountData.value.avatarFile
+      ? compressImage(accountData.value.avatarFile, { maxDimension: 1024 })
+      : null,
+    verifyData.value.idFrontFile
+      ? compressImage(verifyData.value.idFrontFile, { maxDimension: 1920, type: 'image/jpeg' })
+      : null,
+    verifyData.value.idBackFile
+      ? compressImage(verifyData.value.idBackFile, { maxDimension: 1920, type: 'image/jpeg' })
+      : null,
+  ])
+  return { avatar, idFront, idBack }
+}
+
+async function buildFormData() {
+  const { avatar, idFront, idBack } = await compressUploads()
 
   const formData = new FormData()
   formData.append('display_name', accountData.value.displayName)
@@ -73,11 +92,18 @@ async function handleSubmit() {
     JSON.stringify(ratesData.value.rates.map((rate) => ({ game: rate.game, price: rate.price }))),
   )
   formData.append('offer_first_order_free', String(ratesData.value.offerFirstOrderFree))
-  if (accountData.value.avatarFile) formData.append('avatar', accountData.value.avatarFile)
-  if (verifyData.value.idFrontFile) formData.append('id_front', verifyData.value.idFrontFile)
-  if (verifyData.value.idBackFile) formData.append('id_back', verifyData.value.idBackFile)
+  if (avatar) formData.append('avatar', avatar)
+  if (idFront) formData.append('id_front', idFront)
+  if (idBack) formData.append('id_back', idBack)
+  return formData
+}
+
+async function handleSubmit() {
+  submitting.value = true
+  submitError.value = null
 
   try {
+    const formData = await buildFormData()
     await authStore.updateAccount({
       displayName: accountData.value.displayName,
       phone: accountData.value.phone,

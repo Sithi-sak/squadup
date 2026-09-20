@@ -21,6 +21,7 @@ export interface ChatMessage {
   threadId: string
   senderId: string
   body: string
+  imageUrl: string | null
   createdAt: string
 }
 
@@ -31,8 +32,14 @@ interface MessageRow {
   thread_id: string
   sender_id: string
   body: string
+  image_url: string | null
   created_at: string
 }
+
+/** Messages a conversation opens with, and the size of each "Load earlier" page. Matches the
+ * backend's own `_MESSAGE_PAGE_SIZE` default - sent explicitly so the two can't drift apart
+ * without `hasMoreByThread` noticing. */
+const PAGE_SIZE = 40
 
 export const useMessagesStore = defineStore('messages', () => {
   const threads = ref<MessageThread[]>([])
@@ -43,12 +50,18 @@ export const useMessagesStore = defineStore('messages', () => {
   const messagesByThread = ref<Record<string, ChatMessage[]>>({})
   const messagesLoading = ref(false)
   const messagesError = ref<string | null>(null)
+  /** Whether an older page exists for a thread - a full page came back, so there may be more. */
+  const hasMoreByThread = ref<Record<string, boolean>>({})
+  const loadingEarlier = ref(false)
 
   const activeThread = computed(
     () => threads.value.find((t) => t.id === activeThreadId.value) ?? null,
   )
   const activeMessages = computed(() =>
     activeThreadId.value ? (messagesByThread.value[activeThreadId.value] ?? []) : [],
+  )
+  const activeHasMore = computed(() =>
+    activeThreadId.value ? (hasMoreByThread.value[activeThreadId.value] ?? false) : false,
   )
 
   function appendMessage(threadId: string, message: ChatMessage) {
@@ -57,7 +70,8 @@ export const useMessagesStore = defineStore('messages', () => {
     existing.push(message)
     const thread = threads.value.find((t) => t.id === threadId)
     if (thread) {
-      thread.lastMessagePreview = message.body
+      // An image-only message has an empty body, same as the backend's own `_preview`.
+      thread.lastMessagePreview = message.body || (message.imageUrl ? 'Photo' : '')
       thread.updatedAt = message.createdAt
     }
   }
@@ -80,13 +94,19 @@ export const useMessagesStore = defineStore('messages', () => {
       .channel(`messages:${threadId}`)
       .on<MessageRow>(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${threadId}` },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `thread_id=eq.${threadId}`,
+        },
         ({ new: row }) => {
           appendMessage(threadId, {
             id: row.id,
             threadId: row.thread_id,
             senderId: row.sender_id,
             body: row.body,
+            imageUrl: row.image_url,
             createdAt: row.created_at,
           })
         },
@@ -122,21 +142,48 @@ export const useMessagesStore = defineStore('messages', () => {
 
   /** Opening a thread - also marks the other party's messages read server-side (replaces the
    * old frontend-only `unreadCount = 0`), so this always refetches rather than reusing a cached
-   * list even when messages for this thread were already loaded once. */
+   * list even when messages for this thread were already loaded once. Only the newest
+   * `PAGE_SIZE` come back; `loadEarlier` walks backwards from there (4.49). */
   async function fetchMessages(threadId: string) {
-    messagesLoading.value = true
+    // A cached transcript stays on screen while the refresh runs - re-opening a chat you were
+    // just in shouldn't blank the pane and then repaint it.
+    messagesLoading.value = !messagesByThread.value[threadId]?.length
     messagesError.value = null
     try {
-      messagesByThread.value[threadId] = await api.get<ChatMessage[]>(
-        `/messages/threads/${threadId}/messages`,
+      const page = await api.get<ChatMessage[]>(
+        `/messages/threads/${threadId}/messages?limit=${PAGE_SIZE}`,
       )
+      messagesByThread.value[threadId] = page
+      hasMoreByThread.value[threadId] = page.length === PAGE_SIZE
       const thread = threads.value.find((t) => t.id === threadId)
       if (thread) thread.unreadCount = 0
     } catch (err) {
       messagesError.value = err instanceof Error ? err.message : 'Failed to load messages'
       messagesByThread.value[threadId] = mockMessagesByThread[threadId] ?? []
+      hasMoreByThread.value[threadId] = false
     } finally {
       messagesLoading.value = false
+    }
+  }
+
+  /** Prepends the page of messages older than the oldest one held for `threadId`. Errors are
+   * swallowed into `hasMore` staying true rather than replacing the transcript with an error
+   * state - the conversation on screen is still perfectly readable. */
+  async function loadEarlier(threadId: string | null = activeThreadId.value) {
+    if (!threadId || loadingEarlier.value || !hasMoreByThread.value[threadId]) return
+    const existing = messagesByThread.value[threadId] ?? []
+    const oldest = existing[0]
+    if (!oldest) return
+    loadingEarlier.value = true
+    try {
+      const page = await api.get<ChatMessage[]>(
+        `/messages/threads/${threadId}/messages?limit=${PAGE_SIZE}&before=${encodeURIComponent(oldest.createdAt)}`,
+      )
+      const known = new Set(existing.map((m) => m.id))
+      messagesByThread.value[threadId] = [...page.filter((m) => !known.has(m.id)), ...existing]
+      hasMoreByThread.value[threadId] = page.length === PAGE_SIZE
+    } finally {
+      loadingEarlier.value = false
     }
   }
 
@@ -166,12 +213,20 @@ export const useMessagesStore = defineStore('messages', () => {
     return thread
   }
 
-  async function sendMessage(body: string) {
+  /** Multipart rather than JSON (4.49) so an attached image rides along as a real file, the
+   * same way the feed composer posts one - the caller compresses it first (`utils/image.ts`)
+   * and the backend re-encodes it to WebP. Either the text or the image may be missing, not
+   * both. */
+  async function sendMessage(payload: { body?: string; image?: File | null }) {
     const threadId = activeThreadId.value
-    const text = body.trim()
-    if (!threadId || !text) return
-    const message = await api.post<ChatMessage>(`/messages/threads/${threadId}/messages`, { body: text })
+    const text = (payload.body ?? '').trim()
+    if (!threadId || (!text && !payload.image)) return
+    const formData = new FormData()
+    formData.append('body', text)
+    if (payload.image) formData.append('image', payload.image)
+    const message = await api.post<ChatMessage>(`/messages/threads/${threadId}/messages`, formData)
     appendMessage(threadId, message)
+    return message
   }
 
   /** Optimistic: flips `muted` immediately rather than waiting on the round trip, since nothing
@@ -223,8 +278,12 @@ export const useMessagesStore = defineStore('messages', () => {
     activeMessages,
     messagesLoading,
     messagesError,
+    hasMoreByThread,
+    activeHasMore,
+    loadingEarlier,
     fetchThreads,
     selectThread,
+    loadEarlier,
     startThread,
     sendMessage,
     muteThread,

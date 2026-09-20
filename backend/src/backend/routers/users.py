@@ -1,10 +1,15 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from postgrest.exceptions import APIError
 
 from ..core.auth import get_current_user_id, get_optional_user_id
 from ..core.blocks import has_blocked
 from ..core.schema import CamelModel
+from ..core.storage import remove_prefix
 from ..core.supabase import get_supabase_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -67,20 +72,57 @@ def update_me(payload: UserUpdateIn, user_id: str = Depends(get_current_user_id)
     if updates.get("handle"):
         updates["handle"] = "@" + updates["handle"].lstrip("@")
     if updates:
+        client = get_supabase_client()
         try:
-            get_supabase_client().table("users").update(updates).eq("id", user_id).execute()
+            client.table("users").update(updates).eq("id", user_id).execute()
         except APIError as exc:
             if exc.code == "23505":
                 raise HTTPException(status.HTTP_409_CONFLICT, "Username already taken") from exc
             raise
+        # `players` keeps its own `display_name` copy (marketplace cards, search, the Pal profile
+        # header all read it straight off the player row), so a rename from Settings has to reach
+        # it too or the Pal page keeps showing the old name. `handle` needs no such mirror - it
+        # was unified onto `users` in 4.14.
+        if "display_name" in updates:
+            client.table("players").update({"display_name": updates["display_name"]}).eq(
+                "user_id", user_id
+            ).execute()
     return _fetch_user(user_id)
+
+
+# Every bucket this account could own objects in, with the id its upload paths are keyed by
+# (4.52). `service-covers` is the odd one out: covers are written under the *player* id, since a
+# service belongs to the Pal profile rather than the account.
+_OWNED_BUCKETS = ("avatars", "post-images", "message-images", "id-documents")
+_PLAYER_OWNED_BUCKETS = ("service-covers",)
+
+
+def _delete_stored_files(user_id: str, player_id: str | None) -> None:
+    """Sweeps this account's uploads out of Storage. Nothing here can abort the deletion: a bucket
+    that errors is logged and skipped, because leaving someone unable to delete their account over
+    a stray file is the worse failure. Only `{owner_id}/` prefixes are touched, so no other
+    account's files are reachable from here."""
+    targets = [(bucket, user_id) for bucket in _OWNED_BUCKETS]
+    if player_id:
+        targets += [(bucket, player_id) for bucket in _PLAYER_OWNED_BUCKETS]
+    for bucket, prefix in targets:
+        try:
+            remove_prefix(bucket, prefix)
+        except Exception:  # best effort - the account deletion below still runs
+            logger.exception("Could not clear %s/%s during account deletion", bucket, prefix)
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 def delete_me(user_id: str = Depends(get_current_user_id)) -> None:
     # `auth.users` -> `public.users` -> `players` -> everything else cascades in one transaction
-    # per the 3.13c migration, so no explicit pre-cleanup is needed here.
-    get_supabase_client().auth.admin.delete_user(user_id)
+    # per the 3.13c migration, so no explicit row cleanup is needed here. Storage is a different
+    # story: the cascade never reaches `storage.objects`, so uploads (including the private
+    # `id-documents` KYC scans, and public URLs that would otherwise keep serving forever) are
+    # swept first, while the rows that name them still exist (4.52).
+    client = get_supabase_client()
+    player = client.table("players").select("id").eq("user_id", user_id).maybe_single().execute()
+    _delete_stored_files(user_id, player.data["id"] if player and player.data else None)
+    client.auth.admin.delete_user(user_id)
 
 
 @router.get("/{user_id}/profile", response_model=PublicProfileOut)

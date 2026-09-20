@@ -95,7 +95,7 @@ const selectUi = { base: 'bg-gray-800/70 px-5 py-3.5 text-sm ring-0 hover:bg-gra
 
   <form class="mt-8 flex flex-col gap-6" @submit.prevent="canSubmit && emit('continue')">
     <div class="flex flex-col gap-3">
-      <label class="text-sm font-medium text-white">Per-game rate (99 coin = 1$)</label>
+      <label class="text-sm font-medium text-white">Per-game rate (90 coin = 1$)</label>
       <div class="flex flex-col gap-3">
         <div
           v-for="rate in data.rates"

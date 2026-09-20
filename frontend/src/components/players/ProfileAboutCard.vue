@@ -32,9 +32,20 @@ function formatCount(count: number) {
 <template>
   <div class="flex flex-col gap-4 lg:sticky lg:top-20">
     <div class="rounded-xl bg-gray-800/70 p-5">
-      <p v-if="player.tagline" class="text-sm leading-relaxed text-slate-300">{{ player.tagline }}</p>
+      <p v-if="player.tagline" class="text-sm leading-relaxed text-slate-300">
+        {{ player.tagline }}
+      </p>
+      <p
+        v-if="profile.bio"
+        class="text-sm leading-relaxed whitespace-pre-line text-slate-400"
+        :class="player.tagline ? 'mt-3' : ''"
+      >
+        {{ profile.bio }}
+      </p>
 
-      <div class="mt-4 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4 text-center">
+      <div
+        class="mt-4 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4 text-center"
+      >
         <div>
           <p class="font-semibold text-white">{{ formatCount(profile.postsCount) }}</p>
           <p class="text-xs text-slate-400">Posts</p>

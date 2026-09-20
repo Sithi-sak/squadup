@@ -5,6 +5,7 @@ import { PhAppleLogo, PhBank, PhCreditCard, PhDotsThree } from '@phosphor-icons/
 import visaIcon from '@/assets/visa.svg'
 import mastercardIcon from '@/assets/mastercard.svg'
 import { useAuthStore } from '@/stores/auth'
+import { usePlayersStore } from '@/stores/players'
 import { useSettingsStore } from '@/stores/settings'
 import { useWalletStore } from '@/stores/wallet'
 import AddPayoutMethodModal from '@/components/modals/AddPayoutMethodModal.vue'
@@ -12,6 +13,7 @@ import SettingsSelectRow from './SettingsSelectRow.vue'
 import SettingsToggleRow from './SettingsToggleRow.vue'
 
 const authStore = useAuthStore()
+const playersStore = usePlayersStore()
 const settingsStore = useSettingsStore()
 const walletStore = useWalletStore()
 const toast = useToast()
@@ -20,7 +22,12 @@ const isPal = computed(() => Boolean(authStore.user?.playerId))
 
 onMounted(() => {
   settingsStore.fetchPaymentCards()
-  if (isPal.value) walletStore.fetchPayoutMethods()
+  if (isPal.value) {
+    walletStore.fetchPayoutMethods()
+    // The stored payout schedule rides on the earnings payload (4.51) - `players.payout_schedule`
+    // is deliberately not on the public profile response.
+    playersStore.fetchEarnings()
+  }
 })
 
 /** `payout_methods.brand` stores the detected card network (4.32). */
@@ -70,11 +77,46 @@ async function removePayoutMethod(methodId: string) {
   }
 }
 
-const payoutSchedule = ref('Weekly')
 const currencyDisplay = ref('USD ($)')
 const autoTopUp = ref(false)
 
-const scheduleOptions = ['Daily', 'Weekly', 'Bi-weekly', 'Monthly']
+/** Labels for the three `payout_schedule` enum values; there is no daily option because the
+ * column has none. */
+const scheduleOptions = ['Weekly', 'Bi-weekly', 'Monthly']
+const scheduleLabels: Record<string, string> = {
+  weekly: 'Weekly',
+  bi_weekly: 'Bi-weekly',
+  monthly: 'Monthly',
+}
+
+const savingSchedule = ref(false)
+
+/** Reads through to the saved schedule, so it stays right after a reload instead of resetting
+ * to a hardcoded "Weekly"; setting it persists straight away (there is no Save button here). */
+const payoutSchedule = computed({
+  get: () => scheduleLabels[playersStore.earnings?.payoutSchedule ?? 'weekly'] ?? 'Weekly',
+  set: (label: string) => {
+    void savePayoutSchedule(label)
+  },
+})
+
+async function savePayoutSchedule(label: string) {
+  const value = Object.keys(scheduleLabels).find((key) => scheduleLabels[key] === label)
+  if (!value || savingSchedule.value) return
+  savingSchedule.value = true
+  try {
+    await playersStore.updateMine({ payoutSchedule: value })
+    toast.add({ title: `Payouts now run ${label.toLowerCase()}`, color: 'success' })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't change the payout schedule",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    savingSchedule.value = false
+  }
+}
 const currencyOptions = ['USD ($)', 'KHR (៛)', 'THB (฿)']
 
 const busyCardId = ref<string | null>(null)
@@ -130,8 +172,18 @@ async function removeCard(cardId: string) {
         >
           <div class="flex items-center gap-3">
             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-              <img v-if="brandIcon(method.brand)" :src="brandIcon(method.brand)!" alt="" class="h-7 w-7" />
-              <PhBank v-else-if="method.brand === 'bank'" :size="20" weight="fill" class="text-gray-800" />
+              <img
+                v-if="brandIcon(method.brand)"
+                :src="brandIcon(method.brand)!"
+                alt=""
+                class="h-7 w-7"
+              />
+              <PhBank
+                v-else-if="method.brand === 'bank'"
+                :size="20"
+                weight="fill"
+                class="text-gray-800"
+              />
               <PhCreditCard v-else :size="20" weight="fill" class="text-gray-800" />
             </div>
             <div>
@@ -140,7 +192,13 @@ async function removeCard(cardId: string) {
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <UBadge v-if="method.isDefault" color="primary" variant="soft" size="md" class="rounded-full">
+            <UBadge
+              v-if="method.isDefault"
+              color="primary"
+              variant="solid"
+              size="md"
+              class="rounded-full"
+            >
               Default
             </UBadge>
             <UDropdownMenu :items="payoutMenuItems(method.id)">
@@ -171,7 +229,11 @@ async function removeCard(cardId: string) {
       <AddPayoutMethodModal v-model:open="addingPayoutMethod" />
 
       <div class="flex flex-col divide-y divide-white/10">
-        <SettingsSelectRow v-model="payoutSchedule" label="Payout schedule" :items="scheduleOptions" />
+        <SettingsSelectRow
+          v-model="payoutSchedule"
+          label="Payout schedule"
+          :items="scheduleOptions"
+        />
       </div>
     </div>
 
@@ -179,7 +241,9 @@ async function removeCard(cardId: string) {
       <h2 class="text-lg font-semibold text-white">Payment methods</h2>
 
       <div class="mt-3 flex flex-col gap-3">
-        <p v-if="settingsStore.paymentCardsLoading" class="py-2 text-sm text-slate-400">Loading payment methods...</p>
+        <p v-if="settingsStore.paymentCardsLoading" class="py-2 text-sm text-slate-400">
+          Loading payment methods...
+        </p>
         <p v-else-if="settingsStore.paymentCards.length === 0" class="py-2 text-sm text-slate-400">
           No payment methods yet.
         </p>
@@ -198,7 +262,13 @@ async function removeCard(cardId: string) {
               <p class="text-sm text-slate-400">{{ card.detail }}</p>
             </div>
           </div>
-          <UBadge v-if="card.isDefault" color="primary" variant="soft" size="md" class="rounded-full">
+          <UBadge
+            v-if="card.isDefault"
+            color="primary"
+            variant="soft"
+            size="md"
+            class="rounded-full"
+          >
             Default
           </UBadge>
           <UDropdownMenu v-else :items="cardMenuItems(card.id)">
@@ -230,7 +300,11 @@ async function removeCard(cardId: string) {
     <div class="rounded-xl bg-gray-800/70 p-5">
       <h2 class="text-lg font-semibold text-white">Preferences</h2>
       <div class="flex flex-col divide-y divide-white/10">
-        <SettingsSelectRow v-model="currencyDisplay" label="Currency display" :items="currencyOptions" />
+        <SettingsSelectRow
+          v-model="currencyDisplay"
+          label="Currency display"
+          :items="currencyOptions"
+        />
         <SettingsToggleRow
           v-model="autoTopUp"
           label="Auto top-up when low"

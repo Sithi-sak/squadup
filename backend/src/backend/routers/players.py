@@ -11,7 +11,7 @@ from pydantic import BaseModel, ValidationError
 from ..core.auth import get_current_user_id, get_optional_user_id
 from ..core.blocks import has_blocked
 from ..core.schema import CamelModel
-from ..core.storage import upload_file, upload_image_as_webp
+from ..core.storage import upload_document, upload_image_as_webp
 from ..core.supabase import get_supabase_client
 from .feed import _POST_SELECT, PostOut, _serialize_posts
 
@@ -92,6 +92,7 @@ class PlayerDetailOut(CamelModel):
     display_name: str
     avatar_url: str | None
     tagline: str | None
+    bio: str | None
     timezone: str | None
     language: str | None
     tier: str | None
@@ -190,8 +191,9 @@ class WishItemOut(CamelModel):
 
 class EarningsOut(CamelModel):
     """`GET /players/me/earnings` (3.7) — everything derivable from the Pal's own `bookings`
-    rows without a real payout ledger yet (that's 3.9): payout method/schedule/history/pending
-    clearance stay on `mocks/dashboardStats.ts` on the frontend for now."""
+    rows, plus the Pal's own `payout_schedule` and the next run it implies (4.51). Pending
+    clearance and payout history come from the wallet endpoints (3.9); nothing on this payload
+    is mocked any more."""
 
     lifetime_earned_coins: int
     lifetime_earned_change_pct: float | None
@@ -202,6 +204,8 @@ class EarningsOut(CamelModel):
     response_rate_pct: int
     earnings_this_week: list[EarningsBar]
     earnings_overview: list[EarningsBar]
+    payout_schedule: str
+    next_payout_date: str
 
 
 # Helpers -----------------------------------------------------------------------------------
@@ -442,6 +446,35 @@ def _match_score(player: dict, *, game: str | None, rank: str | None, role: str 
     return score
 
 
+# `players.payout_schedule` is a Postgres enum ('weekly' | 'bi_weekly' | 'monthly'). The
+# Become-a-Pal wizard and the Settings select both speak the hyphenated "bi-weekly", so every
+# write normalizes first - an un-normalized value is rejected by the enum, not coerced.
+PAYOUT_SCHEDULES = ("weekly", "bi_weekly", "monthly")
+
+
+def _normalize_payout_schedule(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_")
+    if normalized not in PAYOUT_SCHEDULES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown payout schedule: {value}")
+    return normalized
+
+
+def _next_payout_date(schedule: str, now: datetime) -> str:
+    """The next payout run for `schedule`, as a date. There's no payout-run job yet (3.9 pays
+    out per approved withdrawal), so this is the calendar answer to "when does my next one
+    land": weekly and bi-weekly pay on Mondays (bi-weekly on even ISO weeks), monthly on the
+    1st. Kept here rather than on the frontend so the Dashboard and Earnings pages can't drift."""
+    if schedule == "monthly":
+        year, month = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+        return datetime(year, month, 1, tzinfo=UTC).date().isoformat()
+    # Monday of next week, then for bi-weekly skip to the following one if that lands on an odd
+    # ISO week.
+    monday = (now + timedelta(days=7 - now.weekday())).date()
+    if schedule == "bi_weekly" and monday.isocalendar().week % 2 == 1:
+        monday += timedelta(days=7)
+    return monday.isoformat()
+
+
 def _month_key(now: datetime, offset: int) -> tuple[int, int]:
     year, month = now.year, now.month - offset
     while month <= 0:
@@ -456,7 +489,7 @@ def _pct_change(current: int, previous: int) -> float | None:
     return round((current - previous) / previous * 100, 1)
 
 
-def _compute_earnings(bookings: list[dict]) -> dict:
+def _compute_earnings(bookings: list[dict], payout_schedule: str) -> dict:
     """Aggregates a Pal's own `bookings` rows into `EarningsOut` (3.7), same aggregate-in-Python
     approach as `_match_score`/`list_players` (3.2a/3.3a) rather than composing this in SQL."""
     now = datetime.now(UTC)
@@ -502,6 +535,8 @@ def _compute_earnings(bookings: list[dict]) -> dict:
         "response_rate_pct": response_rate_pct,
         "earnings_this_week": earnings_this_week,
         "earnings_overview": earnings_overview,
+        "payout_schedule": payout_schedule,
+        "next_payout_date": _next_payout_date(payout_schedule, now),
     }
 
 
@@ -618,14 +653,44 @@ def get_my_player(user_id: str = Depends(get_current_user_id)) -> dict:
     return _fetch_player_by_user_id(user_id, active_only=False)
 
 
+class PlayerProfileUpdateIn(CamelModel):
+    """Settings' Profile tab. `display_name` is deliberately absent - it lives on the Account
+    tab and `PATCH /users/me` mirrors it onto the player row, so there is one place to rename."""
+
+    tagline: str | None = None
+    bio: str | None = None
+    languages: list[str] | None = None
+    payout_schedule: str | None = None
+
+
+@router.patch("/me", response_model=PlayerDetailOut)
+def update_my_player(
+    payload: PlayerProfileUpdateIn,
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    client = get_supabase_client()
+    player = client.table("players").select("id").eq("user_id", user_id).maybe_single().execute()
+    if not player or not player.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "languages" in updates:
+        # `language` is the singular legacy column the About card and browse filters still read;
+        # creation keeps it as `languages[0]` and an edit has to follow, or the two disagree.
+        updates["language"] = updates["languages"][0] if updates["languages"] else None
+    if updates.get("payout_schedule"):
+        updates["payout_schedule"] = _normalize_payout_schedule(updates["payout_schedule"])
+    if updates:
+        client.table("players").update(updates).eq("id", player.data["id"]).execute()
+    return _fetch_player_by_user_id(user_id, active_only=False)
+
+
 @router.patch("/me/avatar", response_model=PlayerDetailOut)
 def update_my_player_avatar(
     avatar: UploadFile = File(...),  # noqa: B008
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     """Settings' Profile tab "Change photo" (4.16) - re-encoded to WebP same as feed/post
-    images, unlike the raw upload `create_my_player` does for the Become-a-Pal wizard's initial
-    avatar (that one's a one-off at signup, not worth the extra Pillow round-trip there)."""
+    images and the Become-a-Pal wizard's initial avatar."""
     client = get_supabase_client()
     player = client.table("players").select("id").eq("user_id", user_id).maybe_single().execute()
     if not player or not player.data:
@@ -640,7 +705,13 @@ def get_my_earnings(user_id: str = Depends(get_current_user_id)) -> dict:
     """Player Dashboard / Earnings (3.7) - not a `_fetch_player_by_user_id` call since only the
     player id is needed here, not the full serialized profile + services."""
     client = get_supabase_client()
-    player = client.table("players").select("id").eq("user_id", user_id).maybe_single().execute()
+    player = (
+        client.table("players")
+        .select("id, payout_schedule")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
     if not player or not player.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Player profile not found")
     bookings = (
@@ -651,7 +722,7 @@ def get_my_earnings(user_id: str = Depends(get_current_user_id)) -> dict:
         .data
         or []
     )
-    return _compute_earnings(bookings)
+    return _compute_earnings(bookings, player.data["payout_schedule"])
 
 
 @router.post("/me", response_model=PlayerDetailOut, status_code=status.HTTP_201_CREATED)
@@ -684,9 +755,11 @@ def create_my_player(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid rates payload") from exc
 
     player_id = str(uuid4())
-    avatar_url = upload_file("avatars", f"{user_id}/avatar-{uuid4()}", avatar) if avatar else None
-    id_front_url = upload_file("id-documents", f"{user_id}/id-front-{uuid4()}", id_front)
-    id_back_url = upload_file("id-documents", f"{user_id}/id-back-{uuid4()}", id_back) if id_back else None
+    # Every upload here is re-encoded and downscaled first: a raw phone photo is routinely over
+    # the `avatars` bucket's 5MB limit, which used to fail the whole submission with a 500.
+    avatar_url = upload_image_as_webp("avatars", f"{user_id}/avatar-{uuid4()}", avatar) if avatar else None
+    id_front_url = upload_document("id-documents", f"{user_id}/id-front-{uuid4()}", id_front)
+    id_back_url = upload_document("id-documents", f"{user_id}/id-back-{uuid4()}", id_back) if id_back else None
 
     # A Pal's marketplace handle is just their account username (4.14) - only assign the old
     # auto-generated fallback if they haven't already set one in Settings.
@@ -708,7 +781,7 @@ def create_my_player(
             "rank": rank,
             "role": role,
             "languages": languages,
-            "payout_schedule": payout_schedule,
+            "payout_schedule": _normalize_payout_schedule(payout_schedule),
             "id_front_url": id_front_url,
             "id_back_url": id_back_url,
             "status": "pending_review",
@@ -780,7 +853,7 @@ async def create_my_service(
     if not parsed_options:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "At least one pricing option is required")
 
-    cover_url = upload_file("service-covers", f"{player_id}/cover-{uuid4()}", cover) if cover else None
+    cover_url = upload_image_as_webp("service-covers", f"{player_id}/cover-{uuid4()}", cover) if cover else None
 
     service_id = str(uuid4())
     client.table("services").insert(
@@ -871,7 +944,7 @@ async def update_my_service(
     if active is not None:
         updates["active"] = active
     if cover is not None:
-        updates["cover_image_url"] = upload_file(
+        updates["cover_image_url"] = upload_image_as_webp(
             "service-covers", f"{service['player_id']}/cover-{uuid4()}", cover
         )
     if updates:

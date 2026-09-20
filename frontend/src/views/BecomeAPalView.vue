@@ -9,6 +9,7 @@ import {
   PhSparkle,
 } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
+import palBanner from '@/assets/becomepalbanner.png'
 
 const router = useRouter()
 
@@ -60,20 +61,15 @@ function goToApplication() {
 
 <template>
   <div class="flex flex-col">
-    <section class="relative overflow-hidden px-4 py-16 text-center md:px-6 md:py-20"
-      style="background: linear-gradient(120deg, var(--color-brand-700), var(--color-brand-500))">
-      <img :src="coinIcon" alt="" class="absolute top-10 right-[12%] h-7 w-7 opacity-70" />
-      <img :src="coinIcon" alt="" class="absolute top-24 right-[22%] h-5 w-5 opacity-60" />
-      <img :src="coinIcon" alt="" class="absolute top-32 right-[8%] h-6 w-6 opacity-50" />
-
+    <section class="relative overflow-hidden bg-squadup-dark bg-cover bg-center px-4 py-16 text-center md:px-6 md:py-20"
+      :style="{ backgroundImage: `url(${palBanner})` }">
       <h1 class="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
         BECOME A SQUADUP PAL NOW!
       </h1>
       <p class="mt-3 text-sm font-medium text-white/90 md:text-base">
         High income · Flexible · Make Friends
       </p>
-      <UButton color="neutral" variant="solid" size="xl"
-        class="mt-6 rounded-full bg-squadup-dark px-6 text-white hover:bg-squadup-dark/80" @click="goToApplication">
+      <UButton color="primary" variant="solid" size="xl" class="mt-6 rounded-full px-6" @click="goToApplication">
         Apply for Free
       </UButton>
     </section>

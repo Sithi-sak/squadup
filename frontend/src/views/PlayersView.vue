@@ -151,16 +151,11 @@ function formatCount(count: number) {
           </UButton>
         </div>
 
-        <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div class="mt-5">
           <p class="text-sm text-slate-400">
             <span class="font-semibold text-white">{{ visiblePlayers.length.toLocaleString() }} Pals</span>
             <template v-if="query"> match "{{ query }}"</template>
           </p>
-          <div class="flex items-center gap-2">
-            <UButton color="primary" variant="solid" size="sm" class="rounded-full">Pals</UButton>
-            <span class="rounded-full bg-white/5 px-3.5 py-1.5 text-sm text-slate-400">Games</span>
-            <span class="rounded-full bg-white/5 px-3.5 py-1.5 text-sm text-slate-400">eStars</span>
-          </div>
         </div>
       </div>
     </div>

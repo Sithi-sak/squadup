@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { PhMagnifyingGlass } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
+import { gameCoverForName } from '@/lib/covers'
 import type { PlayerServiceListing } from '@/stores/players'
 
 const props = defineProps<{ services: PlayerServiceListing[]; selectedId: string }>()
@@ -20,6 +21,10 @@ const filtered = computed(() => {
 const visible = computed(() =>
   expanded.value || search.value ? filtered.value : filtered.value.slice(0, collapsedCount),
 )
+
+function thumbSrc(service: PlayerServiceListing): string | undefined {
+  return service.coverImageUrl ?? gameCoverForName(service.name)
+}
 </script>
 
 <template>
@@ -49,8 +54,18 @@ const visible = computed(() =>
         "
         @click="$emit('select', service.id)"
       >
-        <div class="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white/10">
-          <img v-if="service.coverImageUrl" :src="service.coverImageUrl" alt="" class="h-full w-full object-cover" />
+        <div
+          class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10"
+        >
+          <img
+            v-if="thumbSrc(service)"
+            :src="thumbSrc(service)"
+            alt=""
+            class="h-full w-full object-cover"
+          />
+          <span v-else class="text-sm font-semibold text-slate-300">
+            {{ service.name.charAt(0).toUpperCase() }}
+          </span>
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">

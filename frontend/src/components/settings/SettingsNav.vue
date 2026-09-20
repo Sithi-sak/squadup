@@ -1,6 +1,8 @@
 <script setup lang="ts">
 defineProps<{
-  tabs: { key: string; label: string }[]
+  /** `badge` is optional and only rendered when > 0 - the Admin panel uses it for the number
+   * of unread alerts sitting in each queue (4.54). */
+  tabs: { key: string; label: string; badge?: number }[]
   active: string
 }>()
 defineEmits<{ 'update:active': [string] }>()
@@ -20,7 +22,15 @@ defineEmits<{ 'update:active': [string] }>()
       "
       @click="$emit('update:active', tab.key)"
     >
-      {{ tab.label }}
+      <span class="flex items-center justify-between gap-2">
+        {{ tab.label }}
+        <span
+          v-if="tab.badge"
+          class="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1.5 text-[11px] font-semibold text-white"
+        >
+          {{ tab.badge }}
+        </span>
+      </span>
     </button>
   </nav>
 </template>

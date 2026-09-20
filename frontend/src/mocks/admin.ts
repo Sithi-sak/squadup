@@ -74,6 +74,24 @@ export interface AdminWithdrawal {
   reviewedAt: string | null
 }
 
+/** Mirrors `AdminNotificationOut` (`routers/admin.py`, 4.54). Derived from whatever is awaiting
+ * a decision rather than stored, so `id` is source-prefixed (`flag:...`, `dispute:...`) and an
+ * item disappears from the feed once it is decided. */
+export type AdminNotificationType = 'report' | 'dispute' | 'payout' | 'application'
+
+/** The Admin panel's tabs (`AdminView.vue`), named here so an alert can point at one. */
+export type AdminTabKey = 'overview' | 'applications' | 'flagged' | 'disputes' | 'payouts'
+
+export interface AdminNotification {
+  id: string
+  type: AdminNotificationType
+  title: string
+  message: string
+  /** Admin tab this alert belongs to, so a click can open the queue that resolves it. */
+  tab: AdminTabKey
+  createdAt: string
+}
+
 export interface AdminOverviewStats {
   totalUsers: number
   totalPals: number
@@ -295,5 +313,42 @@ export const mockAdminWithdrawals: AdminWithdrawal[] = [
     status: 'paid',
     requestedAt: '2026-09-12T11:05:00',
     reviewedAt: '2026-09-13T08:30:00',
+  },
+]
+
+
+/** Fallback rows for the admin bell (4.54), same offline convention as the lists above. */
+export const mockAdminNotifications: AdminNotification[] = [
+  {
+    id: 'flag:flag-1',
+    type: 'report',
+    title: 'New report',
+    message: 'VelvetAce was reported for inappropriate content',
+    tab: 'flagged',
+    createdAt: '2026-09-19T09:12:00.000Z',
+  },
+  {
+    id: 'dispute:dispute-1',
+    type: 'dispute',
+    title: 'New dispute',
+    message: "mochi opened a dispute on #SU-48213: The Pal didn't show up",
+    tab: 'disputes',
+    createdAt: '2026-09-19T08:40:00.000Z',
+  },
+  {
+    id: 'withdrawal:withdrawal-1',
+    type: 'payout',
+    title: 'Payout request',
+    message: 'VelvetAce requested a payout of 3,600 SC',
+    tab: 'payouts',
+    createdAt: '2026-09-18T09:12:00.000Z',
+  },
+  {
+    id: 'application:application-1',
+    type: 'application',
+    title: 'Pal application',
+    message: 'NightOwlDrift applied to become a Pal',
+    tab: 'applications',
+    createdAt: '2026-09-04T10:15:00.000Z',
   },
 ]

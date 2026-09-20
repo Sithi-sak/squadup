@@ -3340,6 +3340,42 @@ kind of Stripe id.
           as-is rather than carrying a whole-file reindent. Not run live in the app per
           [[feedback_no_build_or_run_skill]].
 
+  - [x] 4.54 Admin alerts bell (user request, 2026-09-20). The Admin panel had no way to learn
+        that anything had arrived: every queue only showed its count once you opened its tab, so
+        a report, a dispute, a payout request or a Pal application sat unseen until the admin
+        happened to click through all five tabs.
+    - [x] 4.54a Backend `routers/admin.py`: `GET /admin/notifications` merges four queries into
+          one time-ordered feed - pending flags, open disputes, `requested` withdrawals and
+          `pending_review` players - each capped at 25 rows. Deliberately only the states nobody
+          has picked up: `reviewing`/`investigating`/`in_progress` are already in someone's
+          hands, and alerting on them would make the bell a second copy of the tabs. Deciding an
+          item is therefore what retires its alert, so the feed can't drift from the work. Ids
+          are source-prefixed (`flag:`, `dispute:`, `withdrawal:`, `application:`) so the four id
+          spaces can share one read set. Same no-auth posture as the rest of the router.
+    - [x] 4.54b Frontend `stores/admin.ts` + `mocks/admin.ts`: `fetchNotifications` with the
+          usual mock fallback, plus `unreadNotifications`/`unreadNotificationCount` and
+          mark-read. Read state lives in `localStorage` under `squadup-admin-read-alerts`: the
+          feed is derived, not stored, and there is no admin account to hang a `read` column off.
+          It outlives the session on purpose - a reload should not make yesterday's queue look
+          new. Every fetch drops ids the feed no longer carries, so the key can't grow forever.
+    - [x] 4.54c Frontend `components/admin/AdminNotificationPanel.vue`: the bell's dropdown,
+          built to the same shape as the user-facing `NotificationPanel.vue` (skeleton rows,
+          unread tint plus left rail, "Mark all read"), with one icon and tint per source. A row
+          click marks it read and opens the tab that resolves it.
+    - [x] 4.54d Frontend `views/AdminView.vue`: a header bar above the content column carrying
+          the bell with an unread dot, and the brand link on mobile where the sidebar is hidden.
+          The feed is fetched on login and polled every 60s - the admin sits on this screen while
+          the work arrives elsewhere. `SettingsNav.vue` grew an optional `badge` per tab (unused
+          by Settings), so each queue also shows its own unread count in the sidebar and in the
+          mobile tab strip.
+    - [x] 4.54e Verification: the handler run live against the linked project returns `[]` and
+          all four selects (including the `bookings(order_number, users(display_name))` embed)
+          execute - the database currently holds no pending flags, open disputes, `requested`
+          withdrawals or `pending_review` players, which is exactly the empty state. `ruff check`
+          clean on `routers/admin.py`; `vue-tsc` shows the same 16 pre-existing errors and no new
+          ones; `oxlint` clean on all five frontend files. Not run live in the app per
+          [[feedback_no_build_or_run_skill]].
+
 ---
 
 ## Cut list (only if time runs out)

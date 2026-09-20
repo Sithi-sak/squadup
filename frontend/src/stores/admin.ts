@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { api } from '@/lib/api'
 import {
@@ -6,6 +6,7 @@ import {
   mockAdminDisputes,
   mockAdminPalApplications,
   mockAdminWithdrawals,
+  mockAdminNotifications,
   type AdminFlaggedPlayer,
   type FlaggedPlayerStatus,
   type AdminDispute,
@@ -15,6 +16,7 @@ import {
   type PalApplicationStatus,
   type AdminWithdrawal,
   type AdminWithdrawalStatus,
+  type AdminNotification,
 } from '@/mocks/admin'
 
 /** Mock-only PIN, known solely to the admin, standing in until real admin auth ships (Phase 2
@@ -24,6 +26,30 @@ import {
 const ADMIN_ACCESS_CODE = '1234'
 
 const SESSION_KEY = 'squadup-admin-session'
+
+/** Read state for the admin bell (4.54). The feed is derived server-side from open work, not
+ * stored rows, and there is no admin account to hang a `read` column off, so "seen" lives in the
+ * browser. It outlives the session on purpose: a reload should not make yesterday's queue look
+ * new again. */
+const READ_ALERTS_KEY = 'squadup-admin-read-alerts'
+
+function loadReadAlertIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(READ_ALERTS_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    // Corrupt or unavailable storage just means everything reads as unread.
+    return []
+  }
+}
+
+function saveReadAlertIds(ids: string[]) {
+  try {
+    localStorage.setItem(READ_ALERTS_KEY, JSON.stringify(ids))
+  } catch {
+    // Private-mode quota errors are not worth failing a fetch over.
+  }
+}
 
 export const useAdminStore = defineStore('admin', () => {
   const isAuthenticated = ref(sessionStorage.getItem(SESSION_KEY) === '1')
@@ -65,6 +91,51 @@ export const useAdminStore = defineStore('admin', () => {
   const palApplications = ref<AdminPalApplication[]>([])
   const palApplicationsLoading = ref(false)
   const palApplicationsError = ref<string | null>(null)
+
+  const notifications = ref<AdminNotification[]>([])
+  const notificationsLoading = ref(false)
+  const notificationsError = ref<string | null>(null)
+  const readAlertIds = ref<string[]>(loadReadAlertIds())
+
+  const unreadNotifications = computed(() =>
+    notifications.value.filter((alert) => !readAlertIds.value.includes(alert.id)),
+  )
+  const unreadNotificationCount = computed(() => unreadNotifications.value.length)
+
+  /** Admin bell (`GET /admin/notifications`, 4.54). Same fallback convention as the lists
+   * below. Ids the feed no longer carries are dropped from the read set on every fetch: an
+   * item leaves the feed for good once it is decided, so keeping its id would only grow
+   * localStorage forever. */
+  async function fetchNotifications() {
+    notificationsLoading.value = true
+    notificationsError.value = null
+    try {
+      notifications.value = await api.get<AdminNotification[]>('/admin/notifications')
+    } catch (err) {
+      notificationsError.value = err instanceof Error ? err.message : 'Failed to load alerts'
+      notifications.value = [...mockAdminNotifications]
+    } finally {
+      const live = new Set(notifications.value.map((alert) => alert.id))
+      readAlertIds.value = readAlertIds.value.filter((id) => live.has(id))
+      saveReadAlertIds(readAlertIds.value)
+      notificationsLoading.value = false
+    }
+  }
+
+  function markNotificationRead(id: string) {
+    if (readAlertIds.value.includes(id)) return
+    readAlertIds.value = [...readAlertIds.value, id]
+    saveReadAlertIds(readAlertIds.value)
+  }
+
+  function markAllNotificationsRead() {
+    readAlertIds.value = notifications.value.map((alert) => alert.id)
+    saveReadAlertIds(readAlertIds.value)
+  }
+
+  function isNotificationRead(id: string) {
+    return readAlertIds.value.includes(id)
+  }
 
   /** Flagged Players tab (`GET /admin/flagged-players`). Falls back to `mockAdminFlaggedPlayers`
    * on failure, same convention as every other Phase 3 store's list fetch. */
@@ -231,5 +302,14 @@ export const useAdminStore = defineStore('admin', () => {
     palApplicationsError,
     fetchPalApplications,
     updatePalApplicationStatus,
+    notifications,
+    notificationsLoading,
+    notificationsError,
+    unreadNotifications,
+    unreadNotificationCount,
+    fetchNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    isNotificationRead,
   }
 })

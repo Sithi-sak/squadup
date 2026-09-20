@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { PhShieldCheck, PhSignOut } from '@phosphor-icons/vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { PhBell, PhShieldCheck, PhSignOut } from '@phosphor-icons/vue'
 import brandLogo from '@/assets/brand.svg'
 import SettingsNav from '@/components/settings/SettingsNav.vue'
 import AdminOverviewPanel from '@/components/admin/AdminOverviewPanel.vue'
@@ -8,7 +8,9 @@ import AdminPalApplicationsPanel from '@/components/admin/AdminPalApplicationsPa
 import AdminFlaggedPlayersPanel from '@/components/admin/AdminFlaggedPlayersPanel.vue'
 import AdminDisputesPanel from '@/components/admin/AdminDisputesPanel.vue'
 import AdminWithdrawalsPanel from '@/components/admin/AdminWithdrawalsPanel.vue'
+import AdminNotificationPanel from '@/components/admin/AdminNotificationPanel.vue'
 import { useAdminStore } from '@/stores/admin'
+import type { AdminTabKey } from '@/mocks/admin'
 
 const admin = useAdminStore()
 
@@ -32,15 +34,57 @@ function handleLogout() {
   code.value = ''
 }
 
-const tabs = [
+const baseTabs: { key: AdminTabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'applications', label: 'Pal applications' },
   { key: 'flagged', label: 'Flagged players' },
   { key: 'disputes', label: 'Disputes' },
   { key: 'payouts', label: 'Payouts' },
-] as const
+]
 
-const activeTab = ref<(typeof tabs)[number]['key']>('overview')
+const activeTab = ref<AdminTabKey>('overview')
+
+/** How many unread alerts each queue is holding, so the count is visible without opening the
+ * bell. Overview never carries one - it is a summary, not a queue. */
+const unreadByTab = computed(() => {
+  const counts: Partial<Record<AdminTabKey, number>> = {}
+  for (const alert of admin.unreadNotifications) {
+    counts[alert.tab] = (counts[alert.tab] ?? 0) + 1
+  }
+  return counts
+})
+
+const tabs = computed(() =>
+  baseTabs.map((tab) => ({ ...tab, badge: unreadByTab.value[tab.key] ?? 0 })),
+)
+
+/** The admin sits on this screen while reports and payout requests arrive elsewhere, so the
+ * feed is refetched on a timer rather than only on load. A minute is slow enough to be
+ * invisible against the four queries behind `/admin/notifications`. */
+const ALERT_POLL_MS = 60_000
+let alertTimer: ReturnType<typeof setInterval> | undefined
+
+watch(
+  () => admin.isAuthenticated,
+  (authenticated) => {
+    clearInterval(alertTimer)
+    alertTimer = undefined
+    if (!authenticated) {
+      return
+    }
+    admin.fetchNotifications()
+    alertTimer = setInterval(() => admin.fetchNotifications(), ALERT_POLL_MS)
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => clearInterval(alertTimer))
+
+/** Opening a queue from the bell. The alert itself is retired by the click (the panel marks it
+ * read) and leaves the feed for good once the item is decided here. */
+function openTab(tab: AdminTabKey) {
+  activeTab.value = tab
+}
 </script>
 
 <template>
@@ -85,7 +129,7 @@ const activeTab = ref<(typeof tabs)[number]['key']>('overview')
           <img :src="brandLogo" alt="SquadUp" class="h-6" />
           <span class="text-sm font-semibold text-slate-400">Admin</span>
         </router-link>
-        <SettingsNav v-model:active="activeTab" :tabs="[...tabs]" />
+        <SettingsNav v-model:active="activeTab" :tabs="tabs" />
       </div>
 
       <div class="flex flex-col gap-3 border-t border-white/10 pt-4">
@@ -106,6 +150,38 @@ const activeTab = ref<(typeof tabs)[number]['key']>('overview')
     </aside>
 
     <div class="flex flex-col overflow-y-auto">
+      <header class="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 md:px-8">
+        <router-link to="/" class="flex items-center gap-2 lg:hidden">
+          <img :src="brandLogo" alt="SquadUp" class="h-6" />
+          <span class="text-sm font-semibold text-slate-400">Admin</span>
+        </router-link>
+        <p class="hidden text-sm text-slate-400 lg:block">Moderation queue</p>
+
+        <UPopover :content="{ side: 'bottom', align: 'end', sideOffset: 8 }">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            :ui="{ base: 'rounded-full' }"
+            square
+            class="relative"
+            :aria-label="
+              admin.unreadNotificationCount > 0
+                ? `Alerts, ${admin.unreadNotificationCount} unread`
+                : 'Alerts'
+            "
+          >
+            <PhBell :size="20" />
+            <span
+              v-if="admin.unreadNotificationCount > 0"
+              class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-brand-400 ring-2 ring-squadup-bg"
+            />
+          </UButton>
+          <template #content="{ close }">
+            <AdminNotificationPanel :close="close" @open-tab="openTab" />
+          </template>
+        </UPopover>
+      </header>
+
       <nav class="flex gap-2 overflow-x-auto border-b border-white/10 p-3 lg:hidden">
         <button
           v-for="tab in tabs"
@@ -120,11 +196,17 @@ const activeTab = ref<(typeof tabs)[number]['key']>('overview')
           @click="activeTab = tab.key"
         >
           {{ tab.label }}
+          <span
+            v-if="tab.badge"
+            class="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-semibold text-white"
+          >
+            {{ tab.badge }}
+          </span>
         </button>
       </nav>
 
       <div class="mx-auto w-full max-w-full flex-1 p-6 md:p-8">
-        <AdminOverviewPanel v-if="activeTab === 'overview'" @view-all="activeTab = $event" />
+        <AdminOverviewPanel v-if="activeTab === 'overview'" @view-all="openTab" />
         <AdminPalApplicationsPanel v-else-if="activeTab === 'applications'" />
         <AdminFlaggedPlayersPanel v-else-if="activeTab === 'flagged'" />
         <AdminDisputesPanel v-else-if="activeTab === 'disputes'" />

@@ -99,6 +99,20 @@ class AdminWithdrawalStatusIn(CamelModel):
     status: str
 
 
+class AdminNotificationOut(CamelModel):
+    """One item in the admin alert feed. Not a `notifications` row: there is no admin user
+    account to address (see the PIN note in `stores/admin.ts`), so the feed is derived on every
+    read from whatever is still awaiting a decision. `id` is source-prefixed so the frontend can
+    keep read state per item without the four id spaces colliding."""
+
+    id: str
+    type: str
+    title: str
+    message: str
+    tab: str
+    created_at: str
+
+
 class AdminReportDayOut(CamelModel):
     day: str
     count: int
@@ -569,3 +583,140 @@ def get_overview() -> dict:
         "total_commission_coins": total_commission_coins,
         "reports_this_week": reports_this_week,
     }
+
+
+# Notifications --------------------------------------------------------------------------
+# Same no-auth posture as the sections above.
+
+# How many of each source the feed carries. The panel shows the newest handful and the page
+# behind it the rest, so this is a ceiling on one very noisy day, not a page size.
+_ADMIN_FEED_PER_SOURCE = 25
+
+
+def _feed_item(
+    prefix: str, row_id: str, type_: str, title: str, message: str, tab: str, created_at: str
+) -> dict:
+    return {
+        "id": f"{prefix}:{row_id}",
+        "type": type_,
+        "title": title,
+        "message": message,
+        "tab": tab,
+        "created_at": created_at,
+    }
+
+
+@router.get("/notifications", response_model=list[AdminNotificationOut])
+def list_admin_notifications() -> list[dict]:
+    """The admin bell (4.54). One feed over everything that is waiting on an admin: new reports,
+    open disputes, payout requests and Pal applications.
+
+    Only the states nobody has picked up yet - a flag moved to `reviewing`, a dispute moved to
+    `investigating` and a payout moved to `in_progress` are all already in someone's hands, and
+    re-alerting on them would make the bell a second copy of the tabs rather than a queue.
+    Deciding an item is therefore what retires its alert, so the feed can't drift from the work.
+    """
+    client = get_supabase_client()
+    items: list[dict] = []
+
+    flags = (
+        client.table("admin_flags")
+        .select("id, reason, created_at, players(display_name)")
+        .eq("status", "pending")
+        .order("created_at", desc=True)
+        .limit(_ADMIN_FEED_PER_SOURCE)
+        .execute()
+        .data
+        or []
+    )
+    for row in flags:
+        name = (row.get("players") or {}).get("display_name") or "A Pal"
+        items.append(
+            _feed_item(
+                "flag",
+                row["id"],
+                "report",
+                "New report",
+                f"{name} was reported for {row['reason'].lower()}",
+                "flagged",
+                row["created_at"],
+            )
+        )
+
+    disputes = (
+        client.table("order_disputes")
+        .select("id, reason, created_at, bookings(order_number, users(display_name))")
+        .eq("status", "open")
+        .order("created_at", desc=True)
+        .limit(_ADMIN_FEED_PER_SOURCE)
+        .execute()
+        .data
+        or []
+    )
+    for row in disputes:
+        booking = row.get("bookings") or {}
+        buyer = (booking.get("users") or {}).get("display_name") or "A buyer"
+        order_number = booking.get("order_number") or "an order"
+        items.append(
+            _feed_item(
+                "dispute",
+                row["id"],
+                "dispute",
+                "New dispute",
+                f"{buyer} opened a dispute on #{order_number}: {row['reason']}",
+                "disputes",
+                row["created_at"],
+            )
+        )
+
+    withdrawals = (
+        client.table("withdrawals")
+        .select("id, coins, fee_coins, created_at, players(display_name)")
+        .eq("status", "requested")
+        .order("created_at", desc=True)
+        .limit(_ADMIN_FEED_PER_SOURCE)
+        .execute()
+        .data
+        or []
+    )
+    for row in withdrawals:
+        name = (row.get("players") or {}).get("display_name") or "A Pal"
+        payout_coins = row["coins"] - row["fee_coins"]
+        items.append(
+            _feed_item(
+                "withdrawal",
+                row["id"],
+                "payout",
+                "Payout request",
+                f"{name} requested a payout of {payout_coins:,} SC",
+                "payouts",
+                row["created_at"],
+            )
+        )
+
+    applications = (
+        client.table("players")
+        .select("id, display_name, created_at")
+        .eq("status", "pending_review")
+        .order("created_at", desc=True)
+        .limit(_ADMIN_FEED_PER_SOURCE)
+        .execute()
+        .data
+        or []
+    )
+    for row in applications:
+        name = row.get("display_name") or "Someone"
+        items.append(
+            _feed_item(
+                "application",
+                row["id"],
+                "application",
+                "Pal application",
+                f"{name} applied to become a Pal",
+                "applications",
+                row["created_at"],
+            )
+        )
+
+    items.sort(key=lambda item: item["created_at"], reverse=True)
+    return items

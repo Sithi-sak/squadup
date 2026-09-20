@@ -3284,6 +3284,62 @@ kind of Stripe id.
           still shows `DELETE /users/me`; `ruff` clean on `core/storage.py` and `routers/users.py`.
           Not run live in the app per [[feedback_no_build_or_run_skill]].
 
+  - [ ] 4.53 A tip was taken from the buyer and never paid to the Pal (user report, 2026-09-20).
+        `POST /reviews` did the submission as eight separate PostgREST round-trips and a dropped
+        Supabase connection landed between the debit and the credit. Booking 934cc068 got its
+        review and lost the buyer 200 SC; Lucid was never paid; and with a review on record the
+        buyer's retry could only ever come back "This order has already been reviewed".
+    - [x] 4.53a Root cause, two layers. The handler was non-atomic - review insert, two rating
+          recomputes, then debit and credit as separate calls, with no way to undo the ones that
+          had already committed. Underneath it, `httpx.RemoteProtocolError: Server disconnected`:
+          the `lru_cache`d Supabase client pools HTTP/2 connections with no keepalive bound, and
+          postgrest-py's `send_with_retry` only retries on response *status* codes, so a socket
+          the server had already closed raises straight out of the call site.
+    - [x] 4.53b Migration `20260920150000_review_tip_atomic.sql`: `submit_review(...)` does the
+          whole submission in one transaction - `select ... for update` on the booking to
+          serialise concurrent submits, the ownership/completed/already-reviewed checks, the
+          insert, both rating recomputes, and both sides of the tip with the buyer's row locked
+          for the balance check. Custom SQLSTATEs (SU404/409/410/411/412) carry the failure
+          reasons out so the router maps to HTTP without matching message strings. Plus a unique
+          index on `reviews (booking_id)` - the read-then-insert check could be raced.
+    - [x] 4.53c Backend `routers/reviews.py`: `create_review` now reads only what the
+          notification text and the tip's ledger `detail` need, then calls the RPC and translates
+          `APIError.code` through `RPC_ERROR_STATUS`. `_recompute_after_review`/`_recompute_rating`
+          are gone (now SQL) and the handler no longer touches `core/wallet.py`. The notify call
+          moved after the commit and is wrapped: past that point the coins have moved, so a
+          dropped connection there must not come back as a failed submission the buyer retries
+          into a 409. It logs and the review still returns 201; a lost notification is cheaper.
+    - [x] 4.53d Backend `core/supabase.py`: one shared `httpx.Client` with
+          `keepalive_expiry=15s`, so pooled connections are retired well inside the server's idle
+          window, and `_RetryOnDisconnectTransport`, which replays `RemoteProtocolError`/
+          `ReadError`/`WriteError` for GET/HEAD/OPTIONS only. POSTs deliberately fail loudly -
+          with 4.53b every write that matters is one transaction, so the caller retrying is
+          correct and silent replay could double one that actually committed. The client also
+          now backs Storage and Auth, so its 60s timeout replaces PostgREST's 120s and Storage's
+          20s: room for an image upload, still a cap on a hung query.
+    - [x] 4.53e Frontend: `stores/bookings.ts` marks the order reviewed on a 409 too (otherwise
+          the row keeps offering "Leave review" for an order that can never take one) and
+          refetches the wallet after a tip so the header balance moves, same convention as
+          `wallet.ts`'s `requestWithdrawal`. `LeaveReviewModal.vue` takes a `submitting` prop
+          that locks Submit and Skip while the request is in flight, and `MyBookingsView.vue`
+          drives it and closes the modal on an already-reviewed 409.
+    - [ ] 4.53f Outstanding: booking 934cc068's 200 SC is still stranded - Levi was debited,
+          Lucid was not credited. The repair (credit 200 SC to Lucid plus the matching
+          `wallet_transactions` row) was written but blocked by the sandbox as a live-data write,
+          so it needs the user to run or approve it.
+    - [x] 4.53g Verification: migration pushed to the linked project with `bunx supabase db push`.
+          Error paths exercised live against it - already-reviewed returns SU410, another user's
+          booking and an unknown id both SU404, all arriving as `APIError.code`. Atomicity proven
+          on a real completed unreviewed booking by requesting a tip larger than the buyer's
+          balance: SU412 raised, and the review count for that booking and the buyer's balance
+          were both unchanged afterwards, so the insert and recomputes rolled back with the tip.
+          `ruff check` clean on both backend files (the repo has no ruff config, and `ruff format`
+          at its default 88 columns would reflow most of the file, so it stays unrun as before);
+          `vue-tsc` shows the same 16 pre-existing errors and no new ones; `oxlint` clean. All
+          three touched frontend files were already prettier-unclean at HEAD, so they are left
+          as-is rather than carrying a whole-file reindent. Not run live in the app per
+          [[feedback_no_build_or_run_skill]].
+
 ---
 
 ## Cut list (only if time runs out)

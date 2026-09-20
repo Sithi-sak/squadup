@@ -1,8 +1,9 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import { mockBookings, mockIncomingBookings } from '@/mocks/bookings'
 import { isRealId } from '@/utils/id'
+import { useWalletStore } from '@/stores/wallet'
 
 export type BookingStatus = 'pending' | 'accepted' | 'declined' | 'completed'
 export type PaymentMethod = 'coins' | 'card'
@@ -213,11 +214,24 @@ export const useBookingsStore = defineStore('bookings', () => {
   }
 
   /** My Bookings' `LeaveReviewModal` submit (`POST /reviews`). Patches `hasReview` onto the
-   * local booking rather than refetching, same as the other action methods. */
+   * local booking rather than refetching, same as the other action methods. A 409 means the
+   * review is already on record, so it patches too - otherwise the row keeps offering "Leave
+   * review" for an order that can never accept one. A tip moves coins, so the wallet is
+   * refetched for the header balance, same convention as `wallet.ts`'s `requestWithdrawal`. */
   async function submitReview(bookingId: string, payload: ReviewPayload) {
-    await api.post(`/reviews`, { bookingId, ...payload })
-    const booking = getBooking(bookingId)
-    if (booking) replaceInPlace({ ...booking, hasReview: true })
+    function markReviewed() {
+      const booking = getBooking(bookingId)
+      if (booking) replaceInPlace({ ...booking, hasReview: true })
+    }
+
+    try {
+      await api.post(`/reviews`, { bookingId, ...payload })
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) markReviewed()
+      throw err
+    }
+    markReviewed()
+    if (payload.tipCoins > 0) await useWalletStore().fetchWallet()
   }
 
   return {

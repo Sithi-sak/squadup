@@ -6,6 +6,9 @@ import { resolveAvatarUrl } from '@/utils/avatar'
 const props = defineProps<{
   palName: string
   meta: string
+  /** True while the parent's `POST /reviews` is in flight. A second submit would 409 on the
+   * one-review-per-booking rule and read to the buyer as a failure, so the button locks. */
+  submitting?: boolean
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -64,7 +67,7 @@ function skip() {
  * rejected tip (not enough coins) leaves the buyer's rating, chips and comment intact to retry
  * instead of throwing them away behind an error toast. */
 function submit() {
-  if (!rating.value) return
+  if (!rating.value || props.submitting) return
   emit('submit', { rating: rating.value, highlights: highlights.value, comment: comment.value, tipCoins: tipCoins.value })
 }
 </script>
@@ -172,10 +175,22 @@ function submit() {
         </div>
 
         <div class="flex items-center justify-between border-t border-white/10 pt-4">
-          <button type="button" class="text-sm font-medium text-slate-400 hover:text-white" @click="skip">
+          <button
+            type="button"
+            class="text-sm font-medium text-slate-400 hover:text-white disabled:opacity-50"
+            :disabled="submitting"
+            @click="skip"
+          >
             Skip
           </button>
-          <UButton color="primary" size="lg" class="rounded-full" :disabled="!rating" @click="submit">
+          <UButton
+            color="primary"
+            size="lg"
+            class="rounded-full"
+            :disabled="!rating || submitting"
+            :loading="submitting"
+            @click="submit"
+          >
             Submit review
           </UButton>
         </div>

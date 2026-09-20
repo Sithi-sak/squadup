@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
+import { ApiError } from '@/lib/api'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
@@ -33,6 +34,7 @@ const cancelTarget = ref<{
 
 const reviewModalOpen = ref(false)
 const reviewTarget = ref<{ bookingId: string; palName: string; meta: string } | null>(null)
+const reviewSubmitting = ref(false)
 
 function isCancellable(status: BookingStatus) {
   return status === 'pending' || status === 'accepted'
@@ -169,7 +171,8 @@ function handlePrimaryAction(booking: Booking) {
 }
 
 async function confirmReview(payload: { rating: number; highlights: string[]; comment: string; tipCoins: number }) {
-  if (!reviewTarget.value) return
+  if (!reviewTarget.value || reviewSubmitting.value) return
+  reviewSubmitting.value = true
   try {
     await bookingsStore.submitReview(reviewTarget.value.bookingId, {
       rating: payload.rating,
@@ -186,11 +189,18 @@ async function confirmReview(payload: { rating: number; highlights: string[]; co
       color: 'success',
     })
   } catch (err) {
+    // An already-reviewed 409 isn't a retry the buyer can win - the store has marked the order
+    // reviewed, so close rather than leave them staring at a form that will only fail again.
+    if (err instanceof ApiError && err.status === 409 && err.message.includes('already been reviewed')) {
+      reviewModalOpen.value = false
+    }
     toast.add({
       title: 'Could not submit review',
       description: err instanceof Error ? err.message : 'Please try again.',
       color: 'error',
     })
+  } finally {
+    reviewSubmitting.value = false
   }
 }
 </script>
@@ -325,6 +335,7 @@ async function confirmReview(payload: { rating: number; highlights: string[]; co
         v-model:open="reviewModalOpen"
         :pal-name="reviewTarget?.palName ?? 'Pal'"
         :meta="reviewTarget?.meta ?? ''"
+        :submitting="reviewSubmitting"
         @submit="confirmReview"
       />
     </div>

@@ -4,9 +4,15 @@ import { useRoute } from 'vue-router'
 import { PhArrowRight, PhArrowLeft, PhMagnifyingGlass } from '@phosphor-icons/vue'
 import gamesTileImage from '@/assets/game.jpg'
 import chillingTileImage from '@/assets/chilling.jpg'
-import hobbiesImage from '@/assets/hobbies.jpg'
-import echatImage from '@/assets/echat.jpg'
-import watchTogetherImage from '@/assets/watch_together.jpg'
+import justChattingImage from '@/assets/chilling/just_chatting.jpg'
+import watchTogetherImage from '@/assets/chilling/watch_together.jpg'
+import hobbiesTalkImage from '@/assets/chilling/hobbie_talk.jpg'
+import echatImage from '@/assets/chilling/e_chat.jpg'
+import ventSupportImage from '@/assets/chilling/vent_support.jpg'
+import truthDareImage from '@/assets/chilling/truth_dare.jpg'
+import studyTogetherImage from '@/assets/chilling/study_together.jpg'
+import movieNightImage from '@/assets/chilling/move_night.jpg'
+import listenTogetherImage from '@/assets/chilling/listen_together.jpg'
 import { gameCoverUrl, useCoverManifest } from '@/lib/covers'
 import { games, type Game } from '@/data/games'
 
@@ -18,7 +24,7 @@ const categoryTiles: { label: string; tab: CategoryTab; image: string }[] = [
 ]
 
 const serviceCards: { label: string; to: string | { path: string; query: Record<string, string> }; image?: string; gameSlug?: string }[] = [
-  { label: 'Hobbies Talk', to: '/players', image: hobbiesImage },
+  { label: 'Hobbies Talk', to: '/players', image: hobbiesTalkImage },
   { label: 'E-Chat', to: '/players', image: echatImage },
   { label: 'Watch Together', to: '/players', image: watchTogetherImage },
   { label: 'Valorant', to: { path: '/players', query: { game: 'Valorant' } }, gameSlug: 'valorant' },
@@ -79,24 +85,24 @@ const gameGroups = computed(() => {
   return Array.from(groups.entries()).map(([letter, items]) => ({ letter, items }))
 })
 
-const chillingSections = [
+const chillingSections: { title: string; items: { label: string; caption: string; image: string }[] }[] = [
   {
     title: 'Popular',
     items: [
-      { label: 'Just Chatting', caption: 'Talk about anything' },
-      { label: 'Watch Together', caption: 'Movies & streaming' },
-      { label: 'Hobbies Talk', caption: 'Share what you love' },
-      { label: 'E-Chat', caption: 'Voice call & chilling' },
+      { label: 'Just Chatting', caption: 'Talk about anything', image: justChattingImage },
+      { label: 'Watch Together', caption: 'Movies & streaming', image: watchTogetherImage },
+      { label: 'Hobbies Talk', caption: 'Share what you love', image: hobbiesTalkImage },
+      { label: 'E-Chat', caption: 'Voice call & chilling', image: echatImage },
     ],
   },
   {
     title: 'More ways to chill',
     items: [
-      { label: 'Vent & Support', caption: 'A kind listener' },
-      { label: 'Truth or Dare', caption: 'Break the ice' },
-      { label: 'Study Together', caption: 'Focus co-working' },
-      { label: 'Movie Night', caption: 'Watch together' },
-      { label: 'Listen Together', caption: 'Share your playlist' },
+      { label: 'Vent & Support', caption: 'A kind listener', image: ventSupportImage },
+      { label: 'Truth or Dare', caption: 'Break the ice', image: truthDareImage },
+      { label: 'Study Together', caption: 'Focus co-working', image: studyTogetherImage },
+      { label: 'Movie Night', caption: 'Watch together', image: movieNightImage },
+      { label: 'Listen Together', caption: 'Share your playlist', image: listenTogetherImage },
     ],
   },
 ]
@@ -268,11 +274,19 @@ const filteredChillingSections = computed(() => {
                   v-for="item in section.items"
                   :key="item.label"
                   to="/players"
-                  class="relative flex aspect-3/2 flex-col justify-end overflow-hidden rounded-xl bg-white/5 p-4 ring-1 ring-white/10 transition-colors hover:bg-white/10"
+                  class="group relative flex aspect-3/2 flex-col justify-end overflow-hidden rounded-xl bg-white/5 p-4"
                   @click="drawerOpen = false"
                 >
-                  <span class="font-semibold text-white">{{ item.label }}</span>
-                  <span class="text-sm text-slate-400">{{ item.caption }}</span>
+                  <img
+                    :src="item.image"
+                    :alt="item.label"
+                    class="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <div
+                    class="absolute inset-0 bg-linear-to-t from-squadup-dark via-squadup-dark/40 to-transparent transition-colors group-hover:bg-squadup-dark/20"
+                  />
+                  <span class="relative font-semibold text-white">{{ item.label }}</span>
+                  <span class="relative text-sm text-slate-300">{{ item.caption }}</span>
                 </router-link>
               </div>
             </div>

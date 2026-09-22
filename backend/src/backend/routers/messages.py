@@ -12,6 +12,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from postgrest.exceptions import APIError
 
 from ..core.auth import get_current_user_id
 from ..core.blocks import require_not_blocked
@@ -88,6 +89,18 @@ def _get_thread(client, thread_id: str, user_id: str) -> dict:
     if user_id not in (thread["user_a_id"], thread["user_b_id"]):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Thread not found")
     return thread
+
+
+def _find_thread_by_pair(client, user_a_id: str, user_b_id: str) -> dict | None:
+    result = (
+        client.table("message_threads")
+        .select(_THREAD_SELECT)
+        .eq("user_a_id", user_a_id)
+        .eq("user_b_id", user_b_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data if result and result.data else None
 
 
 def _preview(body: str | None, image_url: str | None) -> str | None:
@@ -195,29 +208,30 @@ def start_thread(payload: StartThreadIn, user_id: str = Depends(get_current_user
     require_not_blocked(user_id, payload.participant_id, "message")
 
     user_a_id, user_b_id = _canonical_pair(user_id, payload.participant_id)
-    existing = (
-        client.table("message_threads")
-        .select(_THREAD_SELECT)
-        .eq("user_a_id", user_a_id)
-        .eq("user_b_id", user_b_id)
-        .maybe_single()
-        .execute()
-    )
-    if existing and existing.data:
-        thread = existing.data
-        # Starting a thread you'd previously deleted brings it back into your list rather than
-        # leaving it permanently hidden - matches `_get_thread_state`'s "no row = not deleted".
-        state = _get_thread_state(client, thread["id"], user_id)
-        if state["deleted_at"]:
-            _set_thread_state(client, thread["id"], user_id, deleted_at=None)
-    else:
-        created = (
-            client.table("message_threads")
-            .insert({"user_a_id": user_a_id, "user_b_id": user_b_id})
-            .execute()
-        )
-        thread = _get_thread(client, created.data[0]["id"], user_id)
-        state = {"muted": False}
+    thread = _find_thread_by_pair(client, user_a_id, user_b_id)
+    if thread is None:
+        try:
+            created = (
+                client.table("message_threads")
+                .insert({"user_a_id": user_a_id, "user_b_id": user_b_id})
+                .execute()
+            )
+            thread = _get_thread(client, created.data[0]["id"], user_id)
+        except APIError as exc:
+            # Two "Chat" taps in flight at once (the booking flow opens a thread and the messages
+            # page opens the same one) both read no row and both insert - the loser trips the
+            # `(user_a_id, user_b_id)` unique constraint. The thread it wanted exists either way,
+            # so read the winner's row back instead of failing the request.
+            if exc.code != "23505":
+                raise
+            thread = _find_thread_by_pair(client, user_a_id, user_b_id)
+            if thread is None:
+                raise
+    # Starting a thread you'd previously deleted brings it back into your list rather than
+    # leaving it permanently hidden - matches `_get_thread_state`'s "no row = not deleted".
+    state = _get_thread_state(client, thread["id"], user_id)
+    if state["deleted_at"]:
+        _set_thread_state(client, thread["id"], user_id, deleted_at=None)
 
     return _thread_out(thread, user_id, last_message=None, unread_count=0, muted=state["muted"])
 

@@ -69,6 +69,10 @@ function openThreadFromQuery() {
 async function openParticipantFromQuery() {
   const participantId = route.query.with
   if (typeof participantId !== 'string' || !participantId) return false
+  // `onMounted` and the `?with=` watcher can both reach here for the same arrival. Two
+  // find-or-create posts in flight at once used to race each other in the backend, so only the
+  // first one runs.
+  if (starting.value) return true
   starting.value = true
   try {
     const thread = await store.startThread(participantId)

@@ -16,13 +16,16 @@ const columns: { heading: string; links: FooterLink[] }[] = [
     links: [
       { label: 'FAQ', to: '/faq' },
       { label: 'Help Center', to: '/help' },
-      { label: 'Report' },
-      { label: 'Customer Service' },
+      { label: 'Report', to: '/report' },
+      { label: 'Customer Service', to: '/support' },
     ],
   },
   {
     heading: 'Company',
-    links: [{ label: 'About Us' }, { label: 'Update Log' }, { label: 'Business Inquiry' }],
+    links: [
+      { label: 'About Us', to: '/about' },
+      { label: 'Update Log', to: '/changelog' },
+    ],
   },
   {
     heading: 'Legal',

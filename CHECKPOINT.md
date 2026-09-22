@@ -3376,6 +3376,41 @@ kind of Stripe id.
           ones; `oxlint` clean on all five frontend files. Not run live in the app per
           [[feedback_no_build_or_run_skill]].
 
+  - [x] 4.55 Chilling service covers (user request, 2026-09-22). The Chilling tab of All Services
+        drew every card as a bare tinted box: the art existed in `assets/chilling/` but nothing
+        referenced it, so nine services shipped with no cover at all.
+    - [x] 4.55a `views/AllServicesView.vue`: each `chillingSections` item carries an `image`, and
+          the card renders it under the same bottom-up gradient the Pal cards use, so the label
+          and caption stay readable over a bright cover. Hover moved to `group-hover` on the
+          overlay now that the image, not the card background, is what tints.
+    - [x] 4.55b The three top-level service cards (Hobbies Talk, E-Chat, Watch Together) now read
+          from `assets/chilling/` too, and the older root-level `hobbies.jpg`/`echat.jpg`/
+          `watch_together.jpg` imports are gone. One folder is the source of truth per service,
+          so a service can't end up with two different covers on one screen.
+
+  - [x] 4.56 Footer pages: Report, Customer Service, About Us, Update Log (user request,
+        2026-09-22). Four footer links rendered as plain `<span>`s because they had no route
+        behind them, and a fifth (Business Inquiry) was never going to get one.
+    - [x] 4.56a `views/ReportView.vue` + `/report`: routes a report to the flow that can actually
+          carry it - a profile report needs the profile (the existing `POST /players/{id}/report`
+          is player-scoped), an order dispute needs the booking, a post needs the post. A standalone
+          form would have had nowhere to post to, so the page triages instead of collecting.
+          Carries the same confidentiality line as `ReportProfileModal.vue` plus an emergency block.
+    - [x] 4.56b `views/CustomerServiceView.vue` + `/support`: contact channels (in-app order help,
+          email, Help Center), common-request shortcuts into `/bookings` and `/faq`, and stated
+          response times. No fake contact form for the same reason as 4.56a.
+    - [x] 4.56c `views/AboutView.vue` + `/about`: mission, stats, values, milestones, and a
+          Become a Pal call to action. Static content, in line with the other marketing pages.
+    - [x] 4.56d `views/ChangelogView.vue` + `/changelog`: release list built from the real recent
+          work (4.54 admin alerts, atomic reviews, KHQR, feed uploads, wallet), tagged
+          New/Improved/Fixed.
+    - [x] 4.56e `components/layout/AppFooter.vue`: the four links now carry `to`, Business Inquiry
+          is removed. Every footer link resolves to a route; the `<span>` fallback branch stays for
+          the bottom-row language label.
+    - [x] 4.56f Verification: `oxlint` clean on all six touched frontend files; `vue-tsc` shows the
+          same 16 pre-existing errors and no new ones. Not run live in the app per
+          [[feedback_no_build_or_run_skill]].
+
 ---
 
 ## Cut list (only if time runs out)

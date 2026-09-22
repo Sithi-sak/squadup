@@ -203,6 +203,26 @@ const router = createRouter({
       component: () => import('@/views/HelpCenterView.vue'),
     },
     {
+      path: '/report',
+      name: 'report',
+      component: () => import('@/views/ReportView.vue'),
+    },
+    {
+      path: '/support',
+      name: 'customer-service',
+      component: () => import('@/views/CustomerServiceView.vue'),
+    },
+    {
+      path: '/about',
+      name: 'about',
+      component: () => import('@/views/AboutView.vue'),
+    },
+    {
+      path: '/changelog',
+      name: 'changelog',
+      component: () => import('@/views/ChangelogView.vue'),
+    },
+    {
       path: '/terms',
       name: 'terms-of-service',
       component: () => import('@/views/TermsOfServiceView.vue'),

@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
+import { PhFlag, PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { ApiError } from '@/lib/api'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload } from '@/stores/bookings'
+import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload, type DisputePayload } from '@/stores/bookings'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
 import CancelOrderModal from '@/components/modals/CancelOrderModal.vue'
 import LeaveReviewModal from '@/components/modals/LeaveReviewModal.vue'
+import RefundModal from '@/components/modals/RefundModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { usePalChat } from '@/composables/usePalChat'
 
@@ -24,6 +25,16 @@ onMounted(() => {
 
 const cancelModalOpen = ref(false)
 const cancelTarget = ref<{
+  id: string
+  orderNumber: string
+  palName: string
+  serviceTitle: string
+  meta: string
+  totalCoins: number
+} | null>(null)
+
+const reportModalOpen = ref(false)
+const reportTarget = ref<{
   id: string
   orderNumber: string
   palName: string
@@ -64,6 +75,36 @@ async function confirmCancel(payload: CancelPayload) {
     })
   } finally {
     cancelModalOpen.value = false
+  }
+}
+
+function openReportModal(booking: Booking) {
+  reportTarget.value = {
+    id: booking.id,
+    orderNumber: booking.orderNumber,
+    palName: palName(booking),
+    serviceTitle: serviceTitle(booking),
+    meta: `${summaryText(booking)} · ${statusMeta[booking.status].label}`,
+    totalCoins: booking.totalCoins,
+  }
+  reportModalOpen.value = true
+}
+
+async function confirmReport(payload: DisputePayload) {
+  if (!reportTarget.value) return
+  try {
+    await bookingsStore.reportIssue(reportTarget.value.id, payload)
+    toast.add({
+      title: 'Report submitted',
+      description: "We'll get back to you within 24 hours.",
+      color: 'success',
+    })
+  } catch (err) {
+    toast.add({
+      title: 'Could not submit report',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
   }
 }
 
@@ -308,6 +349,17 @@ async function confirmReview(payload: { rating: number; highlights: string[]; co
                 Message
               </UButton>
               <UButton
+                color="neutral"
+                variant="soft"
+                size="sm"
+                class="rounded-full"
+                title="Report an issue"
+                @click="openReportModal(booking)"
+              >
+                <PhFlag :size="14" weight="bold" />
+                Report
+              </UButton>
+              <UButton
                 color="primary"
                 size="sm"
                 class="rounded-full"
@@ -329,6 +381,16 @@ async function confirmReview(payload: { rating: number; highlights: string[]; co
         :meta="cancelTarget?.meta ?? ''"
         :total-coins="cancelTarget?.totalCoins ?? 0"
         @confirm="confirmCancel"
+      />
+
+      <RefundModal
+        v-model:open="reportModalOpen"
+        :order-number="reportTarget?.orderNumber ?? ''"
+        :pal-name="reportTarget?.palName ?? 'Pal'"
+        :service-title="reportTarget?.serviceTitle ?? ''"
+        :meta="reportTarget?.meta ?? ''"
+        :total-coins="reportTarget?.totalCoins ?? 0"
+        @confirm="confirmReport"
       />
 
       <LeaveReviewModal

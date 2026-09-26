@@ -37,7 +37,12 @@ export function cardNetwork(digits: string): CardNetwork {
   return 'card'
 }
 
+/** 4.59: the demo payout card (user request). Payouts are simulated, and this number fails the
+ * Luhn check, so it is let through by name. Mirrors `routers/wallet.py`'s `_DEMO_PAYOUT_CARDS`. */
+const DEMO_PAYOUT_CARDS = new Set(['5156839937706777'])
+
 export function isValidCardNumber(digits: string) {
+  if (DEMO_PAYOUT_CARDS.has(digits)) return true
   return digits.length >= 12 && digits.length <= 19 && luhnOk(digits)
 }
 

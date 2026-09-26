@@ -597,11 +597,27 @@ Table "wallet_transactions" {
   "coins" integer [not null]
   "booking_id" uuid
   "withdrawal_id" uuid
-  "stripe_payment_intent_id" text [unique]
+  "payment_reference" text [unique]
   "created_at" timestamptz [not null, default: `now()`]
 
   Indexes {
     user_id [name: "wallet_transactions_user_id_idx"]
+  }
+}
+
+Table "payway_topups" {
+  "tran_id" text [pk]
+  "user_id" uuid [not null]
+  "package_id" uuid
+  "method" text [not null, default: 'card']
+  "coins" integer [not null]
+  "amount_usd" numeric(10,2) [not null]
+  "status" text [not null, default: 'pending']
+  "created_at" timestamptz [not null, default: `now()`]
+  "paid_at" timestamptz
+
+  Indexes {
+    (user_id, created_at) [name: "payway_topups_user_id_idx"]
   }
 }
 
@@ -740,6 +756,10 @@ Ref:"users"."id" <? "wallet_transactions"."user_id" [delete: cascade]
 Ref:"bookings"."id" ?<? "wallet_transactions"."booking_id" [delete: set null]
 
 Ref:"withdrawals"."id" ?<? "wallet_transactions"."withdrawal_id" [delete: set null]
+
+Ref:"users"."id" <? "payway_topups"."user_id" [delete: cascade]
+
+Ref:"topup_packages"."id" ?<? "payway_topups"."package_id" [delete: set null]
 
 Ref:"users"."id" <? "payment_cards"."user_id" [delete: cascade]
 

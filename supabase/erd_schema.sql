@@ -468,11 +468,25 @@ create table wallet_transactions (
   coins integer not null,
   booking_id uuid references bookings (id) on delete set null,
   withdrawal_id uuid references withdrawals (id) on delete set null,
-  stripe_payment_intent_id text unique,
+  payment_reference text unique,
   created_at timestamptz not null default now()
 );
 
 create index wallet_transactions_user_id_idx on wallet_transactions (user_id);
+
+create table payway_topups (
+  tran_id text primary key,
+  user_id uuid not null references users (id) on delete cascade,
+  package_id uuid references topup_packages (id) on delete set null,
+  method text not null default 'card' check (method in ('card', 'khqr')),
+  coins integer not null,
+  amount_usd numeric(10, 2) not null,
+  status text not null default 'pending' check (status in ('pending', 'paid')),
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+
+create index payway_topups_user_id_idx on payway_topups (user_id, created_at desc);
 
 create table payment_cards (
   id uuid primary key default gen_random_uuid(),

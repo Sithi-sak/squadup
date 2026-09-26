@@ -143,9 +143,12 @@ export const useWalletStore = defineStore('wallet', () => {
 
   /** Balance + pending clearance + recent activity (`/wallet`). Falls back to
    * `mockCurrentUser.coinBalance`/`mockPendingCoins`/`mockWalletActivity`, same resilience
-   * convention as `stores/players.ts`/`bookings.ts`/`feed.ts`. */
-  async function fetchWallet() {
-    loading.value = true
+   * convention as `stores/players.ts`/`bookings.ts`/`feed.ts`. Pass `silent` for a refresh after a
+   * payment, so the page stays mounted. */
+  async function fetchWallet(options: { silent?: boolean } = {}) {
+    // `silent` refreshes in place without flipping `loading`, which `WalletView.vue` swaps the
+    // whole page (and any open modal) out for a skeleton on.
+    if (!options.silent) loading.value = true
     error.value = null
     try {
       const result = await api.get<{
@@ -183,63 +186,36 @@ export const useWalletStore = defineStore('wallet', () => {
     }
   }
 
-  /** Step 1 of Wallet Top-up - creates a Stripe PaymentIntent for the chosen package
-   * (`routers/wallet.py`'s `POST /topup/payment-intent`, 4.1c). `WalletView.vue` confirms the
-   * returned `clientSecret` client-side with Stripe Elements (a card form on the page, same
-   * pattern PawMart's Checkout uses), then calls `confirmTopup` with the resulting
-   * `paymentIntentId`. */
-  async function createTopupPaymentIntent(packageId: string) {
-    return api.post<{ clientSecret: string; paymentIntentId: string }>('/wallet/topup/payment-intent', {
+  /** Step 1 of a card top-up (4.57) - records a pending top-up and returns the signed fields for
+   * ABA PayWay's card popup (`lib/payway.ts`). Nothing is credited yet. No mock fallback, same
+   * convention as `feedStore.createPost`. */
+  async function createCardCheckout(packageId: string) {
+    return api.post<{ tranId: string; amountUsd: number; form: Record<string, string> }>('/wallet/topup/card', {
       packageId,
     })
   }
 
-  /** Step 2 - the actual credit. The backend re-verifies the PaymentIntent against Stripe before
-   * trusting it (4.1d), so this is a real mutation, not a "trust the client" call. No mock
-   * fallback, same convention as `feedStore.createPost`. */
-  async function confirmTopup(packageId: string, paymentIntentId: string) {
-    const result = await api.post<{
-      balanceCoins: number
-      pendingClearanceCoins: number
-      lockedPayoutCoins: number
-      activity: WalletActivity[]
-    }>('/wallet/topup', { packageId, paymentIntentId })
-    balance.value = result.balanceCoins
-    pendingClearanceCoins.value = result.pendingClearanceCoins
-    lockedPayoutCoins.value = result.lockedPayoutCoins
-    activity.value = result.activity
-    return result
+  /** Step 2 - polled while the popup is up. The backend confirms the payment with PayWay's Check
+   * Transaction API and credits it the first time it comes back approved, so `paid` means the
+   * coins are already in the balance (`fetchWallet` picks them up). */
+  async function getCardTopupStatus(tranId: string) {
+    return api.get<{ status: 'pending' | 'paid' | 'failed' }>(`/wallet/topup/card/${tranId}`)
   }
 
-  /** 4.4b: starts a fake KHQR "Scan to Pay" session for the chosen package - no mock fallback,
-   * same convention as `createTopupPaymentIntent`. */
-  async function createKhqrSession(packageId: string) {
-    return api.post<{ sessionId: string; qrPayload: string; amountUsd: number; expiresInSeconds: number }>(
+  /** 4.58: starts a KHQR top-up - PayWay generates a real KHQR for the chosen package, payable
+   * from ABA Mobile or any Bakong member bank app. No mock fallback, same convention as
+   * `createCardCheckout`. */
+  async function createKhqrCheckout(packageId: string) {
+    return api.post<{ tranId: string; amountUsd: number; coins: number; qrString: string; expiresAt: string }>(
       '/wallet/topup/khqr',
       { packageId },
     )
   }
 
-  /** 4.4c: polled while the QR modal is open until it flips to `confirmed` (or `expired`). */
-  async function getKhqrStatus(sessionId: string) {
-    return api.get<{ status: 'pending' | 'confirmed' | 'completed' | 'expired' }>(
-      `/wallet/topup/khqr/${sessionId}/status`,
-    )
-  }
-
-  /** 4.4d: the actual credit, called once `getKhqrStatus` reports `confirmed`. */
-  async function completeKhqrTopup(sessionId: string) {
-    const result = await api.post<{
-      balanceCoins: number
-      pendingClearanceCoins: number
-      lockedPayoutCoins: number
-      activity: WalletActivity[]
-    }>(`/wallet/topup/khqr/${sessionId}/complete`)
-    balance.value = result.balanceCoins
-    pendingClearanceCoins.value = result.pendingClearanceCoins
-    lockedPayoutCoins.value = result.lockedPayoutCoins
-    activity.value = result.activity
-    return result
+  /** Polled while the KHQR modal is open. `paid` means the coins are already credited, by a real
+   * payment or the backend's demo auto-confirm timer. */
+  async function getKhqrTopupStatus(tranId: string) {
+    return api.get<{ status: 'pending' | 'paid' | 'failed' | 'expired' }>(`/wallet/topup/khqr/${tranId}`)
   }
 
   /** Payout methods (`/wallet/payout-methods`, Pal only). Falls back to `mockPayoutMethods`. */
@@ -326,11 +302,10 @@ export const useWalletStore = defineStore('wallet', () => {
     withdrawalsError,
     fetchWallet,
     fetchTopupPackages,
-    createTopupPaymentIntent,
-    confirmTopup,
-    createKhqrSession,
-    getKhqrStatus,
-    completeKhqrTopup,
+    createCardCheckout,
+    getCardTopupStatus,
+    createKhqrCheckout,
+    getKhqrTopupStatus,
     fetchPayoutMethods,
     addPayoutMethod,
     setDefaultPayoutMethod,

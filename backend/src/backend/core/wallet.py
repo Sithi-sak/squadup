@@ -25,7 +25,7 @@ def adjust_coin_balance(
     event source doesn't duplicate the read-modify-write + audit-row shape (mirrors `notify()`'s
     role for notifications). Raises 409 rather than letting a balance go negative. Doesn't touch
     `routers/wallet.py`'s own topup/withdrawal read-modify-write - those rely on inserting the
-    `wallet_transactions` row *before* crediting so a replayed Stripe `payment_intent_id`'s unique
+    `wallet_transactions` row *before* crediting so a replayed `payment_reference`'s unique
     constraint blocks the credit, an ordering this helper doesn't need for booking events."""
     new_balance = get_coin_balance(client, user_id) + delta
     if new_balance < 0:

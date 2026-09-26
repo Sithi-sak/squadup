@@ -1,16 +1,18 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-import stripe
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 
+from ..core import payway
 from ..core.auth import get_current_user_id
-from ..core.config import get_settings
 from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.supabase import get_supabase_client
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
+logger = logging.getLogger(__name__)
 
 # SquadUp's cut of a payout (4.28c): the Pal keeps 80%, the platform takes 20%. Matches
 # `mocks/wallet.ts`'s `mockWithdrawalPlatformFeePct`, applied on the backend side too since the
@@ -28,17 +30,21 @@ _ABA_BANK_NAME = "ABA Bank"
 # 'card' and renders the fallback glyph rather than being mislabelled as one of these two.
 _CARD_NETWORKS = {"visa": "Visa", "mastercard": "Mastercard", "card": "Card"}
 
+# 4.59: the demo payout card (user request). Payouts are simulated - no money moves on approval
+# (see `admin.update_withdrawal_status`) - and this number fails the Luhn check, so it is let
+# through by name. Mirrors `utils/card.ts`.
+_DEMO_PAYOUT_CARDS = {"5156839937706777"}
+
 # A payout request that is still waiting on, or in the middle of, an admin decision. Its coins are
 # held out of the withdrawable balance but not debited yet (4.31).
 _OPEN_WITHDRAWAL_STATUSES = ("requested", "in_progress")
 
-# 4.4: registering for real Bakong KHQR access is out of scope for this project, so "QR Scan"
-# simulates the KHQR UX instead - a session auto-confirms itself after KHQR_AUTO_CONFIRM_SECONDS
-# rather than waiting on a real bank webhook, standing in for the judge/phone "scanning" it. State
-# only needs to survive one demo session, so an in-memory dict (not a table) is enough.
-KHQR_AUTO_CONFIRM_SECONDS = 5
-KHQR_SESSION_TTL_SECONDS = 120
-_khqr_sessions: dict[str, dict] = {}
+# 4.58: "QR Scan" shows a real ABA KHQR from PayWay, but a classroom demo can't count on someone
+# actually paying it, so a KHQR top-up also auto-succeeds this many seconds after it was created.
+# A real scan settles it the same way, just sooner. Card top-ups never auto-succeed.
+KHQR_AUTO_CONFIRM_SECONDS = 10
+
+_TOPUP_DETAIL = {"card": "Card", "khqr": "KHQR"}
 
 
 # Schemas ---------------------------------------------------------------------------------
@@ -69,28 +75,28 @@ class WalletOut(CamelModel):
     activity: list[WalletActivityOut]
 
 
-class TopupPaymentIntentIn(CamelModel):
+class TopupPackageIn(CamelModel):
     package_id: str
 
 
-class TopupPaymentIntentOut(CamelModel):
-    client_secret: str
-    payment_intent_id: str
-
-
-class TopupIn(CamelModel):
-    package_id: str
-    payment_intent_id: str
-
-
-class KhqrSessionOut(CamelModel):
-    session_id: str
-    qr_payload: str
+class CardCheckoutOut(CamelModel):
+    tran_id: str
     amount_usd: float
-    expires_in_seconds: int
+    # Signed fields for PayWay's card popup, posted by the browser itself (`lib/payway.ts`).
+    form: dict[str, str]
 
 
-class KhqrStatusOut(CamelModel):
+class KhqrCheckoutOut(CamelModel):
+    tran_id: str
+    amount_usd: float
+    coins: int
+    # The KHQR string itself; `KhqrCard.vue` draws the code from it.
+    qr_string: str
+    expires_at: str
+
+
+class TopupStatusOut(CamelModel):
+    # 'pending' | 'paid' | 'failed' | 'expired' ('expired' is KHQR only)
     status: str
 
 
@@ -243,7 +249,7 @@ def _record_transaction(
     detail: str | None,
     coins: int,
     txn_status: str = "completed",
-    stripe_payment_intent_id: str | None = None,
+    payment_reference: str | None = None,
     withdrawal_id: str | None = None,
 ) -> None:
     client.table("wallet_transactions").insert(
@@ -255,7 +261,7 @@ def _record_transaction(
             "label": label,
             "detail": detail,
             "coins": coins,
-            "stripe_payment_intent_id": stripe_payment_intent_id,
+            "payment_reference": payment_reference,
             "withdrawal_id": withdrawal_id,
         }
     ).execute()
@@ -305,164 +311,190 @@ def list_topup_packages() -> list[dict]:
     return get_supabase_client().table("topup_packages").select("*").order("price_usd").execute().data or []
 
 
-@router.post("/topup/payment-intent", response_model=TopupPaymentIntentOut, status_code=status.HTTP_201_CREATED)
-def create_topup_payment_intent(payload: TopupPaymentIntentIn, user_id: str = Depends(get_current_user_id)) -> dict:
-    """4.1c: creates a Stripe PaymentIntent for the chosen package's dollar amount - the frontend
-    confirms it client-side with Stripe Elements (a card form embedded on `/wallet`, same pattern
-    as PawMart's `POST /payment-intent`), then calls `POST /topup` with the resulting
-    `payment_intent_id`. Nothing is credited here; that endpoint verifies the charge actually
-    succeeded before crediting anything."""
-    client = get_supabase_client()
-    package = client.table("topup_packages").select("*").eq("id", payload.package_id).maybe_single().execute()
+def _get_package(client, package_id: str) -> dict:
+    package = client.table("topup_packages").select("*").eq("id", package_id).maybe_single().execute()
     if not package or not package.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Top-up package not found")
-
-    stripe.api_key = get_settings().stripe_secret_key
-    intent = stripe.PaymentIntent.create(
-        amount=round(package.data["price_usd"] * 100),
-        currency="usd",
-        payment_method_types=["card"],
-        metadata={"user_id": user_id, "package_id": payload.package_id},
-    )
-    return {"client_secret": intent.client_secret, "payment_intent_id": intent.id}
+    return package.data
 
 
-@router.post("/topup", response_model=WalletOut, status_code=status.HTTP_201_CREATED)
-def top_up(payload: TopupIn, user_id: str = Depends(get_current_user_id)) -> dict:
-    """4.1d: the only place a top-up actually gets credited. Re-verifies the PaymentIntent
-    server-side against the Stripe API (status/amount/who it belongs to) rather than trusting the
-    client's word that payment succeeded - a client hitting this endpoint proves nothing on its
-    own, that was the old mock `POST /topup`'s exact flaw."""
-    client = get_supabase_client()
-    package = client.table("topup_packages").select("*").eq("id", payload.package_id).maybe_single().execute()
-    if not package or not package.data:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Top-up package not found")
-
-    stripe.api_key = get_settings().stripe_secret_key
-    try:
-        intent = stripe.PaymentIntent.retrieve(payload.payment_intent_id)
-    except stripe.error.StripeError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid payment intent") from exc
-
-    # StripeObject has no .get() - only __getitem__/__contains__, same gotcha PawMart hit.
-    intent_user_id = intent.metadata["user_id"] if "user_id" in intent.metadata else None  # noqa: SIM401
-    if intent_user_id != user_id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your payment")
-    if intent.status != "succeeded":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment has not succeeded")
-    if intent.amount != round(package.data["price_usd"] * 100):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment amount does not match package price")
-
+def _credit_topup(client, user_id: str, *, coins: int, detail: str, payment_reference: str) -> None:
+    """Logs the ledger row *before* crediting, so the unique `payment_reference` rejects a second
+    credit for the same payment before the balance moves."""
     user = client.table("users").select("coin_balance").eq("id", user_id).maybe_single().execute()
     if not user or not user.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-
-    coins = package.data["coins"] + package.data["bonus_coins"]
     try:
-        # Unique constraint on `stripe_payment_intent_id` (4.1b) rejects a second top-up for the
-        # same PaymentIntent - the idempotency guard against a double-submitted confirm.
         _record_transaction(
             client,
             user_id,
             kind="topup",
             label="Top-up",
-            detail="Visa",
+            detail=detail,
             coins=coins,
-            stripe_payment_intent_id=payload.payment_intent_id,
+            payment_reference=payment_reference,
         )
     except Exception as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This payment has already been used") from exc
-
     client.table("users").update({"coin_balance": user.data["coin_balance"] + coins}).eq("id", user_id).execute()
 
-    return _get_wallet(user_id)
 
+def _settle_topup(topup: dict) -> str:
+    """'paid', 'pending', 'failed' or 'expired' for a PayWay top-up, crediting it the first time
+    it's settled (4.57c/4.58b). Only PayWay's signed Check Transaction answer counts as a real
+    payment - never the client's or a callback body's word that it went through. The one
+    exception is the KHQR demo timer (`KHQR_AUTO_CONFIRM_SECONDS`)."""
+    if topup["status"] == "paid":
+        return "paid"
 
-@router.post("/topup/khqr", response_model=KhqrSessionOut, status_code=status.HTTP_201_CREATED)
-def create_khqr_session(payload: TopupPaymentIntentIn, user_id: str = Depends(get_current_user_id)) -> dict:
-    """4.4b: fake KHQR "Scan to Pay" session for the chosen package - no Stripe/Bakong call at
-    all, just a timer the frontend polls via `GET /topup/khqr/{id}/status`."""
+    approved = False
+    result = payway.check_transaction(topup["tran_id"])
+    if result:
+        payment_status = result.get("payment_status")
+        if payment_status in payway.FAILED_STATUSES:
+            return "failed"
+        if payment_status == payway.APPROVED:
+            # Guards against a transaction for some other amount being passed off under this
+            # tran_id.
+            if abs(float(result.get("total_amount", 0)) - float(topup["amount_usd"])) > 0.005:
+                logger.error(
+                    "tran=%s approved amount %s != expected %s",
+                    topup["tran_id"],
+                    result.get("total_amount"),
+                    topup["amount_usd"],
+                )
+                return "failed"
+            approved = True
+
+    if not approved and topup["method"] == "khqr":
+        age = datetime.now(UTC) - datetime.fromisoformat(topup["created_at"])
+        if age >= timedelta(minutes=payway.QR_LIFETIME_MINUTES):
+            return "expired"
+        if age >= timedelta(seconds=KHQR_AUTO_CONFIRM_SECONDS):
+            logger.info("tran=%s KHQR demo auto-confirm", topup["tran_id"])
+            approved = True
+
+    if not approved:
+        return "pending"
+
+    # Only the request that flips the row out of 'pending' credits it, so a poll and a callback
+    # racing each other can't both add the coins.
     client = get_supabase_client()
-    package = client.table("topup_packages").select("*").eq("id", payload.package_id).maybe_single().execute()
-    if not package or not package.data:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Top-up package not found")
-
-    now = datetime.now(UTC)
-    session_id = str(uuid4())
-    _khqr_sessions[session_id] = {
-        "user_id": user_id,
-        "amount_usd": package.data["price_usd"],
-        "coins": package.data["coins"] + package.data["bonus_coins"],
-        "status": "pending",
-        "confirm_at": now + timedelta(seconds=KHQR_AUTO_CONFIRM_SECONDS),
-        "expires_at": now + timedelta(seconds=KHQR_SESSION_TTL_SECONDS),
-    }
-    # Short and low-entropy on purpose - `session_id` already carries the real reference for the
-    # status/complete calls, this string only needs to look plausible in the rendered QR. A long
-    # payload (e.g. a full UUID) forces a higher QR version, i.e. a denser grid of small modules;
-    # keeping this short lets the frontend pin a low version for a bigger-block look.
-    qr_payload = f"KHQR|SquadUp|{package.data['price_usd']:.2f}|{session_id[:8]}"
-    return {
-        "session_id": session_id,
-        "qr_payload": qr_payload,
-        "amount_usd": package.data["price_usd"],
-        "expires_in_seconds": KHQR_SESSION_TTL_SECONDS,
-    }
+    claimed = (
+        client.table("payway_topups")
+        .update({"status": "paid", "paid_at": datetime.now(UTC).isoformat()})
+        .eq("tran_id", topup["tran_id"])
+        .eq("status", "pending")
+        .execute()
+    )
+    if claimed.data:
+        _credit_topup(
+            client,
+            topup["user_id"],
+            coins=topup["coins"],
+            detail=_TOPUP_DETAIL[topup["method"]],
+            payment_reference=f"payway_{topup['tran_id']}",
+        )
+    return "paid"
 
 
-@router.get("/topup/khqr/{session_id}/status", response_model=KhqrStatusOut)
-def get_khqr_status(session_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
-    """4.4c: the frontend polls this while the QR modal is open. Flips `pending` -> `confirmed`
-    once `confirm_at` has passed - standing in for the bank webhook a real KHQR integration would
-    wait on - or -> `expired` if nobody "scanned" it in time."""
-    session = _khqr_sessions.get(session_id)
-    if not session or session["user_id"] != user_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "KHQR session not found")
-
-    now = datetime.now(UTC)
-    if session["status"] == "pending" and now >= session["expires_at"]:
-        session["status"] = "expired"
-    elif session["status"] == "pending" and now >= session["confirm_at"]:
-        session["status"] = "confirmed"
-    return {"status": session["status"]}
+def _get_topup(tran_id: str) -> dict | None:
+    rows = get_supabase_client().table("payway_topups").select("*").eq("tran_id", tran_id).execute().data
+    return rows[0] if rows else None
 
 
-@router.post("/topup/khqr/{session_id}/complete", response_model=WalletOut, status_code=status.HTTP_201_CREATED)
-def complete_khqr_topup(session_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
-    """4.4d: the actual credit, only once the session has reached `confirmed` - same
-    verify-before-credit shape as `top_up`'s Stripe re-check, just against our own fake session
-    state instead of Stripe's API. `stripe_payment_intent_id` doubles as the idempotency key here
-    too (`khqr_<session_id>`, still unique) rather than adding a KHQR-specific column."""
-    session = _khqr_sessions.get(session_id)
-    if not session or session["user_id"] != user_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "KHQR session not found")
-    if session["status"] != "confirmed":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment has not been confirmed yet")
+def _get_owned_topup(tran_id: str, user_id: str, method: str) -> dict:
+    topup = _get_topup(tran_id)
+    if not topup or topup["user_id"] != user_id or topup["method"] != method:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Top-up not found")
+    return topup
 
-    client = get_supabase_client()
-    user = client.table("users").select("coin_balance").eq("id", user_id).maybe_single().execute()
+
+def _start_topup(client, user_id: str, package_id: str, method: str) -> tuple[dict, str, str]:
+    """Records a pending `payway_topups` row for the package, freezing its coins and price, and
+    returns `(row, tran_id, payer_email)`."""
+    package = _get_package(client, package_id)
+    user = client.table("users").select("email").eq("id", user_id).maybe_single().execute()
     if not user or not user.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
+    row = {
+        "tran_id": payway.new_tran_id(),
+        "user_id": user_id,
+        "package_id": package["id"],
+        "method": method,
+        "coins": package["coins"] + package["bonus_coins"],
+        "amount_usd": float(package["price_usd"]),
+    }
+    client.table("payway_topups").insert(row).execute()
+    return row, row["tran_id"], user.data["email"]
+
+
+def _topup_description(coins: int) -> str:
+    return f"SquadUp {coins:,} Squad Coin"
+
+
+@router.post("/topup/card", response_model=CardCheckoutOut, status_code=status.HTTP_201_CREATED)
+def create_card_checkout(payload: TopupPackageIn, user_id: str = Depends(get_current_user_id)) -> dict:
+    """4.57c: records a pending card top-up and returns the signed fields for PayWay's card
+    popup. Nothing is credited here - the popup charges the card on PayWay's side, and
+    `GET /topup/card/{tran_id}` (or PayWay's callback) settles it afterwards."""
+    row, tran_id, email = _start_topup(get_supabase_client(), user_id, payload.package_id, "card")
+    form = payway.card_checkout_form(tran_id, row["amount_usd"], _topup_description(row["coins"]), email)
+    return {"tran_id": tran_id, "amount_usd": row["amount_usd"], "form": form}
+
+
+@router.get("/topup/card/{tran_id}", response_model=TopupStatusOut)
+def get_card_topup_status(tran_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
+    """Polled by the Wallet page while PayWay's popup is up. Settles the top-up as a side effect,
+    so local dev (where PayWay's callback can't reach localhost) works without the callback."""
+    return {"status": _settle_topup(_get_owned_topup(tran_id, user_id, "card"))}
+
+
+@router.post("/topup/khqr", response_model=KhqrCheckoutOut, status_code=status.HTTP_201_CREATED)
+def create_khqr_checkout(payload: TopupPackageIn, user_id: str = Depends(get_current_user_id)) -> dict:
+    """4.58b: records a pending KHQR top-up and asks PayWay for a real KHQR for it, payable from
+    ABA Mobile or any Bakong member bank app until `expires_at`."""
+    client = get_supabase_client()
+    row, tran_id, email = _start_topup(client, user_id, payload.package_id, "khqr")
     try:
-        _record_transaction(
-            client,
-            user_id,
-            kind="topup",
-            label="Top-up",
-            detail="KHQR",
-            coins=session["coins"],
-            stripe_payment_intent_id=f"khqr_{session_id}",
-        )
-    except Exception as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This payment has already been used") from exc
+        qr_string = payway.generate_qr(tran_id, row["amount_usd"], _topup_description(row["coins"]), email)
+    except payway.PayWayError as exc:
+        logger.exception("user=%s KHQR generation failed", user_id)
+        client.table("payway_topups").delete().eq("tran_id", tran_id).execute()
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not create a KHQR payment") from exc
 
-    client.table("users").update({"coin_balance": user.data["coin_balance"] + session["coins"]}).eq(
-        "id", user_id
-    ).execute()
-    del _khqr_sessions[session_id]
+    expires_at = datetime.now(UTC) + timedelta(minutes=payway.QR_LIFETIME_MINUTES)
+    return {
+        "tran_id": tran_id,
+        "amount_usd": row["amount_usd"],
+        "coins": row["coins"],
+        "qr_string": qr_string,
+        "expires_at": expires_at.isoformat(),
+    }
 
-    return _get_wallet(user_id)
+
+@router.get("/topup/khqr/{tran_id}", response_model=TopupStatusOut)
+def get_khqr_topup_status(tran_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
+    """Polled while the KHQR modal is open. Settles on a real PayWay payment or, for the demo,
+    once `KHQR_AUTO_CONFIRM_SECONDS` have passed."""
+    return {"status": _settle_topup(_get_owned_topup(tran_id, user_id, "khqr"))}
+
+
+@router.post("/topup/payway/callback")
+async def payway_callback(request: Request) -> dict[str, bool]:
+    """PayWay's pushback once a card or KHQR payment completes. Public on purpose; the body is
+    only used to find the row, and `_settle_topup` re-checks with PayWay before crediting
+    anything, so a forged callback can't mint coins."""
+    try:
+        body = await request.json()
+    except ValueError:
+        body = dict(await request.form())
+    tran_id = body.get("tran_id")
+    topup = await run_in_threadpool(_get_topup, tran_id) if isinstance(tran_id, str) else None
+    if topup:
+        await run_in_threadpool(_settle_topup, topup)
+    return {"received": True}
 
 
 # Payout methods ------------------------------------------------------------------------------
@@ -493,7 +525,11 @@ def create_payout_method(payload: PayoutMethodCreateIn, user_id: str = Depends(g
     if payload.brand not in _PAYOUT_BRANDS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported payout brand")
     digits = _digits(payload.account)
-    if payload.brand == "card" and (not 12 <= len(digits) <= 19 or not _luhn_ok(digits)):
+    if (
+        payload.brand == "card"
+        and digits not in _DEMO_PAYOUT_CARDS
+        and (not 12 <= len(digits) <= 19 or not _luhn_ok(digits))
+    ):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Enter a valid card number")
     if payload.brand == "bank" and len(digits) < 6:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Enter the full ABA account number")

@@ -3410,6 +3410,68 @@ kind of Stripe id.
     - [x] 4.56f Verification: `oxlint` clean on all six touched frontend files; `vue-tsc` shows the
           same 16 pre-existing errors and no new ones. Not run live in the app per
           [[feedback_no_build_or_run_skill]].
+  - [x] 4.57 ABA PayWay replaces Stripe for card top-ups (user request, 2026-09-26). Ported from
+        Niyey's PayWay checkout (`niyey/backend/src/backend/services/payway.py`,
+        `routers/payway.py`, `frontend/src/utils/payway.ts`). Card details are typed into PayWay's
+        own popup (`checkout2-0.js`), never into SquadUp. A top-up is only credited after PayWay's
+        signed Check Transaction API reports it `APPROVED` for the right amount. KHQR stays the
+        4.4 simulated flow, only the card path moves.
+    - [x] 4.57a Backend: `core/payway.py` (HMAC-SHA512 signing, signed card popup fields,
+          Check Transaction) + `PAYWAY_*` settings replace `STRIPE_SECRET_KEY`; `stripe` dependency
+          removed.
+    - [x] 4.57b Migration: `payway_topups` table (one row per card attempt, keyed by `tran_id`) and
+          `wallet_transactions.stripe_payment_intent_id` renamed to `payment_reference`.
+    - [x] 4.57c Backend: `POST /wallet/topup/card`, `GET /wallet/topup/card/{tran_id}` (settles on
+          poll) and the public `POST /wallet/topup/card/callback` pushback replace
+          `/topup/payment-intent` + `/topup`. A conditional pending-to-paid update makes a racing
+          poll and callback credit exactly once.
+    - [x] 4.57d Frontend: `lib/payway.ts` popup loader, store methods, `WalletView.vue` card path
+          opens the PayWay popup and polls; Stripe Element, `lib/stripe.ts`,
+          `@stripe/stripe-js` and `VITE_STRIPE_PUBLISHABLE_KEY` removed. Card network logos from
+          `aba_resource/`.
+    - [x] 4.57e Verification: `ruff check` clean; `oxlint` clean on the touched files; `vue-tsc`
+          shows the same 16 pre-existing errors and no new ones. Sandbox smoke test against the
+          real PayWay sandbox (Niyey's merchant profile, creds copied into `backend/.env`): Check
+          Transaction accepts our hash (`tran_id not found`, not `wrong hash`) and the signed card
+          form gets PayWay's 302 to its hosted card page. ERD regenerated
+          (`docs/erd/generate_erd.py`). `20260926120000_payway_topups.sql` pushed to the linked
+          project on 2026-09-26 (first attempt 403'd while the CLI was logged into the Niyey
+          account, which made the first card top-up 500). A real card payment through the popup is left to the user per
+          [[feedback_no_build_or_run_skill]].
+  - [x] 4.58 Real ABA KHQR replaces the fake 4.4 QR (user request, 2026-09-26). "QR Scan" now
+        shows a genuine KHQR from PayWay's `generate-qr` (scannable by ABA Mobile or any Bakong
+        app), laid out to `aba_resource/qr_guideline.png`'s "on Website Popup" style. For the
+        demo, a timer still auto-succeeds the payment; a real scan settles it the same way.
+    - [x] 4.58a Migration: `payway_topups.method` (`card` | `khqr`).
+    - [x] 4.58b Backend: `payway.generate_qr`; `POST /wallet/topup/khqr` records a `khqr` row and
+          returns the QR string; `GET /wallet/topup/khqr/{tran_id}` settles it (PayWay approval,
+          or the demo timer). In-memory `_khqr_sessions` and `/complete` removed.
+    - [x] 4.58c Frontend: `KhqrCard.vue` rebuilt to the guideline (ABA PAY logo 196x31, red KHQR
+          header with folded corner, merchant + amount, perforation, 144px code with the Bakong
+          badge, scan caption, 24px safe space), ported from Niyey. Store + `WalletView.vue`
+          modal updated, with an expiry countdown.
+    - [x] 4.58d Verification: `ruff check` clean; `oxlint` clean on the touched files; `vue-tsc`
+          shows the same 16 pre-existing errors. Migration pushed. Sandbox `generate-qr` returns a
+          real KHQR (`000201...`) for all four package prices. It first failed with "Wrong Hash."
+          because `amount` went out as a JSON number: whole-dollar 10.0 never matches the hashed
+          "10.00". It's now sent as the hashed string (Niyey has the same latent bug). Settle
+          logic checked on an unsaved row: fresh KHQR `pending`, over 5 min `expired`, card never
+          auto-succeeds. ERD regenerated. Demo auto-confirm is `KHQR_AUTO_CONFIRM_SECONDS` (10s)
+          in `routers/wallet.py`.
+    - [x] 4.58e Fix (user report, same day): on success the KHQR modal closed and reopened.
+          `fetchWallet()` flips `walletStore.loading`, and `WalletView.vue` swaps the whole page,
+          modal included, for its skeleton while that's true. `fetchWallet({ silent: true })` now
+          refreshes in place, used after card and KHQR payments. The KHQR modal stays open on
+          success ("N SC added to your wallet" + Done) instead of auto-closing;
+          `POST /wallet/topup/khqr` returns `coins` for that line.
+  - [x] 4.59 Payouts stay simulated; demo payout card saves (user request, 2026-09-26). Checked
+        PayWay's Payout API against the sandbox: our hash is accepted, but beneficiaries must be
+        RSA-encrypted (key from ABA) and whitelisted, and a payee can only be an ABA account or
+        merchant ID, never a card. User chose to keep payouts simulated (4.31's flow, unchanged).
+        `5156 8399 3770 6777` couldn't be saved as a payout card because it fails the Luhn check;
+        it's now allowed by name in `_DEMO_PAYOUT_CARDS` (`routers/wallet.py`) and
+        `DEMO_PAYOUT_CARDS` (`utils/card.ts`). Its `51` prefix makes it a Mastercard, so it saves
+        and shows as "Mastercard •••• 6777". `ruff` + `oxlint` clean, `vue-tsc` unchanged (16).
 
 ---
 

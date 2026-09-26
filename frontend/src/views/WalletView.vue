@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import type { Stripe, StripeCardElement, StripeElements } from '@stripe/stripe-js'
-import QRCode from 'qrcode'
 import {
   PhArrowUp,
   PhArrowDown,
@@ -17,8 +15,12 @@ import {
   PhCheckCircle,
 } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
+import visaLogo from '@/assets/payway/visa.svg'
+import mastercardLogo from '@/assets/payway/mastercard.svg'
+import unionpayLogo from '@/assets/payway/unionpay.svg'
+import jcbLogo from '@/assets/payway/jcb.svg'
 import KhqrCard from '@/components/wallet/KhqrCard.vue'
-import { stripePromise } from '@/lib/stripe'
+import { closePayWayCheckout, openPayWayCheckout, preloadPayWay } from '@/lib/payway'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore, type WalletActivity } from '@/stores/wallet'
 import { coinsToUsd } from '@/utils/coins'
@@ -35,10 +37,11 @@ const isPal = computed(() => Boolean(authStore.user?.playerId))
 onMounted(() => {
   walletStore.fetchWallet()
   walletStore.fetchTopupPackages()
-  loadStripe()
+  preloadPayWay()
 })
 onBeforeUnmount(() => {
-  cardElement?.unmount()
+  stopCardPolling()
+  closePayWayCheckout()
   stopKhqrPolling()
 })
 
@@ -87,77 +90,78 @@ function formatDateTime(iso: string) {
   return `${day} · ${time}`
 }
 
-// Stripe Elements card form (same mount pattern as PawMart's CheckoutView) - a card number/
-// expiry/CVC field embedded directly on this page, since Wallet Top-up confirms the charge
-// client-side rather than redirecting to a Stripe-hosted page.
-const cardElementRef = ref<HTMLDivElement | null>(null)
-const cardError = ref<string | null>(null)
-const cardComplete = ref(false)
-const stripeLoadFailed = ref(false)
-let stripe: Stripe | null = null
-let elements: StripeElements | null = null
-let cardElement: StripeCardElement | null = null
-
-async function loadStripe() {
-  stripe = await stripePromise
-  stripeLoadFailed.value = !stripe
-  mountCardElementIfReady()
-}
-
-// `cardElementRef` and `stripe` become ready independently and in either order - the wallet's
-// own `/wallet/me` fetch (toggling `walletStore.loading`, which the card form's `v-else` is
-// gated on) races the Stripe.js script load, so a one-shot mount attempt right after `onMounted`
-// can run while the div hasn't rendered yet and silently never retry. Re-running this on both
-// triggers (below) makes the mount order-independent.
-function mountCardElementIfReady() {
-  if (cardElement || !stripe || !cardElementRef.value) return
-
-  elements ??= stripe.elements()
-  cardElement = elements.create('card', {
-    hidePostalCode: true,
-    style: {
-      base: { color: '#dcdcdc', '::placeholder': { color: '#707070' } },
-    },
-  })
-  cardElement.on('change', (event) => {
-    cardError.value = event.error?.message ?? null
-    cardComplete.value = event.complete
-  })
-  cardElement.mount(cardElementRef.value)
-}
-
-watch(cardElementRef, mountCardElementIfReady)
-
 const toppingUp = ref(false)
+
+// 4.57: card top-ups go through ABA PayWay's own card popup (`lib/payway.ts`), so card details
+// never touch SquadUp. The popup charges the card on PayWay's side and closes itself; this page
+// polls the backend, which confirms the payment with PayWay before crediting it.
+const CARD_POLL_INTERVAL_MS = 2000
+let cardTranId: string | null = null
+let cardPollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopCardPolling() {
+  if (cardPollTimer) {
+    clearInterval(cardPollTimer)
+    cardPollTimer = null
+  }
+}
+
+async function onCardTopupPaid() {
+  stopCardPolling()
+  cardTranId = null
+  closePayWayCheckout()
+  await walletStore.fetchWallet({ silent: true })
+  toast.add({ title: 'Top-up successful', description: 'Squad Coin added to your wallet.', color: 'success' })
+}
+
+function onCardTopupFailed() {
+  stopCardPolling()
+  cardTranId = null
+  closePayWayCheckout()
+  toast.add({ title: 'Card was declined', description: 'No coins were added. Please try again.', color: 'error' })
+}
+
+async function checkCardTopup(tranId: string) {
+  const { status: s } = await walletStore.getCardTopupStatus(tranId)
+  // A newer attempt (or a finished one) owns the page now; ignore a stale answer.
+  if (cardTranId !== tranId) return s
+  if (s === 'paid') await onCardTopupPaid()
+  else if (s === 'failed') onCardTopupFailed()
+  return s
+}
+
+/** The customer closed PayWay's popup. One last check covers a payment made just before closing;
+ * anything still pending after that is treated as cancelled. */
+async function onCardPopupClosed(tranId: string) {
+  if (cardTranId !== tranId) return
+  stopCardPolling()
+  try {
+    const s = await checkCardTopup(tranId)
+    if (s !== 'pending' || cardTranId !== tranId) return
+  } catch {
+    // Fall through to the cancelled toast; a payment that did go through is still settled by
+    // PayWay's callback.
+  }
+  cardTranId = null
+  toast.add({ title: 'Top-up cancelled', description: 'No charge was made.', color: 'neutral' })
+}
 
 async function topUp(packageId: string | null) {
   if (!packageId || toppingUp.value) return
-  if (!stripe || !cardElement) {
-    toast.add({ title: 'Payment form is not ready yet', description: 'Please try again.', color: 'error' })
-    return
-  }
-  if (!cardComplete.value) {
-    toast.add({ title: 'Enter your card details', description: 'Fill in the card form to continue.', color: 'error' })
-    return
-  }
 
   toppingUp.value = true
   try {
-    const { clientSecret, paymentIntentId } = await walletStore.createTopupPaymentIntent(packageId)
-    const { paymentIntent, error } = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: { card: cardElement },
-    })
-    if (error || paymentIntent?.status !== 'succeeded') {
-      toast.add({ title: 'Card was declined', description: error?.message ?? 'Please try again.', color: 'error' })
-      return
-    }
-
-    await walletStore.confirmTopup(packageId, paymentIntentId)
-    cardElement.clear()
-    toast.add({ title: 'Top-up successful', description: 'Squad Coin added to your wallet.', color: 'success' })
+    const checkout = await walletStore.createCardCheckout(packageId)
+    cardTranId = checkout.tranId
+    await openPayWayCheckout(checkout.form, () => onCardPopupClosed(checkout.tranId))
+    stopCardPolling()
+    cardPollTimer = setInterval(() => {
+      checkCardTopup(checkout.tranId).catch(() => {})
+    }, CARD_POLL_INTERVAL_MS)
   } catch (err) {
+    cardTranId = null
     toast.add({
-      title: "Couldn't complete top-up",
+      title: "Couldn't open card payment",
       description: err instanceof Error ? err.message : 'Please try again.',
       color: 'error',
     })
@@ -166,48 +170,63 @@ async function topUp(packageId: string | null) {
   }
 }
 
-// 4.4: simulated KHQR "Scan to Pay" - the QR encodes a fake session reference (no real Bakong
-// call), and the backend auto-confirms it a few seconds after creation, standing in for a judge
-// actually scanning it with a banking app. Polling (not a websocket) matches how a real KHQR
-// checkout waits on a bank webhook, just against our own fake session status instead.
+// 4.58: "QR Scan" shows a real ABA KHQR from PayWay (`KhqrCard.vue`, drawn to ABA's QR display
+// guideline). The backend settles it on a real payment or, for the demo, after a short timer, so
+// this only polls and reacts.
+const KHQR_POLL_INTERVAL_MS = 2000
 const khqrModalOpen = ref(false)
-const khqrQrDataUrl = ref<string | null>(null)
+const khqrQrString = ref('')
 const khqrAmount = ref(0)
-const khqrStatus = ref<'pending' | 'confirmed' | 'completed' | 'expired'>('pending')
-let khqrSessionId: string | null = null
+const khqrCoins = ref(0)
+const khqrStatus = ref<'pending' | 'paid' | 'failed' | 'expired'>('pending')
+const khqrExpiresAt = ref(0)
+const khqrSecondsLeft = ref(0)
+let khqrTranId: string | null = null
 let khqrPollTimer: ReturnType<typeof setInterval> | null = null
+let khqrCountdownTimer: ReturnType<typeof setInterval> | null = null
+
+const khqrCountdown = computed(() => {
+  const minutes = Math.floor(khqrSecondsLeft.value / 60)
+  const seconds = String(khqrSecondsLeft.value % 60).padStart(2, '0')
+  return `${minutes}:${seconds}`
+})
 
 function stopKhqrPolling() {
   if (khqrPollTimer) {
     clearInterval(khqrPollTimer)
     khqrPollTimer = null
   }
+  if (khqrCountdownTimer) {
+    clearInterval(khqrCountdownTimer)
+    khqrCountdownTimer = null
+  }
+}
+
+function tickKhqrCountdown() {
+  khqrSecondsLeft.value = Math.max(0, Math.ceil((khqrExpiresAt.value - Date.now()) / 1000))
 }
 
 async function pollKhqrStatus() {
-  if (!khqrSessionId) return
-  const { status: s } = await walletStore.getKhqrStatus(khqrSessionId)
+  const tranId = khqrTranId
+  if (!tranId) return
+  const { status: s } = await walletStore.getKhqrTopupStatus(tranId)
+  // The modal was closed, or a newer QR replaced this one, while the request was in flight.
+  if (khqrTranId !== tranId) return
   khqrStatus.value = s
 
-  if (s === 'confirmed') {
+  if (s === 'paid') {
     stopKhqrPolling()
-    try {
-      await walletStore.completeKhqrTopup(khqrSessionId)
-      khqrStatus.value = 'completed'
-      toast.add({ title: 'Top-up successful', description: 'Squad Coin added to your wallet.', color: 'success' })
-      setTimeout(() => (khqrModalOpen.value = false), 1200)
-    } catch (err) {
-      toast.add({
-        title: "Couldn't complete top-up",
-        description: err instanceof Error ? err.message : 'Please try again.',
-        color: 'error',
-      })
-      khqrModalOpen.value = false
-    }
+    khqrTranId = null
+    await walletStore.fetchWallet({ silent: true })
+    toast.add({ title: 'Top-up successful', description: 'Squad Coin added to your wallet.', color: 'success' })
+  } else if (s === 'failed') {
+    stopKhqrPolling()
+    khqrTranId = null
+    toast.add({ title: 'Payment failed', description: 'No coins were added. Please try again.', color: 'error' })
+    khqrModalOpen.value = false
   } else if (s === 'expired') {
     stopKhqrPolling()
-    toast.add({ title: 'QR code expired', description: 'Please try again.', color: 'error' })
-    khqrModalOpen.value = false
+    khqrTranId = null
   }
 }
 
@@ -216,22 +235,21 @@ async function startKhqrTopup(packageId: string | null) {
 
   toppingUp.value = true
   try {
-    const session = await walletStore.createKhqrSession(packageId)
-    khqrSessionId = session.sessionId
-    khqrAmount.value = session.amountUsd
+    const checkout = await walletStore.createKhqrCheckout(packageId)
+    khqrTranId = checkout.tranId
+    khqrQrString.value = checkout.qrString
+    khqrAmount.value = checkout.amountUsd
+    khqrCoins.value = checkout.coins
     khqrStatus.value = 'pending'
-    // `errorCorrectionLevel: 'L'` (least redundancy) plus the backend's short payload keep this
-    // at the QR spec's lowest version - fewer, bigger modules ("blockier") rather than the dense
-    // fine-grained grid a longer/higher-redundancy payload would force at the same pixel size.
-    khqrQrDataUrl.value = await QRCode.toDataURL(session.qrPayload, {
-      margin: 1,
-      width: 300,
-      errorCorrectionLevel: 'L',
-    })
+    khqrExpiresAt.value = new Date(checkout.expiresAt).getTime()
+    tickKhqrCountdown()
     khqrModalOpen.value = true
 
     stopKhqrPolling()
-    khqrPollTimer = setInterval(pollKhqrStatus, 1000)
+    khqrPollTimer = setInterval(() => {
+      pollKhqrStatus().catch(() => {})
+    }, KHQR_POLL_INTERVAL_MS)
+    khqrCountdownTimer = setInterval(tickKhqrCountdown, 1000)
   } catch (err) {
     toast.add({
       title: "Couldn't start QR payment",
@@ -243,14 +261,22 @@ async function startKhqrTopup(packageId: string | null) {
   }
 }
 
+/** Closing the modal while a QR is still unpaid abandons it. A payment that still lands is
+ * settled by PayWay's callback. */
+function onKhqrModalToggle(open: boolean) {
+  if (open) return
+  stopKhqrPolling()
+  khqrTranId = null
+}
+
 function confirmTopUp() {
   const packageId = selectedPackageId.value ?? basePackageId.value
   if (paymentMethod.value === 'khqr') startKhqrTopup(packageId)
   else topUp(packageId)
 }
 
-// `?topup=cancelled` isn't a real routable state here (there's no redirect anymore, the card
-// form is inline), kept only so an old bookmarked/shared link with the old query param doesn't
+// `?topup=cancelled` isn't a real routable state here (the PayWay card popup never
+// redirects away from this page), kept only so an old bookmarked/shared link with the old query param doesn't
 // dead-end silently.
 if (route.query.topup === 'cancelled') {
   toast.add({ title: 'Top-up cancelled', description: 'No charge was made.', color: 'neutral' })
@@ -363,12 +389,15 @@ if (route.query.topup === 'cancelled') {
             </button>
           </UDropdownMenu>
 
-          <template v-if="paymentMethod === 'card'">
-            <p v-if="stripeLoadFailed" class="text-xs text-red-400">
-              Couldn't load the payment form. Check your connection and reload the page.
-            </p>
-            <div v-else ref="cardElementRef" class="min-w-56 flex-1 rounded-full bg-white/5 px-4 py-2 ring-1 ring-inset ring-white/10" />
-          </template>
+          <div v-if="paymentMethod === 'card'" class="flex min-w-56 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span class="text-sm text-slate-400">You'll enter your card in ABA PayWay's secure form.</span>
+            <span class="flex items-center gap-1">
+              <img :src="visaLogo" alt="Visa" class="h-4 w-auto" />
+              <img :src="mastercardLogo" alt="Mastercard" class="h-4 w-auto" />
+              <img :src="unionpayLogo" alt="UnionPay" class="h-4 w-auto" />
+              <img :src="jcbLogo" alt="JCB" class="h-4 w-auto" />
+            </span>
+          </div>
           <p v-else class="min-w-56 flex-1 text-sm text-slate-400">
             You'll scan a QR code to confirm this payment on the next step.
           </p>
@@ -383,23 +412,48 @@ if (route.query.topup === 'cancelled') {
             Confirm Top-Up
           </UButton>
         </div>
-        <p v-if="paymentMethod === 'card' && cardError" class="mt-2 text-xs text-red-400">{{ cardError }}</p>
       </div>
 
-      <UModal v-model:open="khqrModalOpen" title="Scan to Pay" description="KHQR" :ui="{ content: 'max-w-sm rounded-3xl' }">
+      <UModal
+        v-model:open="khqrModalOpen"
+        title="ABA KHQR"
+        description="Scan to pay with ABA Mobile or any KHQR banking app"
+        :ui="{ content: 'max-w-sm rounded-3xl' }"
+        @update:open="onKhqrModalToggle"
+      >
         <template #body>
-          <div class="flex flex-col items-center gap-4 py-2">
-            <KhqrCard :amount-usd="khqrAmount" :qr-data-url="khqrQrDataUrl" />
+          <div class="flex flex-col items-center gap-4">
+            <!-- The guideline's "on Website Popup" backdrop: the display sits on light grey. -->
+            <div class="w-full rounded-2xl bg-[#e8e9ec]">
+              <KhqrCard
+                merchant="SquadUp"
+                :amount="khqrAmount"
+                :payload="khqrQrString"
+                :paid="khqrStatus === 'paid'"
+                :expired="khqrStatus === 'expired'"
+              />
+            </div>
             <div class="flex items-center gap-2 text-sm text-slate-400">
-              <template v-if="khqrStatus === 'completed'">
+              <template v-if="khqrStatus === 'paid'">
                 <PhCheckCircle :size="18" weight="fill" class="text-brand-400" />
-                Payment successful
+                Payment successful. {{ khqrCoins.toLocaleString() }} SC added to your wallet.
+              </template>
+              <template v-else-if="khqrStatus === 'expired'">
+                This QR has expired. Close it and try again.
               </template>
               <template v-else>
                 <PhSpinnerGap :size="18" class="animate-spin" />
-                {{ khqrStatus === 'confirmed' ? 'Confirming payment…' : 'Waiting for confirmation on your banking app…' }}
+                Waiting for payment. QR expires in {{ khqrCountdown }}
               </template>
             </div>
+            <UButton
+              v-if="khqrStatus === 'paid'"
+              color="primary"
+              class="rounded-full px-8"
+              @click="khqrModalOpen = false"
+            >
+              Done
+            </UButton>
           </div>
         </template>
       </UModal>

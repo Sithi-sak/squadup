@@ -11,7 +11,14 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_role_key: str
 
-    stripe_secret_key: str
+    # ABA PayWay (4.57) - merchant id + the signing key PayWay's onboarding email calls the
+    # "public key". `payway_callback_url` is this backend's public `/wallet/topup/payway/callback`
+    # address; left empty in local dev, where PayWay can't reach localhost and the frontend's
+    # polling settles the payment on its own.
+    payway_merchant_id: str = ""
+    payway_api_key: str = ""
+    payway_base_url: str = "https://checkout-sandbox.payway.com.kh"
+    payway_callback_url: str = ""
 
     # Platform's cut of a completed booking, tracked per-booking only - no escrow, no coins
     # actually move for it (recap_squadup.md's "commission tracked manually", CHECKPOINT 4.3).

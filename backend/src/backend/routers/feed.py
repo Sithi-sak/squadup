@@ -1,3 +1,6 @@
+import logging
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import (
@@ -12,13 +15,16 @@ from fastapi import (
 )
 from pydantic import Field
 
+from ..core import video as clips
 from ..core.auth import get_current_user_id, get_optional_user_id
 from ..core.blocks import blocked_user_ids, require_not_blocked
 from ..core.schema import CamelModel
-from ..core.storage import upload_image_as_webp
+from ..core.storage import upload_bytes, upload_image_as_webp
 from ..core.supabase import get_supabase_client
 
 router = APIRouter(prefix="/feed", tags=["feed"])
+
+logger = logging.getLogger(__name__)
 
 
 # Schemas ---------------------------------------------------------------------------------
@@ -37,6 +43,9 @@ class PostOut(CamelModel):
     has_image: bool
     image_url: str | None
     image_urls: list[str]
+    video_url: str | None
+    video_poster_url: str | None
+    video_status: str | None
     category: str
     tag: str | None
     kind: str
@@ -170,6 +179,49 @@ def _collect_uploads(image: UploadFile | None, images: list[UploadFile] | None) 
     return [upload for upload in candidates if upload and upload.filename][:_MAX_POST_IMAGES]
 
 
+# A clip still `processing` after this long lost its encode (the server restarted mid-job, the
+# worker died), so it reads as `failed` and its author can delete it and try again.
+_VIDEO_STALE_AFTER = timedelta(minutes=30)
+
+
+def _video_status(row: dict) -> str | None:
+    video_status = row.get("video_status")
+    if video_status == "processing":
+        created_at = datetime.fromisoformat(row["created_at"])
+        if datetime.now(UTC) - created_at > _VIDEO_STALE_AFTER:
+            return "failed"
+    return video_status
+
+
+def _visible_posts(rows: list[dict], viewer_id: str | None) -> list[dict]:
+    """Drops clips that aren't ready yet unless the viewer wrote them: everyone else only sees a
+    video post once there is a video to play."""
+    return [row for row in rows if row.get("video_status") in (None, "ready") or row["author_id"] == viewer_id]
+
+
+def _finish_post_video(post_id: str, src: Path, info: clips.VideoInfo) -> None:
+    """Runs on the encode worker after `create_post` has already answered: encodes the clip,
+    stores it and its poster, and flips the post to `ready`, or to `failed` if anything breaks.
+    A post deleted while it waited in the queue is skipped rather than uploaded for nothing."""
+    client = get_supabase_client()
+    try:
+        post = client.table("posts").select("author_id").eq("id", post_id).maybe_single().execute()
+        if not post or not post.data:
+            return
+        encoded = clips.encode_clip(src, info)
+        key = f"{post.data['author_id']}/{uuid4()}"
+        video_url = upload_bytes("post-videos", f"{key}.mp4", encoded.video, "video/mp4")
+        poster_url = upload_bytes("post-images", f"{key}.webp", encoded.poster, "image/webp")
+        client.table("posts").update(
+            {"video_url": video_url, "video_poster_url": poster_url, "video_status": "ready"}
+        ).eq("id", post_id).execute()
+    except Exception:
+        logger.exception("Encoding the clip for post %s failed", post_id)
+        client.table("posts").update({"video_status": "failed"}).eq("id", post_id).execute()
+    finally:
+        src.unlink(missing_ok=True)
+
+
 def _post_out(row: dict, author: dict | None, player: dict | None, *, liked: bool, following: bool) -> dict:
     author = author or {}
     player = player or {}
@@ -186,6 +238,9 @@ def _post_out(row: dict, author: dict | None, player: dict | None, *, liked: boo
         "has_image": row["image_url"] is not None,
         "image_url": row["image_url"],
         "image_urls": row.get("image_urls") or ([row["image_url"]] if row["image_url"] else []),
+        "video_url": row.get("video_url"),
+        "video_poster_url": row.get("video_poster_url"),
+        "video_status": _video_status(row),
         "category": row["category"],
         "tag": row.get("tag"),
         "kind": row["kind"],
@@ -391,7 +446,7 @@ def list_feed(
     blocked = blocked_user_ids(user_id)
     if blocked:
         rows = [row for row in rows if row.get("author_id") not in blocked]
-    return _serialize_posts(client, rows, user_id)
+    return _serialize_posts(client, _visible_posts(rows, user_id), user_id)
 
 
 @router.get("/following", response_model=list[PostOut])
@@ -414,7 +469,7 @@ def list_following_feed(user_id: str | None = Depends(get_optional_user_id)) -> 
         .data
         or []
     )
-    return _serialize_posts(client, rows, user_id)
+    return _serialize_posts(client, _visible_posts(rows, user_id), user_id)
 
 
 @router.post("/posts", response_model=PostOut, status_code=status.HTTP_201_CREATED)
@@ -424,6 +479,7 @@ def create_post(
     tag: str | None = Form(None),
     image: UploadFile | None = File(None),  # noqa: B008
     images: list[UploadFile] | None = File(None),  # noqa: B008
+    video: UploadFile | None = File(None),  # noqa: B008
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     """The Feed composer (`CreatePostModal.vue`) - any signed-in account can post (3.18), Pal or
@@ -432,28 +488,54 @@ def create_post(
     downscaled by `upload_image_as_webp` before it lands in the `post-images` bucket, so a
     multi-MB phone photo doesn't get stored at full size for a feed-card thumbnail. `images`
     takes the whole set (up to `_MAX_POST_IMAGES`); the single `image` field predates it and
-    still works, counting as one more."""
+    still works, counting as one more.
+
+    A `video` instead makes it a clip post (4.61): the upload is checked here (readable, not too
+    big or long) so a bad file fails the request, then the row goes in as `processing` and
+    `_finish_post_video` encodes it on the background worker. Encoding takes seconds to minutes,
+    far too long to hold the request open."""
     client = get_supabase_client()
 
     uploads = _collect_uploads(image, images)
+    has_video = bool(video and video.filename)
     clean_text = (text or "").strip() or None
-    if not clean_text and not uploads:
+    if has_video and uploads:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A post can have photos or a video, not both")
+    if not clean_text and not uploads and not has_video:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Post must have text or an image")
+
+    video_src: Path | None = None
+    video_info: clips.VideoInfo | None = None
+    if video and has_video:
+        video_src = clips.save_upload(video)
+        try:
+            video_info = clips.probe(video_src)
+        except BaseException:
+            video_src.unlink(missing_ok=True)
+            raise
 
     image_urls = [upload_image_as_webp("post-images", f"{user_id}/{uuid4()}", upload) for upload in uploads]
 
     post_id = str(uuid4())
-    client.table("posts").insert(
-        {
-            "id": post_id,
-            "author_id": user_id,
-            "text": clean_text,
-            "image_url": image_urls[0] if image_urls else None,
-            "image_urls": image_urls,
-            "category": category,
-            "tag": (tag or "").strip() or None,
-        }
-    ).execute()
+    try:
+        client.table("posts").insert(
+            {
+                "id": post_id,
+                "author_id": user_id,
+                "text": clean_text,
+                "image_url": image_urls[0] if image_urls else None,
+                "image_urls": image_urls,
+                "category": "clips" if has_video else category,
+                "tag": (tag or "").strip() or None,
+                "video_status": "processing" if has_video else None,
+            }
+        ).execute()
+    except BaseException:
+        if video_src:
+            video_src.unlink(missing_ok=True)
+        raise
+    if video_src and video_info:
+        clips.submit(_finish_post_video, post_id, video_src, video_info)
     _refresh_posts_count(client, user_id)
 
     row = _get_post(client, post_id)
@@ -484,6 +566,10 @@ def update_post(
 
     existing = post.get("image_urls") or ([post["image_url"]] if post["image_url"] else [])
     uploads = _collect_uploads(image, images)
+    # A clip post keeps its video through an edit; only the caption changes.
+    is_clip = post.get("video_status") is not None
+    if is_clip and uploads:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A post can have photos or a video, not both")
 
     if manage_images:
         kept = [url for url in (keep_image_urls or []) if url in existing]
@@ -498,7 +584,7 @@ def update_post(
     image_urls = (kept + new_urls)[:_MAX_POST_IMAGES]
 
     clean_text = text.strip() or None
-    if not clean_text and not image_urls:
+    if not clean_text and not image_urls and not is_clip:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Post must have text or an image")
 
     client.table("posts").update(
@@ -516,7 +602,7 @@ def update_post(
 def delete_post(post_id: str, user_id: str = Depends(get_current_user_id)) -> None:
     """Author-only delete. Comments, likes and saved entries all cascade off the `posts` row's
     foreign keys, so the one explicit follow-up is the author's `posts_count`. Uploaded images
-    are left in the bucket, same as an edit that drops one."""
+    and clips are left in their buckets, same as an edit that drops an image."""
     client = get_supabase_client()
     post = _get_post(client, post_id)
     if post["author_id"] != user_id:
@@ -530,6 +616,8 @@ def delete_post(post_id: str, user_id: str = Depends(get_current_user_id)) -> No
 def get_post(post_id: str, user_id: str | None = Depends(get_optional_user_id)) -> dict:
     client = get_supabase_client()
     row = _get_post(client, post_id)
+    if not _visible_posts([row], user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
     return _serialize_posts(client, [row], user_id)[0]
 
 

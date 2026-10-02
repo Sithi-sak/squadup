@@ -74,6 +74,13 @@ onMounted(async () => {
 })
 
 const createPostOpen = ref(false)
+/** The "Clip" button opens the composer on a video-only picker (4.61). */
+const createPostClip = ref(false)
+
+function openClipComposer() {
+  createPostClip.value = true
+  createPostOpen.value = true
+}
 
 const activePostId = ref<string | null>(null)
 
@@ -253,7 +260,7 @@ async function toggleLike(post: FeedPost) {
               variant="soft"
               size="sm"
               class="rounded-full"
-              @click="createPostOpen = true"
+              @click="openClipComposer"
             >
               <PhFilmSlate :size="16" weight="bold" />
               Clip
@@ -275,7 +282,7 @@ async function toggleLike(post: FeedPost) {
         </div>
       </div>
 
-      <CreatePostModal v-model:open="createPostOpen" />
+      <CreatePostModal v-model:open="createPostOpen" v-model:clip="createPostClip" />
       <CreatePostModal v-model:open="editModalOpen" :post="editingPost" @updated="onPostUpdated" />
 
       <template v-if="postsLoading">
@@ -300,6 +307,9 @@ async function toggleLike(post: FeedPost) {
           :has-image="post.hasImage"
           :image-url="post.imageUrl"
           :image-urls="post.imageUrls"
+          :video-url="post.videoUrl"
+          :video-poster-url="post.videoPosterUrl"
+          :video-status="post.videoStatus"
           :tag="post.tag"
           :likes="post.likes"
           :comments="post.comments"

@@ -62,6 +62,9 @@ function postFromMockDetail(detail: FeedPostDetail): FeedPost {
     hasImage: detail.hasImage,
     imageUrl: null,
     imageUrls: [],
+    videoUrl: null,
+    videoPosterUrl: null,
+    videoStatus: null,
     category: 'games',
     tag: null,
     kind: 'user',
@@ -230,6 +233,9 @@ async function deletePost() {
         :has-image="post.hasImage"
         :image-url="post.imageUrl"
         :image-urls="post.imageUrls"
+        :video-url="post.videoUrl"
+        :video-poster-url="post.videoPosterUrl"
+        :video-status="post.videoStatus"
         :tag="post.tag"
         :likes="post.likes"
         :comments="post.comments"

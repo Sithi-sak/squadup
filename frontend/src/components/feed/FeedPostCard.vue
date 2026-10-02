@@ -7,10 +7,13 @@ import {
   PhChatCircle,
   PhHeart,
   PhShareFat,
+  PhSpinnerGap,
   PhUserCircle,
+  PhWarningCircle,
   PhX,
 } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
+import { useFeedStore } from '@/stores/feed'
 import { useSharePost } from '@/composables/useSharePost'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { profileRouteFor } from '@/utils/profileRoute'
@@ -32,6 +35,11 @@ const props = defineProps<{
    * only ever had one. */
   imageUrl?: string | null
   imageUrls?: string[] | null
+  /** Clip posts (4.61). Null/omitted on every post without a video; `processing` and `failed`
+   * only ever reach the author, who gets a placeholder instead of a player. */
+  videoUrl?: string | null
+  videoPosterUrl?: string | null
+  videoStatus?: 'processing' | 'ready' | 'failed' | null
   /** The composer's "Tag a game or service" pick, rendered as a hashtag under the post. Null on
    * posts made before tagging existed and on the mock-backed views. */
   tag?: string | null
@@ -82,6 +90,46 @@ function toggleLike() {
   }
   localLiked[props.id] = !localLiked[props.id]
 }
+
+/** The clip as last seen: the props, until a poll below brings a newer state. Kept locally
+ * because some lists (`UserDashboardView`'s own posts, `ProfileFeedsTab`) hold their own copy
+ * of the post that `feedStore.refreshPost` doesn't reach. */
+const clipState = ref({
+  url: props.videoUrl ?? null,
+  poster: props.videoPosterUrl ?? null,
+  status: props.videoStatus ?? null,
+})
+watch(
+  () => [props.videoUrl, props.videoPosterUrl, props.videoStatus] as const,
+  ([url, poster, status]) =>
+    (clipState.value = { url: url ?? null, poster: poster ?? null, status: status ?? null }),
+)
+
+const CLIP_POLL_MS = 5000
+const feedStore = useFeedStore()
+let clipPoll: ReturnType<typeof setTimeout> | undefined
+
+/** While the author's own clip is encoding, re-reads the post every few seconds until it is
+ * `ready` (or `failed`), so the player appears without a reload. */
+function pollClip() {
+  clearTimeout(clipPoll)
+  if (clipState.value.status !== 'processing') return
+  clipPoll = setTimeout(async () => {
+    try {
+      const fresh = await feedStore.refreshPost(props.id)
+      clipState.value = {
+        url: fresh.videoUrl,
+        poster: fresh.videoPosterUrl,
+        status: fresh.videoStatus,
+      }
+    } catch {
+      // A blip (or the post was deleted meanwhile); the next tick or a reload sorts it out.
+    }
+    pollClip()
+  }, CLIP_POLL_MS)
+}
+watch(() => clipState.value.status, pollClip, { immediate: true })
+onBeforeUnmount(() => clearTimeout(clipPoll))
 
 const photos = computed(() =>
   props.imageUrls?.length ? props.imageUrls : props.imageUrl ? [props.imageUrl] : [],
@@ -181,8 +229,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onLightboxKey))
       {{ text }}
     </p>
 
+    <video
+      v-if="clipState.status === 'ready' && clipState.url"
+      :src="clipState.url"
+      :poster="clipState.poster ?? undefined"
+      controls
+      playsinline
+      preload="none"
+      class="mt-3 aspect-video w-full rounded-lg bg-slate-950 object-contain ring-1 ring-inset ring-white/10"
+    />
+    <div
+      v-else-if="clipState.status === 'processing' || clipState.status === 'failed'"
+      class="mt-3 flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-950 px-6 text-center text-sm text-slate-400 ring-1 ring-inset ring-white/10"
+    >
+      <template v-if="clipState.status === 'processing'">
+        <PhSpinnerGap :size="24" class="animate-spin text-slate-300" />
+        <p>Processing your clip. Only you can see this post until it's ready.</p>
+      </template>
+      <template v-else>
+        <PhWarningCircle :size="24" class="text-red-400" />
+        <p>This clip couldn't be processed. Delete the post and try uploading it again.</p>
+      </template>
+    </div>
+
     <button
-      v-if="photos.length === 1"
+      v-else-if="photos.length === 1"
       type="button"
       class="mt-3 block w-full cursor-zoom-in"
       aria-label="View full-size image"

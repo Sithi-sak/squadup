@@ -6,7 +6,7 @@ from storage3.exceptions import StorageApiError
 
 from .supabase import get_supabase_client
 
-_PUBLIC_BUCKETS = {"avatars", "service-covers", "post-images", "message-images"}
+_PUBLIC_BUCKETS = {"avatars", "service-covers", "post-images", "post-videos", "message-images"}
 
 _MAX_IMAGE_DIMENSION = 1920
 
@@ -35,6 +35,11 @@ def upload_file(bucket: str, path: str, file: UploadFile) -> str:
     """Uploads a file as-is to a Supabase Storage bucket via the service-role client (the buckets
     have no write policies for anon/authenticated yet, see supabase/migrations 2.4)."""
     return _store(bucket, path, file.file.read(), file.content_type or "application/octet-stream")
+
+
+def upload_bytes(bucket: str, path: str, data: bytes, content_type: str) -> str:
+    """For files the backend produced itself (an encoded clip, its poster) rather than received."""
+    return _store(bucket, path, data, content_type)
 
 
 def _encode_image(file: UploadFile, image_format: str, quality: int) -> bytes:

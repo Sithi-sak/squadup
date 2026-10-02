@@ -26,6 +26,12 @@ export interface FeedPost {
   /** First image, kept for every caller that only ever shows one; `imageUrls` has the full set. */
   imageUrl: string | null
   imageUrls: string[]
+  /** Clip posts (4.61): the encoded MP4 and its poster still, both null until the server-side
+   * encode finishes. `videoStatus` is null on posts without a video, and only the author ever
+   * sees a `processing` or `failed` one. */
+  videoUrl: string | null
+  videoPosterUrl: string | null
+  videoStatus: 'processing' | 'ready' | 'failed' | null
   category: string
   /** Free-text tag picked in the composer ("Tag a game or service"): a game from `data/games.ts`
    * or one of the author's own service names. Separate from `category`, which is the fixed
@@ -94,6 +100,8 @@ export interface FollowUser {
 export interface CreatePostPayload {
   text?: string
   images?: File[]
+  /** One clip instead of images; the backend rejects a post carrying both. */
+  video?: File
   category?: string
   tag?: string
 }
@@ -116,6 +124,9 @@ function feedPostFromMock(post: MockFeedPost): FeedPost {
     hasImage: post.hasImage,
     imageUrl: null,
     imageUrls: [],
+    videoUrl: null,
+    videoPosterUrl: null,
+    videoStatus: null,
     category: post.category,
     tag: null,
     kind: 'user',
@@ -297,6 +308,15 @@ export const useFeedStore = defineStore('feed', () => {
     return current.value
   }
 
+  /** Re-reads one post and patches it into the shared lists, for a clip whose encode is still
+   * running (`FeedPostCard.vue` polls this until `videoStatus` settles). Unlike `fetchPost` it
+   * leaves `current` alone unless that is the same post. */
+  async function refreshPost(id: string) {
+    const fresh = await api.get<FeedPost>(`/feed/posts/${id}`)
+    patchPost(fresh)
+    return fresh
+  }
+
   /** Prefers an already-loaded post (from `fetchFeed`/`fetchFollowing`) over a network round-trip,
    * mirroring `bookingsStore.getBooking`. */
   function getPost(id: string): FeedPost | undefined {
@@ -313,6 +333,7 @@ export const useFeedStore = defineStore('feed', () => {
     if (payload.category) formData.append('category', payload.category)
     if (payload.tag) formData.append('tag', payload.tag)
     for (const image of payload.images ?? []) formData.append('images', image)
+    if (payload.video) formData.append('video', payload.video)
 
     const post = await api.post<FeedPost>('/feed/posts', formData)
     posts.value.unshift(post)
@@ -526,6 +547,7 @@ export const useFeedStore = defineStore('feed', () => {
     getPost,
     createPost,
     updatePost,
+    refreshPost,
     deletePost,
     toggleLike,
     toggleFollow,

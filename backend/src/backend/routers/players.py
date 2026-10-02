@@ -13,7 +13,7 @@ from ..core.blocks import has_blocked
 from ..core.schema import CamelModel
 from ..core.storage import upload_document, upload_image_as_webp
 from ..core.supabase import get_supabase_client
-from .feed import _POST_SELECT, PostOut, _serialize_posts
+from .feed import _POST_SELECT, PostOut, _serialize_posts, _visible_posts
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -1088,7 +1088,7 @@ def get_player_feed(player_id: str, user_id: str | None = Depends(get_optional_u
         .data
         or []
     )
-    return _serialize_posts(client, rows, user_id)
+    return _serialize_posts(client, _visible_posts(rows, user_id), user_id)
 
 
 @router.get("/{player_id}/album", response_model=list[AlbumItemOut])

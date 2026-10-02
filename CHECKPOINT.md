@@ -3484,6 +3484,47 @@ kind of Stripe id.
           icon + places moved, "New" for new entries, dash when unchanged.
     - [x] 4.60d Verification: `ruff check` + `ruff format` clean, `oxlint` clean on the touched
           files, `vue-tsc` unchanged (16). Migration not pushed yet (project is unlinked).
+  - [x] 4.61 Video clip posts (user request, 2026-10-02). A video dropped into the composer
+        landed in the photo cropper as a blank image: `accept` only filters the OS picker, and
+        nothing behind it handled video (4.11c narrowed the picker for exactly that reason). Fixed
+        first by filtering non-images out with a toast. The user then asked for real video posts:
+        one clip per post, re-encoded server-side with ffmpeg to 720p (shorter side) at up to
+        60fps, H.264/AAC MP4, CRF 23 capped so the stored file is at most 30MB.
+    - [x] 4.61a Migration: `posts.video_url`, `video_poster_url`, `video_status`
+          (`processing` | `ready` | `failed`); public `post-videos` bucket (mp4, 30MB limit).
+    - [x] 4.61b Backend: `core/video.py` probes the upload (duration, size, fps, audio), encodes
+          720p60 capped CRF under the 30MB budget, grabs a WebP poster frame.
+    - [x] 4.61c Backend: `POST /feed/posts` takes an optional `video` (category forced to
+          `clips`), stores the row as `processing` and encodes in a background task, then fills
+          `video_url`/poster and flips to `ready` (or `failed`). `PostOut` gains the video fields;
+          unfinished clips are hidden from everyone but the author. Edits keep the video.
+          ffmpeg added to both Dockerfiles.
+    - [x] 4.61d Frontend: `stores/feed.ts` `FeedPost` gains video fields, `createPost` sends
+          `video`; mock adapters default them.
+    - [x] 4.61e Frontend: composer takes one video (instead of photos) with a `<video>` preview
+          and no cropper, checks size and length before uploading; Feed's "Clip" button opens it
+          on the video picker.
+    - [x] 4.61f Frontend: post cards render a `<video>` player, plus "processing"/"failed"
+          states for the author, refreshing until the clip is ready.
+    - [x] 4.61g Verification: `ruff check` clean, `oxlint` clean on the touched files, `vue-tsc`
+          unchanged (16). Encoder on generated clips: 60s of 1080p60 noise with audio came out
+          1280x720 60fps at 27.1MB on the first pass (46s on 16 cores); a 1081x1921 120fps clip
+          came out 720x1280 60fps (2.2MB); a 0.4s clip still gets a poster. `probe` rejects a
+          renamed text file, PNG/JPG stills and a 75s clip. The post endpoints ran end to end
+          through `TestClient` with an in-memory Supabase stub and the real encode worker: a clip
+          posts as `processing` (category `clips`), stays hidden from other users (feed and
+          permalink 404) until `ready`, gets its MP4 + WebP poster uploaded, caption-only edits
+          work, photos + video is a 400, and a 30-minute-old `processing` row reads `failed`.
+          Not tested live: the migration is not pushed (project unlinked), and the app wasn't
+          run per [[feedback_no_build_or_run_skill]]. Note: `ruff format` was run by mistake
+          mid-task (the repo has no ruff config, so 88 cols reflowed 20 files); every file was
+          restored, and `estars.py`'s uncommitted 4.60 work was kept via a three-way merge.
+    - [x] 4.61h Sized for Render (the backend is a Render Docker service on `Dockerfile.prod`,
+          small instance = 512MB RAM, a fraction of a CPU). Measured on 20s of busy 1080p60:
+          preset `medium` on all cores peaked at 650MB / 134 CPU-s, `veryfast` on 2 threads at
+          230MB / 69 CPU-s with the same size and quality (the 30MB cap is the limit). Encoder now
+          runs `veryfast`, `-threads 2`. A worst-case 60s clip is roughly 3.5 CPU-minutes, so
+          about 7 minutes on a 0.5 CPU instance; Render's free tier (0.1 CPU) would be too slow.
 
 ---
 

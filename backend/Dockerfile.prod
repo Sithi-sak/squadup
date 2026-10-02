@@ -1,5 +1,10 @@
 FROM python:3.11-slim
 
+# ffmpeg/ffprobe encode clip posts (core/video.py).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app

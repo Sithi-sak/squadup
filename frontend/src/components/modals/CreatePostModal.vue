@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   PhCaretDown,
   PhCrop,
+  PhFilmSlate,
   PhGlobe,
   PhImage,
   PhPencilSimple,
@@ -75,6 +76,81 @@ watch(pendingGame, (game) => {
 const posting = ref(false)
 
 const MAX_IMAGES = 10
+const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+/** Mirrors `core/video.py`'s `MAX_UPLOAD_BYTES`/`MAX_DURATION_SECONDS`, checked here first so a
+ * clip that's too long fails before it uploads rather than after. */
+const MAX_VIDEO_MB = 200
+const MAX_VIDEO_SECONDS = 60
+
+/** Set by the Feed's "Clip" buttons: the dropzone then takes a video only. Cleared on close, so
+ * the next plain open takes either again. */
+const clipOnly = defineModel<boolean>('clip', { default: false })
+
+/** A picked clip (4.61), one per post and never alongside photos. It skips the cropper and
+ * uploads as-is; the server re-encodes it to 720p after the post is created. */
+const clip = ref<{ file: File; url: string } | null>(null)
+
+function setClip(file: File | null) {
+  if (clip.value) URL.revokeObjectURL(clip.value.url)
+  clip.value = file ? { file, url: URL.createObjectURL(file) } : null
+}
+
+/** Reads a clip's length from its metadata. Resolves null when this browser can't parse the
+ * file (some HEVC .mov files outside Safari); the server checks again, so those still go up. */
+function readDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const element = document.createElement('video')
+    const url = URL.createObjectURL(file)
+    const done = (duration: number | null) => {
+      URL.revokeObjectURL(url)
+      resolve(duration)
+    }
+    element.preload = 'metadata'
+    element.onloadedmetadata = () =>
+      done(Number.isFinite(element.duration) ? element.duration : null)
+    element.onerror = () => done(null)
+    element.src = url
+  })
+}
+
+async function pickClip(file: File) {
+  if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+    toast.add({
+      title: 'That clip is too large',
+      description: `Videos can be up to ${MAX_VIDEO_MB}MB.`,
+      color: 'warning',
+    })
+    return
+  }
+  const duration = await readDuration(file)
+  if (duration !== null && duration > MAX_VIDEO_SECONDS + 0.5) {
+    toast.add({
+      title: 'That clip is too long',
+      description: `Clips can be up to ${MAX_VIDEO_SECONDS} seconds. Trim it and try again.`,
+      color: 'warning',
+    })
+    return
+  }
+  if (open.value) setClip(file)
+}
+
+/** Clips go up only on a new post; an edit keeps whatever media the post already has. */
+const acceptsClip = computed(() => !isEditing.value && !attachments.value.length)
+/** The clip shown in the composer: a fresh pick, or the one an edited clip post already has
+ * (`src` is null while its encode is still running). */
+const clipPreview = computed(() => {
+  if (clip.value) return { src: clip.value.url as string | null, poster: undefined }
+  if (isEditing.value && props.post?.videoStatus) {
+    return { src: props.post.videoUrl, poster: props.post.videoPosterUrl ?? undefined }
+  }
+  return null
+})
+const uploadAccept = computed(() => {
+  if (clipOnly.value) return 'video/*'
+  return acceptsClip.value
+    ? [...ACCEPTED_IMAGE_TYPES, 'video/*'].join(',')
+    : ACCEPTED_IMAGE_TYPES.join(',')
+})
 
 /** One entry per image on the post, in display order. `existing` images came back from the
  * backend and survive an edit by URL (`keepImageUrls`); `new` ones are local picks that upload as
@@ -133,6 +209,7 @@ function clearAttachments() {
   files.value = null
   croppingId.value = null
   autoCropId.value = null
+  setClip(null)
 }
 
 function removeAttachment(id: string) {
@@ -157,8 +234,39 @@ function newAttachment(file: File): Attachment {
  * empties it, so the same photo can be picked again later and the dropzone's own list stays out
  * of the way. A lone first pick opens the cropper straight away (one-image posts keep the flow
  * they had); a multi-pick lands as thumbnails to crop individually instead of a modal gauntlet. */
-watch(files, (picked) => {
-  if (!picked?.length) return
+watch(files, (selected) => {
+  if (!selected?.length) return
+  files.value = null
+  // `accept` only filters the OS picker; a drop or the picker's "All files" option still lets
+  // anything through, so every file is sorted by type here. A video must never reach the
+  // cropper, which would show it as a blank image.
+  const videos = acceptsClip.value ? selected.filter((file) => file.type.startsWith('video/')) : []
+  const picked = clipOnly.value
+    ? []
+    : selected.filter((file) => ACCEPTED_IMAGE_TYPES.includes(file.type))
+  if (videos.length + picked.length < selected.length) {
+    toast.add({
+      title: "Some files weren't attached",
+      description: clipOnly.value
+        ? 'Pick a video clip here. Photos go in through the Photo button.'
+        : acceptsClip.value
+          ? 'Posts take PNG, JPG and WEBP photos or one video clip.'
+          : 'Posts take PNG, JPG and WEBP photos.',
+      color: 'warning',
+    })
+  }
+  if (videos.length) {
+    if (videos.length === 1 && !picked.length && !attachments.value.length) {
+      void pickClip(videos[0]!)
+      return
+    }
+    toast.add({
+      title: 'One clip per post',
+      description: 'A post can have photos or a single clip, not both.',
+      color: 'warning',
+    })
+  }
+  if (!picked.length) return
   const room = MAX_IMAGES - attachments.value.length
   const accepted = picked.slice(0, Math.max(0, room))
   if (picked.length > accepted.length) {
@@ -171,7 +279,6 @@ watch(files, (picked) => {
 
   const added = accepted.map(newAttachment)
   attachments.value = [...attachments.value, ...added]
-  files.value = null
   if (added.length === 1 && attachments.value.length === 1) {
     croppingId.value = added[0]!.id
     autoCropId.value = added[0]!.id
@@ -219,7 +326,10 @@ function cancelCrop() {
   autoCropId.value = null
 }
 
-onBeforeUnmount(() => attachments.value.forEach(releaseAttachment))
+onBeforeUnmount(() => {
+  attachments.value.forEach(releaseAttachment)
+  setClip(null)
+})
 
 watch(open, (isOpen) => {
   if (isOpen) {
@@ -238,6 +348,7 @@ watch(open, (isOpen) => {
   pendingGame.value = undefined
   clearAttachments()
   visibility.value = 'Public'
+  clipOnly.value = false
 })
 
 function toggleTag(tag: string) {
@@ -248,7 +359,7 @@ const canPost = computed(
   () =>
     !posting.value &&
     !cropping.value &&
-    (text.value.trim().length > 0 || attachments.value.length > 0),
+    (text.value.trim().length > 0 || attachments.value.length > 0 || !!clipPreview.value),
 )
 
 async function submitPost() {
@@ -264,14 +375,20 @@ async function submitPost() {
       })
       emit('updated', updated)
     } else {
-      emit(
-        'created',
-        await feedStore.createPost({
-          text: text.value.trim(),
-          images: attachments.value.flatMap((a) => (a.kind === 'new' ? [a.file] : [])),
-          tag: selectedTag.value ?? undefined,
-        }),
-      )
+      const created = await feedStore.createPost({
+        text: text.value.trim(),
+        images: attachments.value.flatMap((a) => (a.kind === 'new' ? [a.file] : [])),
+        video: clip.value?.file,
+        tag: selectedTag.value ?? undefined,
+      })
+      emit('created', created)
+      if (created.videoStatus === 'processing') {
+        toast.add({
+          title: 'Clip uploaded',
+          description: "It's being processed and will show in the feed once it's ready.",
+          color: 'success',
+        })
+      }
     }
     open.value = false
   } catch (err) {
@@ -400,11 +517,39 @@ async function submitPost() {
           </div>
         </div>
 
+        <div v-if="clipPreview" class="relative">
+          <video
+            v-if="clipPreview.src"
+            :src="clipPreview.src"
+            :poster="clipPreview.poster"
+            controls
+            playsinline
+            preload="metadata"
+            class="max-h-80 w-full rounded-2xl bg-black/40 ring-1 ring-inset ring-white/10"
+          />
+          <div
+            v-else
+            class="flex h-48 w-full flex-col items-center justify-center gap-2 rounded-2xl bg-black/40 text-sm text-slate-400 ring-1 ring-inset ring-white/10"
+          >
+            <PhFilmSlate :size="28" />
+            Your clip is still processing.
+          </div>
+          <button
+            v-if="clip"
+            type="button"
+            class="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+            aria-label="Remove clip"
+            @click="setClip(null)"
+          >
+            <PhX :size="16" weight="bold" />
+          </button>
+        </div>
+
         <UFileUpload
-          v-if="attachments.length < MAX_IMAGES"
+          v-else-if="attachments.length < MAX_IMAGES"
           v-model="files"
           multiple
-          accept="image/png,image/jpeg,image/webp"
+          :accept="uploadAccept"
           layout="list"
           class="w-full"
           :ui="{
@@ -419,12 +564,32 @@ async function submitPost() {
             <span
               class="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-slate-300"
             >
-              <PhImage :size="20" />
+              <PhFilmSlate v-if="clipOnly" :size="20" />
+              <PhImage v-else :size="20" />
             </span>
           </template>
-          <template #label>{{ attachments.length ? 'Add more photos' : 'Add a photo' }}</template>
+          <template #label>
+            {{
+              clipOnly
+                ? 'Add a clip'
+                : attachments.length
+                  ? 'Add more photos'
+                  : acceptsClip
+                    ? 'Add photos or a clip'
+                    : 'Add a photo'
+            }}
+          </template>
           <template #description>
-            or drag and drop · PNG, JPG, WEBP up to 8MB · {{ MAX_IMAGES }} photos max
+            <template v-if="clipOnly">
+              or drag and drop · MP4, MOV or WEBM up to {{ MAX_VIDEO_SECONDS }} seconds
+            </template>
+            <template v-else-if="acceptsClip">
+              or drag and drop · up to {{ MAX_IMAGES }} photos, or one clip up to
+              {{ MAX_VIDEO_SECONDS }} seconds
+            </template>
+            <template v-else>
+              or drag and drop · PNG, JPG, WEBP up to 8MB · {{ MAX_IMAGES }} photos max
+            </template>
           </template>
         </UFileUpload>
 

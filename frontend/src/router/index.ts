@@ -119,30 +119,6 @@ const router = createRouter({
           component: () => import('@/views/UserDashboardView.vue'),
           meta: { feedTab: 'profile', requiresAuth: true },
         },
-        {
-          path: 'u/:id',
-          name: 'user-profile',
-          component: () => import('@/views/PublicProfileView.vue'),
-          meta: { feedTab: 'feed' },
-          // Resolves before the Feed shell ever paints, so clicking a Pal's name/avatar lands
-          // directly on `/players/{id}` instead of flashing this route's Feed-shell chrome first
-          // and only then redirecting (`PublicProfileView` used to make this same call, but from
-          // inside `onMounted`, after the shell had already rendered around it).
-          beforeEnter: async (to) => {
-            const authStore = useAuthStore()
-            const id = String(to.params.id)
-            if (id === authStore.user?.id) return { name: 'my-profile' }
-            const usersStore = useUsersStore()
-            try {
-              const profile = await usersStore.fetchPublicProfile(id)
-              if (profile.playerId) return `/players/${profile.playerId}`
-              usersStore.prefetchedProfile = { userId: id, profile }
-            } catch {
-              // Let the view's own fetch handle the error/not-found state.
-            }
-            return true
-          },
-        },
       ],
     },
     {
@@ -150,6 +126,29 @@ const router = createRouter({
       name: 'my-profile',
       component: () => import('@/views/MyProfileView.vue'),
       meta: { hideFooter: true, requiresAuth: true },
+    },
+    {
+      path: '/feed/u/:id',
+      name: 'user-profile',
+      component: () => import('@/views/PublicProfileView.vue'),
+      meta: { hideFooter: true },
+      // Full-page like `/players/{id}` and `/profile/me`, not a child of the Feed shell: in
+      // the shell it read as "still the feed page". Resolves before anything paints, so clicking a
+      // Pal's name/avatar lands directly on `/players/{id}` instead of flashing this page first.
+      beforeEnter: async (to) => {
+        const authStore = useAuthStore()
+        const id = String(to.params.id)
+        if (id === authStore.user?.id) return { name: 'my-profile' }
+        const usersStore = useUsersStore()
+        try {
+          const profile = await usersStore.fetchPublicProfile(id)
+          if (profile.playerId) return `/players/${profile.playerId}`
+          usersStore.prefetchedProfile = { userId: id, profile }
+        } catch {
+          // Let the view's own fetch handle the error/not-found state.
+        }
+        return true
+      },
     },
     {
       path: '/feed/:postId',

@@ -18,6 +18,8 @@ export interface PublicProfile {
   followersCount: number
   followingCount: number
   following: boolean
+  /** ISO timestamp the account was created - the "Joined" line on the non-Pal About card. */
+  joinedAt: string
   /** True when the viewer is the one who blocked this account, so the profile menu can offer
    * Unblock. The other direction 403s the read instead (4.39). */
   blocked: boolean

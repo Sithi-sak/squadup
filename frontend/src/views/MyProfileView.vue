@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
 import { useUsersStore, type PublicProfile } from '@/stores/users'
 import ProfileFeedsTab from '@/components/players/ProfileFeedsTab.vue'
+import UserAboutCard from '@/components/players/UserAboutCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
@@ -61,7 +62,7 @@ function copyUsername() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 pt-8 pb-14 md:px-6">
+  <div class="mx-auto max-w-4/5 px-4 pt-8 pb-14 md:px-6">
     <div v-if="loading">
       <div class="flex items-start gap-4">
         <USkeleton class="h-24 w-24 shrink-0 rounded-full" />
@@ -157,7 +158,11 @@ function copyUsername() {
           is-own-profile
           @created="profile.postsCount += 1"
           @deleted="profile.postsCount = Math.max(0, profile.postsCount - 1)"
-        />
+        >
+          <template #aside>
+            <UserAboutCard :profile="profile" is-own-profile />
+          </template>
+        </ProfileFeedsTab>
         <EmptyState
           v-else-if="activeTab === 'album'"
           :icon="PhImage"

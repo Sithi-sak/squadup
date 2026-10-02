@@ -40,6 +40,8 @@ class PublicProfileOut(CamelModel):
     followers_count: int
     following_count: int
     following: bool
+    # Account creation time - the "Joined" line on the non-Pal About card.
+    joined_at: str
     # True when the viewer is the one who blocked this account, so the profile menu can offer
     # Unblock. The reverse case (they blocked the viewer) never reaches here - the read 403s.
     blocked: bool = False
@@ -137,7 +139,7 @@ def get_public_profile(user_id: str, viewer_id: str | None = Depends(get_optiona
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This profile is unavailable.")
     user = (
         client.table("users")
-        .select("id, display_name, handle, posts_count, followers_count, following_count")
+        .select("id, display_name, handle, posts_count, followers_count, following_count, created_at")
         .eq("id", user_id)
         .maybe_single()
         .execute()
@@ -177,6 +179,7 @@ def get_public_profile(user_id: str, viewer_id: str | None = Depends(get_optiona
         "posts_count": user.data.get("posts_count") or 0,
         "followers_count": user.data.get("followers_count") or 0,
         "following_count": user.data.get("following_count") or 0,
+        "joined_at": user.data["created_at"],
         "following": following,
         "blocked": has_blocked(viewer_id, user_id),
     }

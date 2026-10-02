@@ -2,18 +2,19 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
-import { PhCloudWarning, PhUserCircle } from '@phosphor-icons/vue'
+import { PhCloudWarning, PhCopy, PhHeart, PhImage, PhUserCircle } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore, type FeedPost } from '@/stores/feed'
 import { useUsersStore, type PublicProfile } from '@/stores/users'
-import FeedPostCard from '@/components/feed/FeedPostCard.vue'
-import FeedPostSkeleton from '@/components/feed/FeedPostSkeleton.vue'
-import FeedPostThread from '@/components/feed/FeedPostThread.vue'
+import ProfileFeedsTab from '@/components/players/ProfileFeedsTab.vue'
+import UserAboutCard from '@/components/players/UserAboutCard.vue'
 import FollowListPanel from '@/components/feed/FollowListPanel.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
-import { formatTimeAgo } from '@/utils/timeAgo'
 
+/** Someone else's non-Pal profile. Laid out like the Pal profile page and `MyProfileView`
+ * (full-width header plus a `UTabs` row) rather than inside the feed shell, which read as
+ * "still the feed page" when a feed author's name was clicked. */
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -27,11 +28,22 @@ const loading = ref(true)
 const profile = ref<PublicProfile | null>(null)
 const posts = ref<FeedPost[]>([])
 
-function formatCount(count: number) {
-  if (count < 1000) return String(count)
-  const thousands = count / 1000
-  return `${thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1)}k`
-}
+const tabItems = [
+  { label: 'Feeds', value: 'feeds' },
+  { label: 'Album', value: 'album' },
+  { label: 'Wish', value: 'wish' },
+]
+const activeTab = ref('feeds')
+/** The follower/following counts open their list in place of the tab content. */
+const followListTab = ref<'followers' | 'following' | null>(null)
+
+/** `ProfileFeedsTab` is shared with the Pal profile page, which feeds it a `PlayerSummary` -
+ * a buyer has no player row, so this stands in with the three fields that component reads. */
+const author = computed(() => ({
+  id: profile.value?.id ?? '',
+  displayName: profile.value?.displayName ?? 'SquadUp user',
+  avatarUrl: profile.value?.avatarUrl ?? null,
+}))
 
 async function load() {
   const id = userId.value
@@ -48,6 +60,8 @@ async function load() {
   loading.value = true
   profile.value = null
   posts.value = []
+  activeTab.value = 'feeds'
+  followListTab.value = null
   try {
     // The route guard already fetched this and would have redirected a Pal straight to
     // `/players/{id}`, so reaching here with a hand-off means it's already the plain profile -
@@ -91,53 +105,32 @@ async function toggleFollow() {
   }
 }
 
-async function toggleLike(post: FeedPost) {
-  try {
-    const updated = await feedStore.toggleLike(post)
-    const index = posts.value.findIndex((p) => p.id === updated.id)
-    if (index !== -1) posts.value[index] = updated
-  } catch (err) {
-    toast.add({
-      title: 'Could not update like',
-      description: err instanceof Error ? err.message : 'Please try again.',
-      color: 'error',
-    })
-  }
+function copyUsername() {
+  if (!profile.value?.handle) return
+  navigator.clipboard?.writeText(profile.value.handle)
+  toast.add({ title: 'Username copied', color: 'success' })
 }
-
-const activePostId = ref<string | null>(null)
-const followListTab = ref<'followers' | 'following' | null>(null)
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-col gap-4">
-    <FeedPostThread
-      v-if="activePostId"
-      :post-id="activePostId"
-      @back="activePostId = null"
-      @deleted="posts = posts.filter((p) => p.id !== $event)"
-    />
-
-    <FollowListPanel
-      v-else-if="followListTab && profile"
-      :key="followListTab"
-      :user-id="profile.id"
-      :initial-tab="followListTab"
-      @back="followListTab = null"
-    />
-
-    <template v-else-if="loading">
-      <div class="rounded-xl bg-gray-800/70 p-5">
-        <div class="flex items-start gap-4">
-          <USkeleton class="h-20 w-20 shrink-0 rounded-full" />
-          <div class="flex flex-col gap-2 pt-1">
-            <USkeleton class="h-6 w-40" />
-            <USkeleton class="h-4 w-28" />
-          </div>
+  <div class="mx-auto max-w-4/5 px-4 pt-8 pb-14 md:px-6">
+    <div v-if="loading">
+      <div class="flex items-start gap-4">
+        <USkeleton class="h-24 w-24 shrink-0 rounded-full" />
+        <div class="flex flex-col gap-2 pt-2">
+          <USkeleton class="h-7 w-40" />
+          <USkeleton class="h-4 w-28" />
+          <USkeleton class="mt-1 h-4 w-56" />
         </div>
       </div>
-      <FeedPostSkeleton v-for="n in 3" :key="n" />
-    </template>
+      <div class="mt-6 flex w-fit gap-6">
+        <USkeleton v-for="n in 3" :key="n" class="h-5 w-16" />
+      </div>
+      <div class="mt-4">
+        <USkeleton class="h-32 w-full rounded-xl" />
+        <USkeleton class="mt-4 h-40 w-full rounded-xl" />
+      </div>
+    </div>
 
     <EmptyState
       v-else-if="!profile"
@@ -149,91 +142,119 @@ const followListTab = ref<'followers' | 'following' | null>(null)
     />
 
     <template v-else>
-      <div class="rounded-xl bg-gray-800/70 p-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex items-start gap-4">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex items-start gap-4">
+          <div class="relative shrink-0">
             <UAvatar
               :src="resolveAvatarUrl(profile.id, profile.avatarUrl)"
               size="3xl"
-              class="shrink-0 bg-white/10 text-slate-300"
+              class="size-24 bg-white/10 text-slate-300"
             >
               <PhUserCircle :size="40" />
             </UAvatar>
-            <div>
-              <h1 class="text-2xl font-bold text-white">
-                {{ profile.displayName ?? 'SquadUp user' }}
-              </h1>
-              <p v-if="profile.handle" class="mt-1 text-sm text-slate-400">{{ profile.handle }}</p>
+            <span
+              v-if="profile.online"
+              class="absolute right-1 bottom-1 h-3 w-3 rounded-full bg-brand-400 ring-2 ring-squadup-bg"
+            />
+          </div>
+          <div>
+            <h1 class="text-3xl font-bold text-white">
+              {{ profile.displayName ?? 'SquadUp user' }}
+            </h1>
+            <p v-if="profile.handle" class="mt-1 text-sm text-slate-400">{{ profile.handle }}</p>
+            <div class="mt-3 flex flex-wrap items-center gap-5 text-sm">
+              <span>
+                <span class="font-semibold text-white">{{ profile.postsCount.toLocaleString() }}</span>
+                <span class="ml-1.5 text-slate-400">Posts</span>
+              </span>
+              <button
+                type="button"
+                class="transition-opacity hover:opacity-80"
+                @click="followListTab = 'followers'"
+              >
+                <span class="font-semibold text-white">{{ profile.followersCount.toLocaleString() }}</span>
+                <span class="ml-1.5 text-slate-400">Followers</span>
+              </button>
+              <button
+                type="button"
+                class="transition-opacity hover:opacity-80"
+                @click="followListTab = 'following'"
+              >
+                <span class="font-semibold text-white">{{ profile.followingCount.toLocaleString() }}</span>
+                <span class="ml-1.5 text-slate-400">Following</span>
+              </button>
             </div>
           </div>
+        </div>
 
+        <div class="flex items-center gap-2">
+          <UButton
+            v-if="profile.handle"
+            color="neutral"
+            variant="soft"
+            square
+            :ui="{ base: 'rounded-full' }"
+            aria-label="Copy username"
+            @click="copyUsername"
+          >
+            <PhCopy :size="24" weight="regular" />
+          </UButton>
           <UButton
             v-if="authStore.user"
             :color="profile.following ? 'neutral' : 'primary'"
             :variant="profile.following ? 'soft' : 'solid'"
-            class="shrink-0 rounded-full px-5"
+            class="rounded-full px-5"
             :loading="followPending"
             @click="toggleFollow"
           >
             {{ profile.following ? 'Following' : 'Follow' }}
           </UButton>
         </div>
-
-        <div
-          class="mt-5 grid w-full max-w-xs grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4"
-        >
-          <div class="pr-4">
-            <p class="font-semibold text-white">{{ formatCount(profile.postsCount) }}</p>
-            <p class="text-xs text-slate-400">Posts</p>
-          </div>
-          <button
-            type="button"
-            class="block w-full px-4 text-left transition-opacity hover:opacity-80"
-            @click="followListTab = 'followers'"
-          >
-            <p class="font-semibold text-white">{{ formatCount(profile.followersCount) }}</p>
-            <p class="text-xs text-slate-400">Followers</p>
-          </button>
-          <button
-            type="button"
-            class="block w-full pl-4 text-left transition-opacity hover:opacity-80"
-            @click="followListTab = 'following'"
-          >
-            <p class="font-semibold text-white">{{ formatCount(profile.followingCount) }}</p>
-            <p class="text-xs text-slate-400">Following</p>
-          </button>
-        </div>
       </div>
 
-      <p v-if="posts.length === 0" class="py-10 text-center text-sm text-slate-400">
-        {{ profile.displayName ?? 'This user' }} hasn't posted anything yet.
-      </p>
-      <FeedPostCard
-        v-for="post in posts"
-        :key="post.id"
-        :id="post.id"
-        :author-id="post.authorId"
-        :author="post.author"
-        :avatar-url="post.avatarUrl"
-        :handle="post.handle"
-        :tier="post.tier"
-        :player-id="post.playerId"
-        :time-ago="formatTimeAgo(post.createdAt)"
-        :text="post.text ?? ''"
-        :has-image="post.hasImage"
-        :image-url="post.imageUrl"
-        :image-urls="post.imageUrls"
-        :video-url="post.videoUrl"
-        :video-poster-url="post.videoPosterUrl"
-        :video-status="post.videoStatus"
-        :tag="post.tag"
-        :likes="post.likes"
-        :comments="post.comments"
-        :liked="post.liked"
-        :kind="post.kind"
-        @toggle-like="toggleLike(post)"
-        @open-comments="activePostId = post.id"
+      <UTabs
+        v-model="activeTab"
+        variant="link"
+        :items="tabItems"
+        :content="false"
+        class="mt-6 w-fit"
+        :ui="{ label: 'text-white' }"
+        @update:model-value="followListTab = null"
       />
+
+      <div class="mt-4">
+        <FollowListPanel
+          v-if="followListTab"
+          :key="followListTab"
+          :user-id="profile.id"
+          :initial-tab="followListTab"
+          @back="followListTab = null"
+        />
+        <ProfileFeedsTab
+          v-else-if="activeTab === 'feeds'"
+          :player="author"
+          :handle="profile.handle"
+          :feed="posts"
+        >
+          <template #aside>
+            <UserAboutCard :profile="profile" />
+          </template>
+        </ProfileFeedsTab>
+        <EmptyState
+          v-else-if="activeTab === 'album'"
+          :icon="PhImage"
+          badge="Album"
+          title="No highlights yet"
+          description="Clips and screenshots they save will show up here."
+        />
+        <EmptyState
+          v-else
+          :icon="PhHeart"
+          badge="Wish"
+          title="No wishes saved yet"
+          description="Games and services they wishlist will show up here."
+        />
+      </div>
     </template>
   </div>
 </template>

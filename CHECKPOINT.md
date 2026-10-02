@@ -3525,6 +3525,32 @@ kind of Stripe id.
           230MB / 69 CPU-s with the same size and quality (the 30MB cap is the limit). Encoder now
           runs `veryfast`, `-threads 2`. A worst-case 60s clip is roughly 3.5 CPU-minutes, so
           about 7 minutes on a 0.5 CPU instance; Render's free tier (0.1 CPU) would be too slow.
+  - [x] 4.62 Non-Pal profiles opened from the feed looked like the feed page (reported 2026-10-02
+        by the user, off jokebear's clip post next to Ma chav's Pal profile). jokebear has no
+        `players` row, so the name/avatar went to `/feed/u/:id`, which still rendered inside
+        the 3-column Feed shell: the same mistake 4.20c fixed for your own profile.
+    - [x] 4.62a `router/index.ts`: `user-profile` moved out of the `/feed` shell's children to a
+          top-level `/feed/u/:id` record (same URL and name, so every link still works). The
+          `beforeEnter` Pal redirect and profile prefetch are unchanged.
+    - [x] 4.62b `PublicProfileView.vue` rebuilt on `MyProfileView`'s layout: avatar header with
+          online dot, name, handle, Posts/Followers/Following, Copy username and Follow; a
+          Feeds/Album/Wish `UTabs` row. Feeds reuses `ProfileFeedsTab` (no composer, since
+          it's not your profile); Album/Wish are the same placeholders as 4.20e. The
+          follower/following counts still open `FollowListPanel` in place of the tab content.
+    - [x] 4.62c Verification: `eslint` clean and no `vue-tsc` errors in the touched files. Not
+          run in the browser per [[feedback_no_build_or_run_skill]].
+    - [x] 4.62d Widened from `max-w-3xl` to the Pal page's `max-w-4/5` (user said the first
+          pass was too cramped next to the Pal profile). `MyProfileView` got the same change so
+          both non-Pal profile pages stay the same width.
+    - [x] 4.62e About card in the Feeds tab's left rail, like the Pal page's `ProfileAboutCard`
+          (user request off their own Pal profile). New `UserAboutCard.vue`: Posts/Followers/
+          Following, "Joined <Month Year>", and a Chat button (hidden on your own profile and
+          when you've blocked them; no Book, a non-Pal has no services). A plain account has no
+          tagline/bio/timezone/languages/price, so those lines don't exist here. `country` was
+          left out on purpose: it's entered in account settings, never shown publicly before.
+          Backend `GET /users/{id}/profile` now returns `joinedAt` (`users.created_at`). Wired
+          into both `PublicProfileView` and `MyProfileView`. `ruff check` and `eslint` clean,
+          no `vue-tsc` errors in the touched files.
 
 ---
 

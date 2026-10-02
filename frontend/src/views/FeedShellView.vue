@@ -15,8 +15,8 @@ const activeTab = computed(() => route.meta.feedTab ?? 'feed')
 const showCreatePost = computed(() => route.meta.feedCreatePost === true)
 
 /** The four fixed tabs keep their instance while the shell is mounted, so bouncing between
- * them is instant and their filters survive. Param-driven pages (`/feed/u/:id`, `/feed/me`)
- * mount fresh each time so they never show another account's data. */
+ * them is instant and their filters survive. The param-driven `/feed/me` page
+ * mounts fresh each time so it never shows another account's data. */
 const cachedTabViews = ['FeedView', 'FeedFollowingView', 'FeedExploreView', 'FeedSavedView']
 </script>
 

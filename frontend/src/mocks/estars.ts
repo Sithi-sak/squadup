@@ -9,6 +9,7 @@ export interface EstarLeaderboardEntry {
   rating: number
   coins: number
   trend: 'up' | 'down' | 'flat'
+  rankChange: number | null
 }
 
 export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
@@ -21,6 +22,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 5.0,
     coins: 48200,
     trend: 'up',
+    rankChange: 2,
   },
   {
     id: 'e2',
@@ -31,6 +33,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 5.0,
     coins: 41900,
     trend: 'up',
+    rankChange: 1,
   },
   {
     id: 'e3',
@@ -41,6 +44,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 4.99,
     coins: 38400,
     trend: 'flat',
+    rankChange: 0,
   },
   {
     id: 'e4',
@@ -51,6 +55,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 5.0,
     coins: 31200,
     trend: 'up',
+    rankChange: 3,
   },
   {
     id: 'e5',
@@ -61,6 +66,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 4.98,
     coins: 28700,
     trend: 'up',
+    rankChange: 1,
   },
   {
     id: 'e6',
@@ -71,6 +77,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 5.0,
     coins: 26400,
     trend: 'down',
+    rankChange: -2,
   },
   {
     id: 'e7',
@@ -81,6 +88,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 5.0,
     coins: 24100,
     trend: 'up',
+    rankChange: 2,
   },
   {
     id: 'e8',
@@ -91,6 +99,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 4.99,
     coins: 22800,
     trend: 'flat',
+    rankChange: 0,
   },
   {
     id: 'e9',
@@ -101,6 +110,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 5.0,
     coins: 21300,
     trend: 'up',
+    rankChange: null,
   },
   {
     id: 'e10',
@@ -111,6 +121,7 @@ export const mockEstarsLeaderboard: EstarLeaderboardEntry[] = [
     rating: 5.0,
     coins: 19900,
     trend: 'up',
+    rankChange: 1,
   },
 ]
 

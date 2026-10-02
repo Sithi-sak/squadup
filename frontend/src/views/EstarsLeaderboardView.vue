@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onActivated, ref, watch } from 'vue'
 import {
-  PhCaretUp,
-  PhCaretDown,
   PhMedal,
   PhMinus,
   PhStar,
+  PhTrendDown,
+  PhTrendUp,
   PhTrophy,
   PhUserCircle,
 } from '@phosphor-icons/vue'
@@ -73,8 +73,15 @@ const tierMeta = {
   },
 } as const
 
-const trendIcon = { up: PhCaretUp, down: PhCaretDown, flat: PhMinus } as const
+const trendIcon = { up: PhTrendUp, down: PhTrendDown, flat: PhMinus } as const
 const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-slate-500' } as const
+
+function trendLabel(rankChange: number | null) {
+  if (rankChange === null) return 'New to the leaderboard this period'
+  if (rankChange === 0) return 'Same rank as last period'
+  const places = Math.abs(rankChange)
+  return `${rankChange > 0 ? 'Up' : 'Down'} ${places} ${places === 1 ? 'place' : 'places'} since last period`
+}
 </script>
 
 <template>
@@ -225,13 +232,19 @@ const trendClass = { up: 'text-brand-400', down: 'text-red-400', flat: 'text-sla
               {{ entry.coins.toLocaleString() }}
             </span>
 
-            <component
-              :is="trendIcon[entry.trend]"
-              :size="16"
-              weight="bold"
+            <span
               :class="trendClass[entry.trend]"
-              class="shrink-0"
-            />
+              :title="trendLabel(entry.rankChange)"
+              class="inline-flex w-12 shrink-0 items-center justify-end gap-1 text-sm font-semibold tabular-nums"
+            >
+              <template v-if="entry.rankChange === null">
+                <span class="rounded-full bg-brand-500/15 px-1.5 py-0.5 text-[11px] uppercase">New</span>
+              </template>
+              <template v-else>
+                <component :is="trendIcon[entry.trend]" :size="16" weight="bold" />
+                <span v-if="entry.rankChange !== 0">{{ Math.abs(entry.rankChange) }}</span>
+              </template>
+            </span>
           </router-link>
         </div>
       </template>

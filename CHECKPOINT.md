@@ -3472,6 +3472,18 @@ kind of Stripe id.
         it's now allowed by name in `_DEMO_PAYOUT_CARDS` (`routers/wallet.py`) and
         `DEMO_PAYOUT_CARDS` (`utils/card.ts`). Its `51` prefix makes it a Mastercard, so it saves
         and shows as "Mastercard •••• 6777". `ruff` + `oxlint` clean, `vue-tsc` unchanged (16).
+  - [x] 4.60 Real rank trend on the eStars leaderboard (user request, 2026-10-02). Every row showed
+        a dash because 3.12a hard-coded `trend: 'flat'`. The trend now compares each eStar's
+        current rank with their rank one period earlier, worked out from `bookings` (no snapshot
+        table needed): week compares with the 7 days before that, month with the 30 days before,
+        all-time with the standings as of 7 days ago.
+    - [x] 4.60a Migration: `estars_leaderboard` gains an optional `until` upper bound.
+    - [x] 4.60b Backend: `GET /estars/leaderboard` ranks the previous window too and returns
+          `trend` + `rank_change` (places moved, `null` for a new entry).
+    - [x] 4.60c Frontend: store/mock types get `rankChange`; leaderboard rows show a trend-up/down
+          icon + places moved, "New" for new entries, dash when unchanged.
+    - [x] 4.60d Verification: `ruff check` + `ruff format` clean, `oxlint` clean on the touched
+          files, `vue-tsc` unchanged (16). Migration not pushed yet (project is unlinked).
 
 ---
 

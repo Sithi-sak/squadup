@@ -17,6 +17,8 @@ export interface EstarEntry {
   rating: number | null
   coins: number
   trend: 'up' | 'down' | 'flat'
+  /** Places moved since the previous period (positive = climbed), `null` for a new entry. */
+  rankChange: number | null
 }
 
 export const useEstarsStore = defineStore('estars', () => {

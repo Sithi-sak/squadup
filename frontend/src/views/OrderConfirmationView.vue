@@ -42,7 +42,7 @@ const placedAt = computed(() => {
     </UEmpty>
   </div>
 
-  <div v-else class="mx-auto flex max-w-lg flex-col items-center px-4 py-16 text-center">
+  <div v-else class="mx-auto flex max-w-2xl flex-col items-center px-4 py-16 text-center">
     <div class="flex size-16 items-center justify-center rounded-full bg-brand-500">
       <PhCheck :size="32" weight="bold" class="text-white" />
     </div>
@@ -71,9 +71,9 @@ const placedAt = computed(() => {
           <span class="text-slate-400">Quantity</span>
           <span class="font-medium text-white">{{ booking.quantity }}</span>
         </div>
-        <div v-if="booking.addons.length" class="flex items-center justify-between">
-          <span class="text-slate-400">Add-ons</span>
-          <span class="font-medium text-white">{{ booking.addons.map((a) => a.label).join(', ') }}</span>
+        <div v-if="booking.addons.length" class="flex items-start justify-between gap-6">
+          <span class="shrink-0 text-slate-400">Add-ons</span>
+          <span class="text-right font-medium text-white">{{ booking.addons.map((a) => a.label).join(', ') }}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-slate-400">Date</span>

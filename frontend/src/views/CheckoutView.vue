@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhCalendarBlank, PhCaretLeft } from '@phosphor-icons/vue'
 import { CalendarDateTime, getLocalTimeZone, now, toCalendarDate, type CalendarDate } from '@internationalized/date'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type PaymentMethod } from '@/stores/bookings'
+import { useWalletStore } from '@/stores/wallet'
 import { mockPlayers } from '@/mocks/players'
 import { getPlayerProfile } from '@/mocks/playerProfiles'
-import { mockCurrentUser } from '@/mocks/users'
 import { isRealId } from '@/utils/id'
 
 const router = useRouter()
 const bookingsStore = useBookingsStore()
+const walletStore = useWalletStore()
 const toast = useToast()
 
 const draft = computed(() => bookingsStore.draft)
@@ -37,9 +38,13 @@ const scheduledDate = computed({
   },
 })
 
+// `AppHeader` already loads the wallet; refresh silently so a top-up from another tab shows here.
+onMounted(() => walletStore.fetchWallet({ silent: true }))
+
 const remainingBalance = computed(() =>
-  draft.value ? mockCurrentUser.coinBalance - draft.value.totalCoins : mockCurrentUser.coinBalance,
+  draft.value ? walletStore.balance - draft.value.totalCoins : walletStore.balance,
 )
+const insufficientBalance = computed(() => remainingBalance.value < 0)
 
 /** Seed/demo Pals (`p1`..`p8`) have no real `services` row to book against yet (3.17's seed
  * script hasn't landed), so "Place order" would just 500 - disable it up front instead. */
@@ -128,7 +133,7 @@ async function placeOrder() {
                 <img :src="coinIcon" alt="" class="h-6 w-6" />
                 <span>
                   <span class="block font-medium text-white">Squad Coin balance</span>
-                  <span class="block text-xs text-slate-400">{{ mockCurrentUser.coinBalance.toLocaleString() }} SC available</span>
+                  <span class="block text-xs text-slate-400">{{ walletStore.balance.toLocaleString() }} SC available</span>
                 </span>
               </span>
               <span class="bg-brand-500 ring-brand-500 flex size-5 shrink-0 items-center justify-center rounded-full ring-1 ring-inset">
@@ -136,7 +141,10 @@ async function placeOrder() {
               </span>
             </div>
 
-            <p class="text-xs font-medium text-brand-400">
+            <p v-if="insufficientBalance" class="text-xs font-medium text-red-400">
+              Not enough Squad Coin. You need {{ (-remainingBalance).toLocaleString() }} SC more.
+            </p>
+            <p v-else class="text-xs font-medium text-brand-400">
               After this order: {{ remainingBalance.toLocaleString() }} SC left
             </p>
 
@@ -222,7 +230,7 @@ async function placeOrder() {
           size="lg"
           class="mt-4 rounded-full"
           :loading="submitting"
-          :disabled="submitting || isDemoBooking"
+          :disabled="submitting || isDemoBooking || insufficientBalance"
           @click="placeOrder"
         >
           Place order

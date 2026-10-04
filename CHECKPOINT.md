@@ -3551,6 +3551,12 @@ kind of Stripe id.
           Backend `GET /users/{id}/profile` now returns `joinedAt` (`users.created_at`). Wired
           into both `PublicProfileView` and `MyProfileView`. `ruff check` and `eslint` clean,
           no `vue-tsc` errors in the touched files.
+  - [x] 4.63 Checkout showed the mock 3,240 SC balance (reported 2026-10-04 by the user; real
+        balance was 0). `CheckoutView` and `SubscriptionModal` read `mockCurrentUser.coinBalance`
+        instead of `walletStore.balance`. Both now use the wallet store; Checkout refreshes it
+        silently on mount and disables "Place order" with a "Not enough Squad Coin" line when
+        the order costs more than the balance. `stores/wallet.ts`'s offline fallback to the mock
+        balance is left as is (same convention as the other stores).
 
 ---
 

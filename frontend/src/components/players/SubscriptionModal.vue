@@ -3,8 +3,8 @@ import { computed, ref } from 'vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhCheck, PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { mockCurrentUser } from '@/mocks/users'
 import { useSubscriptionsStore } from '@/stores/subscriptions'
+import { useWalletStore } from '@/stores/wallet'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = withDefaults(
@@ -23,6 +23,7 @@ const props = withDefaults(
 const open = defineModel<boolean>('open', { required: true })
 
 const subscriptionsStore = useSubscriptionsStore()
+const walletStore = useWalletStore()
 const toast = useToast()
 const submitting = ref(false)
 
@@ -152,7 +153,7 @@ async function confirmSubscribe() {
             </span>
             <div>
               <p class="text-sm font-semibold text-white">Squad Coin Wallet</p>
-              <p class="text-xs text-slate-400">Balance {{ mockCurrentUser.coinBalance.toLocaleString() }} SC</p>
+              <p class="text-xs text-slate-400">Balance {{ walletStore.balance.toLocaleString() }} SC</p>
             </div>
           </div>
           <UButton color="primary" variant="link" size="sm">Change</UButton>

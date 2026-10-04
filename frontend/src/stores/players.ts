@@ -4,6 +4,13 @@ import { api, ApiError } from '@/lib/api'
 import { formatTimeAgo } from '@/utils/timeAgo'
 import type { FeedPost } from './feed'
 
+/** One game a Pal plays with their rank/role in it (`players.game_skills`, 4.64). */
+export interface GameSkill {
+  game: string
+  rank: string | null
+  role: string | null
+}
+
 export interface PlayerSummary {
   id: string
   /** Null for a seed Pal with no linked account yet. Present so a browse card can follow a Pal -
@@ -12,8 +19,13 @@ export interface PlayerSummary {
   displayName: string
   avatarUrl: string | null
   games: string[]
+  /** The single rank/role from before 4.64, mirrored from the first game. Prefer
+   * `gameSkillsOf()`. */
   rank: string | null
   role: string | null
+  /** Optional so mock fixtures (and a backend from before 4.64) still type-check - read it
+   * through `gameSkillsOf()`, which falls back to `rank`/`role`. */
+  gameSkills?: GameSkill[]
   pricePerHour: number | null
   languages: string[]
   rating: number | null
@@ -169,6 +181,7 @@ export interface MyPlayerProfile {
   games: string[]
   rank: string | null
   role: string | null
+  gameSkills?: GameSkill[]
   languages: string[]
   pricePerHour: number | null
   rating: number | null
@@ -198,6 +211,21 @@ export interface MyService extends PlayerServiceListing, Omit<PlayerServiceDetai
   title: string
 }
 
+/** A Pal's per-game rank/role, one entry per game in `games` (same order). Falls back to the old
+ * single `rank`/`role` on the first game when `gameSkills` is missing (mock fixtures, or a backend
+ * from before 4.64), same as the backend's `game_skills_of`. */
+export function gameSkillsOf(
+  player: Pick<PlayerSummary, 'games' | 'rank' | 'role' | 'gameSkills'>,
+): GameSkill[] {
+  const stored = player.gameSkills ?? []
+  if (stored.length) return stored
+  return player.games.map((game, index) => ({
+    game,
+    rank: index === 0 ? player.rank : null,
+    role: index === 0 ? player.role : null,
+  }))
+}
+
 /** Narrows a `GET /players/{id}` response down to the `PlayerSummary` shape used by browse
  * cards and the Player Profile header. */
 export function playerSummaryFromDetail(p: MyPlayerProfile): PlayerSummary {
@@ -209,6 +237,7 @@ export function playerSummaryFromDetail(p: MyPlayerProfile): PlayerSummary {
     games: p.games,
     rank: p.rank,
     role: p.role,
+    gameSkills: p.gameSkills,
     pricePerHour: p.pricePerHour,
     languages: p.languages,
     rating: p.rating,
@@ -414,6 +443,7 @@ export const usePlayersStore = defineStore('players', () => {
     bio?: string
     languages?: string[]
     payoutSchedule?: string
+    gameSkills?: GameSkill[]
   }) {
     mine.value = await api.patch<MyPlayerProfile>('/players/me', updates)
     // `payoutSchedule` isn't on `PlayerDetailOut` (it would ride along on every public profile

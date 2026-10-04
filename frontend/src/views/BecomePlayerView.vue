@@ -17,6 +17,7 @@ import {
   createReviewStepData,
   createVerifyStepData,
 } from '@/components/become-player/types'
+import { toGameSkills } from '@/utils/gameSkills'
 import { compressImage } from '@/utils/image'
 import { usePlayersStore } from '@/stores/players'
 import { useAuthStore } from '@/stores/auth'
@@ -82,8 +83,11 @@ async function buildFormData() {
   if (gamesData.value.headline) formData.append('tagline', gamesData.value.headline)
   if (accountData.value.timezone) formData.append('timezone', accountData.value.timezone)
   for (const game of gamesData.value.games) formData.append('games', game)
-  if (gamesData.value.highestRank) formData.append('rank', gamesData.value.highestRank)
-  if (gamesData.value.role) formData.append('role', gamesData.value.role)
+  const gameSkills = toGameSkills(gamesData.value.games, gamesData.value.skills)
+  formData.append('game_skills', JSON.stringify(gameSkills))
+  // Still sent for a backend from before 4.64, which only knows the single rank/role.
+  if (gameSkills[0]?.rank) formData.append('rank', gameSkills[0].rank)
+  if (gameSkills[0]?.role) formData.append('role', gameSkills[0].role)
   for (const language of gamesData.value.languages) formData.append('languages', language)
   formData.append('payout_schedule', verifyData.value.payoutSchedule)
   formData.append('pricing_model', ratesData.value.pricingModel)

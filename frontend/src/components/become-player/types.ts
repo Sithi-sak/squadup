@@ -1,3 +1,5 @@
+import type { GameSkillDraft } from '@/utils/gameSkills'
+
 export interface BecomePlayerStepMeta {
   id: number
   title: string
@@ -38,8 +40,8 @@ export function createAccountStepData(): AccountStepData {
 
 export interface GamesStepData {
   games: string[]
-  highestRank: string
-  role: string
+  /** Rank/role per game in `games`, keyed by game name (4.64). */
+  skills: Record<string, GameSkillDraft>
   languages: string[]
   headline: string
 }
@@ -47,8 +49,7 @@ export interface GamesStepData {
 export function createGamesStepData(): GamesStepData {
   return {
     games: [],
-    highestRank: '',
-    role: '',
+    skills: {},
     languages: [],
     headline: '',
   }

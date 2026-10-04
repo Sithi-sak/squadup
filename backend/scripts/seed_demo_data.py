@@ -588,9 +588,10 @@ def _seed_companion_service(client, player_id: str, primary_game: str) -> None:
     )
 
 
-def _seed_extra_services(client, player_id: str, primary_game: str, current_games: list[str]) -> None:
+def _seed_extra_services(client, player_id: str, primary_game: str, current_skills: list[dict]) -> None:
     n_extra = random.choices([0, 1, 2], weights=[25, 55, 20])[0]
-    games = list(current_games)
+    skills = list(current_skills)
+    games = [s["game"] for s in skills]
     for _ in range(n_extra):
         if random.random() < 0.55:
             _seed_companion_service(client, player_id, primary_game)
@@ -609,9 +610,10 @@ def _seed_extra_services(client, player_id: str, primary_game: str, current_game
         _seed_game_service(client, player_id, game, rank, role)
         if game not in games:
             games.append(game)
+            skills.append({"game": game, "rank": rank, "role": role})
 
-    if games != current_games:
-        client.table("players").update({"games": games}).eq("id", player_id).execute()
+    if skills != current_skills:
+        client.table("players").update({"games": games, "game_skills": skills}).eq("id", player_id).execute()
 
 
 # Seeding -----------------------------------------------------------------------------------
@@ -645,6 +647,7 @@ def _seed_pal(client, email_local: str, game: str, used_handles: set[str]) -> di
             "games": [game],
             "rank": rank,
             "role": role,
+            "game_skills": [{"game": game, "rank": rank, "role": role}],
             "languages": random.sample(LANGUAGES, k=random.randint(1, 2)),
             "price_per_hour": None,
             "online": random.random() < 0.55,
@@ -658,7 +661,7 @@ def _seed_pal(client, email_local: str, game: str, used_handles: set[str]) -> di
         "id", player_id
     ).execute()
 
-    _seed_extra_services(client, player_id, game, [game])
+    _seed_extra_services(client, player_id, game, [{"game": game, "rank": rank, "role": role}])
 
     return {
         "user_id": user_id,

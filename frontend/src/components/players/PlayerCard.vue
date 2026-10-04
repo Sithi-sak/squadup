@@ -1,10 +1,23 @@
 <script setup lang="ts">
-import { PhPlay, PhStar, PhUserCircle } from '@phosphor-icons/vue'
+import { computed } from 'vue'
+import { PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import type { PlayerSummary } from '@/stores/players'
+import { gameSkillsOf, type PlayerSummary } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
-defineProps<{ player: PlayerSummary }>()
+const props = defineProps<{
+  player: PlayerSummary
+  /** Game the browse page is filtered to - the card shows the Pal's rank/role in that game
+   * (4.64) instead of their first game's. */
+  game?: string
+}>()
+
+const skill = computed(() => {
+  const skills = gameSkillsOf(props.player)
+  const wanted = props.game?.toLowerCase()
+  if (wanted) return skills.find((s) => s.game.toLowerCase() === wanted) ?? null
+  return skills[0] ?? null
+})
 
 function formatCount(count: number) {
   if (count < 1000) return String(count)
@@ -51,12 +64,12 @@ function formatCount(count: number) {
       <span v-else>--</span>
     </p>
 
-    <div v-if="player.rank || player.role" class="flex flex-wrap gap-1.5">
-      <UBadge v-if="player.rank" color="neutral" variant="soft" size="md" class="rounded-full">
-        {{ player.rank }}
+    <div v-if="skill?.rank || skill?.role" class="flex flex-wrap gap-1.5">
+      <UBadge v-if="skill.rank" color="neutral" variant="soft" size="md" class="rounded-full">
+        {{ skill.rank }}
       </UBadge>
-      <UBadge v-if="player.role" color="neutral" variant="soft" size="md" class="rounded-full">
-        {{ player.role }}
+      <UBadge v-if="skill.role" color="neutral" variant="soft" size="md" class="rounded-full">
+        {{ skill.role }}
       </UBadge>
     </div>
 

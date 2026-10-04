@@ -211,7 +211,12 @@ function formatCount(count: number) {
         <UEmpty title="No Pals match your filters" class="text-white" />
       </div>
       <div v-else class="grid grid-cols-1 gap-4 py-6 sm:grid-cols-2 lg:grid-cols-4">
-        <PlayerCard v-for="player in visiblePlayers" :key="player.id" :player="player" />
+        <PlayerCard
+          v-for="player in visiblePlayers"
+          :key="player.id"
+          :player="player"
+          :game="gameFilter || undefined"
+        />
       </div>
     </div>
   </div>

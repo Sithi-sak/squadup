@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PhClock, PhGlobeHemisphereWest, PhStar } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import type { PlayerProfile, PlayerSummary } from '@/stores/players'
+import { gameSkillsOf, type PlayerProfile, type PlayerSummary } from '@/stores/players'
 import { usePalChat } from '@/composables/usePalChat'
 
 /** Left rail on the non-Services tabs. The services list only makes sense next to a service
@@ -21,6 +21,7 @@ const router = useRouter()
 const startChat = usePalChat()
 
 const languages = computed(() => props.player.languages.join(', ') || props.profile.language)
+const gameSkills = computed(() => gameSkillsOf(props.player))
 
 function formatCount(count: number) {
   if (count < 1000) return String(count)
@@ -58,6 +59,23 @@ function formatCount(count: number) {
           <p class="font-semibold text-white">{{ formatCount(profile.followingCount) }}</p>
           <p class="text-xs text-slate-400">Following</p>
         </div>
+      </div>
+
+      <div v-if="gameSkills.length" class="mt-4 border-t border-white/10 pt-4">
+        <p class="text-xs font-medium tracking-wide text-slate-500 uppercase">Games</p>
+        <ul class="mt-2 flex flex-col gap-2">
+          <li v-for="skill in gameSkills" :key="skill.game" class="text-sm">
+            <p class="font-medium text-white">{{ skill.game }}</p>
+            <div v-if="skill.rank || skill.role" class="mt-1 flex flex-wrap gap-1.5">
+              <UBadge v-if="skill.rank" color="neutral" variant="soft" size="md" class="rounded-full">
+                {{ skill.rank }}
+              </UBadge>
+              <UBadge v-if="skill.role" color="neutral" variant="soft" size="md" class="rounded-full">
+                {{ skill.role }}
+              </UBadge>
+            </div>
+          </li>
+        </ul>
       </div>
 
       <div class="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4 text-sm text-slate-400">

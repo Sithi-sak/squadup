@@ -2,10 +2,17 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { PhPlus, PhUserCircle, PhX } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
+import GameSkillsEditor from '@/components/players/GameSkillsEditor.vue'
 import { mockCurrentUser } from '@/mocks/users'
 import { useAuthStore } from '@/stores/auth'
-import { usePlayersStore } from '@/stores/players'
+import { gameSkillsOf, usePlayersStore } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import {
+  isGameSkillComplete,
+  toGameSkillDrafts,
+  toGameSkills,
+  type GameSkillDraft,
+} from '@/utils/gameSkills'
 
 /** The Pal's public profile: everything a buyer sees on `/players/{id}`. Name, username, email
  * and region are deliberately not here - they are account-level fields the Account tab owns, and
@@ -34,10 +41,15 @@ const bio = ref('')
 const languages = ref<string[]>([])
 
 /** `mine` is usually still loading on mount, so the form fills in from the fetch rather than
- * from a one-shot read of an empty store. */
+ * from a one-shot read of an empty store. Keyed on these fields only, so saving the Games card
+ * (which replaces `mine`) doesn't wipe unsaved edits here. */
 watch(
-  () => playersStore.mine,
-  (mine) => {
+  () => {
+    const mine = playersStore.mine
+    return mine ? JSON.stringify([mine.tagline, mine.bio, mine.languages]) : null
+  },
+  () => {
+    const mine = playersStore.mine
     if (!mine) return
     headline.value = mine.tagline ?? ''
     bio.value = mine.bio ?? ''
@@ -86,6 +98,51 @@ async function saveProfile() {
     })
   } finally {
     saving.value = false
+  }
+}
+
+// Games & skills (4.65): its own Save, so a half-edited rank never blocks saving the bio above.
+const games = ref<string[]>([])
+const skills = ref<Record<string, GameSkillDraft>>({})
+
+function resetGames() {
+  const mine = playersStore.mine
+  if (!mine) return
+  const saved = gameSkillsOf(mine)
+  games.value = saved.map((s) => s.game)
+  skills.value = toGameSkillDrafts(saved)
+}
+// Same idea as the profile watch above: only a change to the saved games refills this card.
+watch(
+  () => (playersStore.mine ? JSON.stringify(gameSkillsOf(playersStore.mine)) : null),
+  resetGames,
+  { immediate: true },
+)
+
+const gamesDirty = computed(() => {
+  const mine = playersStore.mine
+  if (!mine) return false
+  return JSON.stringify(toGameSkills(games.value, skills.value)) !== JSON.stringify(gameSkillsOf(mine))
+})
+const gamesValid = computed(
+  () => games.value.length > 0 && games.value.every((game) => isGameSkillComplete(game, skills.value[game])),
+)
+
+const savingGames = ref(false)
+
+async function saveGames() {
+  savingGames.value = true
+  try {
+    await playersStore.updateMine({ gameSkills: toGameSkills(games.value, skills.value) })
+    toast.add({ title: 'Games saved', color: 'success' })
+  } catch (err) {
+    toast.add({
+      title: "Couldn't save games",
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    savingGames.value = false
   }
 }
 
@@ -224,6 +281,41 @@ async function onAvatarSelected(event: Event) {
           @click="saveProfile"
         >
           Save changes
+        </UButton>
+      </div>
+    </div>
+
+    <div v-if="playersStore.mine" class="rounded-xl bg-gray-800/70 p-5">
+      <h2 class="text-lg font-semibold text-white">Games &amp; skills</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        The games you play, with your rank and role in each. Shown on your Pal page and browse card.
+      </p>
+
+      <div class="mt-5 flex flex-col gap-5">
+        <GameSkillsEditor v-model:games="games" v-model:skills="skills" card-class="bg-gray-900/40" />
+      </div>
+
+      <p v-if="!games.length" class="mt-3 text-sm text-amber-400">Add at least one game.</p>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <UButton
+          v-if="gamesDirty"
+          color="neutral"
+          variant="ghost"
+          class="rounded-full px-4"
+          :disabled="savingGames"
+          @click="resetGames"
+        >
+          Discard
+        </UButton>
+        <UButton
+          color="primary"
+          class="rounded-full px-6"
+          :loading="savingGames"
+          :disabled="!gamesDirty || !gamesValid"
+          @click="saveGames"
+        >
+          Save games
         </UButton>
       </div>
     </div>

@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError
 
 from ..core.auth import get_current_user_id, get_optional_user_id
 from ..core.blocks import has_blocked
+from ..core.game_skills import GameSkill, GameSkillIn, game_skills_of
 from ..core.schema import CamelModel
 from ..core.storage import upload_document, upload_image_as_webp
 from ..core.supabase import get_supabase_client
@@ -68,6 +69,7 @@ class PlayerSummaryOut(CamelModel):
     games: list[str]
     rank: str | None
     role: str | None
+    game_skills: list[GameSkill]
     price_per_hour: float | None
     languages: list[str]
     rating: float | None
@@ -101,6 +103,7 @@ class PlayerDetailOut(CamelModel):
     games: list[str]
     rank: str | None
     role: str | None
+    game_skills: list[GameSkill]
     languages: list[str]
     price_per_hour: float | None
     rating: float | None
@@ -296,6 +299,7 @@ def _player_summary(player: dict, primary_listing: dict | None) -> dict:
         "games": player["games"],
         "rank": player["rank"],
         "role": player["role"],
+        "game_skills": game_skills_of(player),
         "price_per_hour": player["price_per_hour"],
         "languages": player["languages"],
         "rating": player["rating"],
@@ -314,6 +318,7 @@ def _serialize_player(player: dict, services: list[dict]) -> dict:
     primary = next((listing for listing in listings if listing["id"] == highlighted), None)
     return {
         **player,
+        "game_skills": game_skills_of(player),
         "price_coins": primary["price_coins"] if primary else None,
         "promo_badge": primary["promo_badge"] if primary else None,
         "services": listings,
@@ -433,13 +438,17 @@ def _match_score(player: dict, *, game: str | None, rank: str | None, role: str 
     Pal matches the browse criteria the caller is searching with. Unlike `q`/`language`/
     `max_price`/`online`/`is_new` below, game/rank/role no longer exclude a partial match (see
     `matches()`), they just rank it lower - a Diamond duo Pal still shows up for a Platinum
-    search, just below the exact-rank matches."""
+    search, just below the exact-rank matches. rank/role are compared against the searched
+    game's own rank/role (4.64), or any game's when no game is given."""
     score = 0
-    if game and any(g.lower() == game.lower() for g in player["games"]):
-        score += 40
-    if rank and (player["rank"] or "").lower() == rank.lower():
+    skills = game_skills_of(player)
+    if game:
+        skills = [s for s in skills if s["game"].lower() == game.lower()]
+        if skills:
+            score += 40
+    if rank and any((s["rank"] or "").lower() == rank.lower() for s in skills):
         score += 30
-    if role and (player["role"] or "").lower() == role.lower():
+    if role and any((s["role"] or "").lower() == role.lower() for s in skills):
         score += 20
     if player["online"]:
         score += 10
@@ -661,6 +670,8 @@ class PlayerProfileUpdateIn(CamelModel):
     bio: str | None = None
     languages: list[str] | None = None
     payout_schedule: str | None = None
+    # Replaces the Pal's whole games list, one entry per game in order (4.65).
+    game_skills: list[GameSkillIn] | None = None
 
 
 @router.patch("/me", response_model=PlayerDetailOut)
@@ -679,6 +690,17 @@ def update_my_player(
         updates["language"] = updates["languages"][0] if updates["languages"] else None
     if updates.get("payout_schedule"):
         updates["payout_schedule"] = _normalize_payout_schedule(updates["payout_schedule"])
+    if "game_skills" in updates:
+        skills = game_skills_of(
+            {"games": [s.game for s in payload.game_skills or []], "game_skills": updates["game_skills"]}
+        )
+        games = [s["game"] for s in skills]
+        if not games:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Add at least one game")
+        if len(set(games)) != len(games):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Each game can only be listed once")
+        # `rank`/`role` stay mirrored from the first game, same as on creation (4.64).
+        updates.update(games=games, game_skills=skills, rank=skills[0]["rank"], role=skills[0]["role"])
     if updates:
         client.table("players").update(updates).eq("id", player.data["id"]).execute()
     return _fetch_player_by_user_id(user_id, active_only=False)
@@ -733,6 +755,9 @@ def create_my_player(
     games: list[str] = Form(...),  # noqa: B008
     rank: str | None = Form(None),
     role: str | None = Form(None),
+    # JSON `[{game, rank, role}]`, one per game (4.64). Optional so an older frontend that only
+    # sends the single `rank`/`role` above still submits fine.
+    game_skills: str | None = Form(None),
     languages: list[str] = Form(...),  # noqa: B008
     payout_schedule: str = Form("weekly"),
     pricing_model: str = Form("per-game"),
@@ -753,6 +778,24 @@ def create_my_player(
         parsed_rates = [RateIn.model_validate(r) for r in json.loads(rates)]
     except (json.JSONDecodeError, ValidationError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid rates payload") from exc
+
+    try:
+        parsed_skills = [GameSkillIn.model_validate(s) for s in json.loads(game_skills)] if game_skills else []
+    except (json.JSONDecodeError, ValidationError, TypeError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid game skills payload") from exc
+    skills_by_game = {s.game: s for s in parsed_skills}
+    skills = game_skills_of(
+        {
+            "games": games,
+            "game_skills": [s.model_dump() for s in skills_by_game.values()],
+            "rank": rank,
+            "role": role,
+        }
+    )
+    # `rank`/`role` stay mirrored from the first game so anything still reading the old columns
+    # keeps showing what it did before.
+    if skills_by_game and skills:
+        rank, role = skills[0]["rank"], skills[0]["role"]
 
     player_id = str(uuid4())
     # Every upload here is re-encoded and downscaled first: a raw phone photo is routinely over
@@ -780,6 +823,7 @@ def create_my_player(
             "games": games,
             "rank": rank,
             "role": role,
+            "game_skills": skills,
             "languages": languages,
             "payout_schedule": _normalize_payout_schedule(payout_schedule),
             "id_front_url": id_front_url,

@@ -4,6 +4,7 @@
  * (suspend, ban, payouts) land with the real admin endpoints in Phase 3 (3.8). */
 
 import { generatedAvatarUrl } from '@/utils/avatar'
+import type { GameSkill } from '@/stores/players'
 
 export type FlaggedPlayerStatus = 'pending' | 'reviewing' | 'actioned' | 'dismissed'
 export type DisputeStatus = 'open' | 'investigating' | 'resolved' | 'refunded'
@@ -36,6 +37,9 @@ export interface AdminPalApplication {
   games: string[]
   rank: string | null
   role: string | null
+  /** Per-game rank/role (4.64). Optional so the mock applications don't each carry it -
+   * read through `gameSkillsOf()`. */
+  gameSkills?: GameSkill[]
   languages: string[]
   payoutSchedule: string
   idFrontUrl: string | null

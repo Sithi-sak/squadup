@@ -86,8 +86,13 @@ const reviewSections = computed(() => [
   {
     stepId: 2,
     title: 'Games & skills',
-    line1: [props.gamesData.games.join(', '), props.gamesData.highestRank].filter(Boolean).join(' · '),
-    line2: `Mains ${props.gamesData.role} · Speaks ${props.gamesData.languages.join(', ')}`,
+    line1: props.gamesData.games
+      .map((game) => {
+        const skill = props.gamesData.skills[game]
+        return [game, skill?.rank, skill?.role].filter(Boolean).join(' · ')
+      })
+      .join(', '),
+    line2: `Speaks ${props.gamesData.languages.join(', ')}`,
   },
   {
     stepId: 3,

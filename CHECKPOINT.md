@@ -3557,6 +3557,59 @@ kind of Stripe id.
         silently on mount and disables "Place order" with a "Not enough Squad Coin" line when
         the order costs more than the balance. `stores/wallet.ts`'s offline fallback to the mock
         balance is left as is (same convention as the other stores).
+  - [x] 4.64 Rank/role per game (reported 2026-10-04 by the user). `players` had one `rank` and
+        one `role` for all of a Pal's games, so Become a Pal's rank/role pickers only followed the
+        first game, and the Pal profile never showed games/rank/role at all. Additive only so the
+        live site keeps working through the deploy: old `rank`/`role` columns stay and are kept
+        mirrored from the first game. Deploy order: push the migration before the backend (reads
+        work without it, but the new apply endpoint writes `game_skills`).
+    - [x] 4.64a `20261004120000_players_game_skills.sql`: `players.game_skills jsonb` (`[{game,
+          rank, role}]`, default `[]`), backfilled one entry per game with the old `rank`/`role`
+          on the first game (SQL has no rank ladders to match against; the old form normally
+          took them from the first game anyway). `rank`/`role` are not dropped. `erd_schema.sql`
+          updated. Backfill dry-run on a rolled-back temp table: correct for 2 games, 0 games,
+          and a game with no rank.
+    - [x] 4.64b Backend: new `core/game_skills.py` (`GameSkill`, `game_skills_of()`: one entry per
+          `games`, falling back to the old `rank`/`role` on the first game when a row has no
+          `game_skills`, including before the migration lands). `POST /players/me` takes an
+          optional `game_skills` JSON form field and still accepts plain `rank`/`role`, and
+          mirrors the first game into `rank`/`role`. Summary/detail/admin payloads add
+          `gameSkills`. `_match_score` compares rank/role against the searched game's entry (any
+          game when none is searched). Admin's select is `*`, so it never depended on the
+          column list.
+    - [x] 4.64c Become a Pal Games step: a card per added game with its own rank ladder and role
+          list; rank required per game, role required only where the game has a role list
+          (free text and optional otherwise). `GamesStepData` swaps `highestRank`/`role` for
+          `skills` keyed by game. Submit sends `game_skills` plus the first game's `rank`/`role`
+          for an older backend. Review step lists "game · rank · role" per game.
+    - [x] 4.64d `ProfileAboutCard` gets a Games section (rank/role badges per game).
+          `PlayerCard` takes an optional `game` and Browse Players passes its game filter, so a
+          Valorant search shows each Pal's Valorant rank. Admin Review modal lists each game.
+          Frontend reads go through `gameSkillsOf()` (`stores/players.ts`), which falls back to
+          `rank`/`role` for mock fixtures and an older backend.
+    - [x] 4.64e Seed script writes `game_skills` for single-game and extra-game Pals (cluster
+          Pals have no rank/role, the fallback covers them). `ruff check` clean, routers import,
+          `game_skills_of`/`_match_score` sanity-checked. `eslint` clean on touched files;
+          `vue-tsc` total unchanged (16 errors, none new). Not run in the browser per
+          [[feedback_no_build_or_run_skill]]. Not done: editing games after approval (Settings
+          has no games section yet; `PATCH /players/me` doesn't take games), see 4.65.
+  - [x] 4.65 Edit games/rank/role after applying (user request, 2026-10-04, follow-up to 4.64).
+        Become a Pal says "You can add more later" but nothing could change them afterwards.
+    - [x] 4.65a Backend: `PATCH /players/me` takes optional `gameSkills`; sets `games`,
+          `game_skills` and the mirrored `rank`/`role` together. Rejects an empty list and
+          duplicate games. Old payloads without it behave as before.
+    - [x] 4.65b Shared `GameSkillsEditor.vue` (game chips + a rank/role card per game) pulled out
+          of `StepGames.vue`, with the ladder lookups/validation in `utils/gameSkills.ts`.
+          `StepGames` uses it with no behaviour change.
+    - [x] 4.65c Settings > Profile: new "Games & skills" card using the editor, filled from
+          `mine.gameSkills` (via `gameSkillsOf`), its own Save button, disabled until changed
+          and every game has a rank (and role where the game has a role list). Each card's
+          watcher now keys on its own fields, so saving one card no longer resets unsaved edits
+          in the other (the old watcher refilled the whole tab on any `mine` change).
+    - [x] 4.65d Verification: `ruff check` and `eslint` clean on touched files; `vue-tsc` went
+          from 16 to 15 errors (the editor's `pendingGame` is `string | undefined`, which fixes
+          the old `StepGames` one). `PATCH` payload parsing sanity-checked. Not run in the
+          browser per [[feedback_no_build_or_run_skill]].
 
 ---
 

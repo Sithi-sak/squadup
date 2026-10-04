@@ -4,6 +4,7 @@ import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhMagnifyingGlass, PhX } from '@phosphor-icons/vue'
 import { useAdminStore } from '@/stores/admin'
 import type { AdminPalApplication, PalApplicationStatus } from '@/mocks/admin'
+import { gameSkillsOf } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
 const adminStore = useAdminStore()
@@ -165,15 +166,16 @@ async function setStatus(status: PalApplicationStatus) {
 
           <p v-if="viewing.tagline" class="rounded-xl bg-gray-800/70 p-4 text-slate-300">{{ viewing.tagline }}</p>
 
-          <div class="flex items-center justify-between border-t border-white/10 pt-3">
+          <div class="flex items-start justify-between gap-4 border-t border-white/10 pt-3">
             <span class="text-slate-400">Games</span>
-            <span class="font-medium text-white">{{ viewing.games.join(', ') || '-' }}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Rank / Role</span>
-            <span class="font-medium text-white">
-              {{ [viewing.rank, viewing.role].filter(Boolean).join(' · ') || '-' }}
-            </span>
+            <div v-if="gameSkillsOf(viewing).length" class="flex flex-col items-end gap-1 text-right">
+              <span v-for="skill in gameSkillsOf(viewing)" :key="skill.game" class="font-medium text-white">
+                {{ skill.game }}<span v-if="skill.rank || skill.role" class="font-normal text-slate-400">
+                  · {{ [skill.rank, skill.role].filter(Boolean).join(' · ') }}</span
+                >
+              </span>
+            </div>
+            <span v-else class="font-medium text-white">-</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-slate-400">Languages</span>

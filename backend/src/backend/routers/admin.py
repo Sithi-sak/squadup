@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, status
 
+from ..core.game_skills import GameSkill, game_skills_of
 from ..core.notify import notify
 from ..core.schema import CamelModel
 from ..core.storage import create_signed_url
@@ -43,6 +44,7 @@ class AdminPalApplicationOut(CamelModel):
     games: list[str]
     rank: str | None
     role: str | None
+    game_skills: list[GameSkill]
     languages: list[str]
     payout_schedule: str
     id_front_url: str | None
@@ -169,6 +171,7 @@ def _pal_application_out(row: dict) -> dict:
     return {
         **row,
         "email": user.get("email") or "",
+        "game_skills": game_skills_of(row),
         "id_front_url": create_signed_url("id-documents", row["id_front_url"]) if row.get("id_front_url") else None,
         "id_back_url": create_signed_url("id-documents", row["id_back_url"]) if row.get("id_back_url") else None,
         "submitted_at": row["created_at"],

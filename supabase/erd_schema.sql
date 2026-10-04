@@ -63,6 +63,7 @@ create table players (
   games text[] not null default '{}',
   rank text,
   role text,
+  game_skills jsonb not null default '[]',
   languages text[] not null default '{}',
   price_per_hour numeric(10, 2),
   rating numeric(3, 2),

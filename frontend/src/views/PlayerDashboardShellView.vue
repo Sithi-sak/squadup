@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import DashboardLayout from '@/components/dashboard/DashboardLayout.vue'
+import { useShellRoute } from '@/composables/useShellRoute'
 import { useAuthStore } from '@/stores/auth'
 
 /** Persistent shell for every `/dashboard/player` page, plus `/messages` and `/settings`
@@ -15,11 +15,11 @@ import { useAuthStore } from '@/stores/auth'
  * Messages and Settings also serve buyers (non-Pal accounts), who don't get this sidebar at
  * all - each of those two views renders its own buyer-facing layout when `!isPal`, so the
  * shell skips the sidebar chrome entirely and hands the route straight through. */
-const route = useRoute()
+const route = useShellRoute()
 const authStore = useAuthStore()
 
 const isPal = computed(() => Boolean(authStore.user?.playerId))
-const activeTab = computed(() => route.meta.dashboardTab ?? 'dashboard')
+const activeTab = computed(() => route.value.meta.dashboardTab ?? 'dashboard')
 
 /** These keep their instance while the shell is mounted, so bouncing between tabs is instant
  * and doesn't re-fetch or reset scroll/filters/selection. */
@@ -35,7 +35,7 @@ const cachedTabViews = [
 
 <template>
   <DashboardLayout v-if="isPal" :active="activeTab">
-    <router-view v-slot="{ Component }">
+    <router-view v-slot="{ Component }" :route="route">
       <transition name="dashboard-fade" mode="out-in">
         <keep-alive :include="cachedTabViews">
           <component :is="Component" />
@@ -43,7 +43,7 @@ const cachedTabViews = [
       </transition>
     </router-view>
   </DashboardLayout>
-  <router-view v-else />
+  <router-view v-else :route="route" />
 </template>
 
 <style scoped>

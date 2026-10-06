@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import FeedRightRail from '@/components/feed/FeedRightRail.vue'
 import FeedSidebar from '@/components/feed/FeedSidebar.vue'
+import { useShellRoute } from '@/composables/useShellRoute'
 
 /** Persistent shell for every `/feed` page (4.21). The sidebar and right rail live here, one
  * level above the `<router-view>`, so moving between feed tabs swaps only the centre column -
  * the rails keep their component instance, their fetched data and their scroll position
  * instead of unmounting and re-fetching on every navigation. Which nav item is lit and
  * whether the sidebar shows its "Create post" button come from the child route's `meta`. */
-const route = useRoute()
+const route = useShellRoute()
 
-const activeTab = computed(() => route.meta.feedTab ?? 'feed')
-const showCreatePost = computed(() => route.meta.feedCreatePost === true)
+const activeTab = computed(() => route.value.meta.feedTab ?? 'feed')
+const showCreatePost = computed(() => route.value.meta.feedCreatePost === true)
 
 /** The four fixed tabs keep their instance while the shell is mounted, so bouncing between
  * them is instant and their filters survive. The param-driven `/feed/me` page
@@ -27,7 +27,7 @@ const cachedTabViews = ['FeedView', 'FeedFollowingView', 'FeedExploreView', 'Fee
         <FeedSidebar :active="activeTab" :show-create-post="showCreatePost" />
       </div>
 
-      <router-view v-slot="{ Component }">
+      <router-view v-slot="{ Component }" :route="route">
         <transition name="feed-fade" mode="out-in">
           <keep-alive :include="cachedTabViews">
             <component :is="Component" />

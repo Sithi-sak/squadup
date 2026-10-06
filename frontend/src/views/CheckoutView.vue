@@ -128,7 +128,7 @@ async function placeOrder() {
         <div class="rounded-xl bg-gray-800/70 p-5">
           <h2 class="text-lg font-bold text-white">Payment method</h2>
           <div class="mt-3 flex flex-col gap-3">
-            <div class="ring-brand-500 bg-brand-900/20 flex items-center justify-between gap-3 rounded-full px-4 py-3 ring-1 ring-inset">
+            <div class="ring-brand-500 flex items-center justify-between gap-3 rounded-md px-4 py-3 ring-1 ring-inset">
               <span class="flex items-center gap-3">
                 <img :src="coinIcon" alt="" class="h-6 w-6" />
                 <span>
@@ -136,15 +136,12 @@ async function placeOrder() {
                   <span class="block text-xs text-slate-400">{{ walletStore.balance.toLocaleString() }} SC available</span>
                 </span>
               </span>
-              <span class="bg-brand-500 ring-brand-500 flex size-5 shrink-0 items-center justify-center rounded-full ring-1 ring-inset">
-                <span class="size-2 rounded-full bg-white" />
-              </span>
             </div>
 
             <p v-if="insufficientBalance" class="text-xs font-medium text-red-400">
               Not enough Squad Coin. You need {{ (-remainingBalance).toLocaleString() }} SC more.
             </p>
-            <p v-else class="text-xs font-medium text-brand-400">
+            <p v-else class="text-sm text-brand-400">
               After this order: {{ remainingBalance.toLocaleString() }} SC left
             </p>
 
@@ -159,8 +156,8 @@ async function placeOrder() {
           <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
-              class="rounded-full px-6 py-3 text-left ring-1 ring-inset transition-colors"
-              :class="startChoice === 'now' ? 'ring-brand-500 bg-brand-900/20' : 'ring-gray-700 hover:ring-gray-600'"
+              class="rounded-md px-6 py-3 text-left ring-1 ring-inset transition-colors"
+              :class="startChoice === 'now' ? 'ring-brand-500' : 'ring-gray-700 hover:ring-gray-600'"
               @click="startChoice = 'now'"
             >
               <span class="block font-medium text-white">Start now</span>
@@ -168,8 +165,8 @@ async function placeOrder() {
             </button>
             <button
               type="button"
-              class="rounded-full px-6 py-3 text-left ring-1 ring-inset transition-colors"
-              :class="startChoice === 'schedule' ? 'ring-brand-500 bg-brand-900/20' : 'ring-gray-700 hover:ring-gray-600'"
+              class="rounded-md px-6 py-3 text-left ring-1 ring-inset transition-colors"
+              :class="startChoice === 'schedule' ? 'ring-brand-500' : 'ring-gray-700 hover:ring-gray-600'"
               @click="startChoice = 'schedule'"
             >
               <span class="block font-medium text-white">Schedule</span>

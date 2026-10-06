@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { PhMagnifyingGlass, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
@@ -10,12 +11,32 @@ import { resolveAvatarUrl } from '@/utils/avatar'
 
 const bookingsStore = useBookingsStore()
 const toast = useToast()
-
-onMounted(() => {
-  bookingsStore.fetchIncoming()
-})
+const route = useRoute()
+const router = useRouter()
 
 const viewing = ref<Booking | null>(null)
+
+/** `?booking=<id>` (a booking notification, 4.69c) opens that order's modal once the list is in.
+ * Falls back to `GET /bookings/{id}` for an order the list doesn't have yet. */
+async function openFromQuery() {
+  const id = route.query.booking
+  if (typeof id !== 'string') return
+  const booking = bookingsStore.incoming.find((b) => b.id === id) ?? (await bookingsStore.fetchBooking(id).catch(() => null))
+  if (booking) viewing.value = booking
+  else toast.add({ title: "Couldn't find that order", color: 'error' })
+}
+
+onMounted(async () => {
+  await bookingsStore.fetchIncoming()
+  await openFromQuery()
+})
+// A notification clicked while already on this page only changes the query.
+watch(() => route.query.booking, openFromQuery)
+
+// Closing the modal drops the query, so a refresh or Back doesn't reopen it.
+watch(viewing, (value) => {
+  if (!value && route.query.booking) router.replace({ query: { ...route.query, booking: undefined } })
+})
 const actingOn = ref<string | null>(null)
 
 function buyerName(booking: Booking) {

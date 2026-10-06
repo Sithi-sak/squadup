@@ -1,7 +1,10 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { api } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { mockNotifications } from '@/mocks/notifications'
+import { useMessagesStore } from '@/stores/messages'
 
 export type NotificationType =
   | 'booking'
@@ -24,6 +27,16 @@ export interface AppNotification {
   read: boolean
   /** Set on `type: 'message'` notifications so clicking one can open that conversation. */
   threadId?: string
+  /** Set on `type: 'booking'` notifications (4.69) so clicking one opens that order, with
+   * `bookingRole` saying which side the reader is on. Absent on rows from before 4.69. */
+  bookingId?: string | null
+  bookingRole?: 'buyer' | 'pal' | null
+}
+
+/** The `public.notifications` columns a Realtime INSERT is read for (snake_case DB row). */
+interface NotificationRow {
+  type: NotificationType
+  thread_id: string | null
 }
 
 export const useNotificationsStore = defineStore('notifications', () => {
@@ -63,6 +76,58 @@ export const useNotificationsStore = defineStore('notifications', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  /** Background refresh for a Realtime event: no `loading` flip (the bell would flash its
+   * skeleton) and no mock fallback (a dropped request mustn't swap the real list for mocks). */
+  async function refresh() {
+    try {
+      notifications.value = await api.get<AppNotification[]>('/notifications')
+    } catch {
+      // Keep what's on screen; the next event or page load catches up.
+    }
+  }
+
+  // Live bell and messages badge (4.73). One channel per signed-in user, started from `App.vue`
+  // since the header itself unmounts on chrome-less routes. Each INSERT refetches the list
+  // rather than mapping the raw row, which lacks the joined `bookingRole`.
+  let realtimeChannel: RealtimeChannel | null = null
+
+  function unsubscribeRealtime() {
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel)
+      realtimeChannel = null
+    }
+  }
+
+  function subscribeRealtime(userId: string) {
+    unsubscribeRealtime()
+    realtimeChannel = supabase
+      .channel(`notifications:${userId}`)
+      .on<NotificationRow>(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        async ({ new: row }) => {
+          await refresh()
+          // A message in the conversation already open on screen is read as it arrives, so it
+          // mustn't put the badge up.
+          const messages = useMessagesStore()
+          if (
+            row.type === 'message' &&
+            row.thread_id &&
+            messages.panelOpen &&
+            messages.activeThreadId === row.thread_id
+          ) {
+            void markThreadRead(row.thread_id).catch(() => {})
+          }
+        },
+      )
+      .subscribe()
   }
 
   /** Real mutations only, no mock fallback - matches `feedStore.toggleLike`'s convention. */
@@ -120,5 +185,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     markThreadRead,
     dismiss,
     clearAll,
+    subscribeRealtime,
+    unsubscribeRealtime,
   }
 })

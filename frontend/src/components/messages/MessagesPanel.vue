@@ -91,6 +91,7 @@ async function openParticipantFromQuery() {
 }
 
 onMounted(() => {
+  store.panelOpen = true
   // Not awaited: opening the requested conversation shouldn't queue behind the whole inbox.
   const threadsLoaded = store.fetchThreads()
   if (route.query.with) {
@@ -99,9 +100,21 @@ onMounted(() => {
   }
   void threadsLoaded.then(() => {
     if (openThreadFromQuery()) return
+    // A conversation remembered from an earlier visit is reselected rather than just shown:
+    // messages that arrived while away bumped its unread count, and this is what marks them read.
+    if (store.activeThreadId) {
+      if (store.threads.some((t) => t.id === store.activeThreadId)) {
+        store.selectThread(store.activeThreadId)
+      }
+      return
+    }
     const firstThreadId = store.threads[0]?.id
-    if (!store.activeThreadId && firstThreadId) store.selectThread(firstThreadId)
+    if (firstThreadId) store.selectThread(firstThreadId)
   })
+})
+
+onBeforeUnmount(() => {
+  store.panelOpen = false
 })
 
 // Handles landing on a different conversation while already on the Messages page, where

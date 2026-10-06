@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { PhCaretLeft, PhCheck, PhLock, PhStar, PhUserCircle } from '@phosphor-icons/vue'
+import { PhCaretLeft, PhCheck, PhLock, PhSpinnerGap, PhStar, PhUserCircle } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { useBookingsStore, type Booking, type BookingStatus, type CancelPayload, type DisputePayload } from '@/stores/bookings'
@@ -21,26 +21,50 @@ const toast = useToast()
 const startChat = usePalChat()
 
 const booking = ref<Booking | null>(null)
+/** Only true while there's nothing to show yet, so a refresh gets a spinner rather than the
+ * not-found card (4.67b). */
+const loading = ref(true)
 
-/** Prefers whatever's already in the store (populated by My Bookings / Pal Orders), falling
- * back to `GET /bookings/{id}` for a direct/deep link, then to the static mock fixtures if
- * that fails (signed out, network error) - same resilience pattern as the rest of Phase 3. */
+/** Shows whatever's already in the store (populated by My Bookings / Pal Orders) straight away,
+ * then always refetches `GET /bookings/{id}` since that copy can be stale. Falls back to the
+ * static mock fixtures if the fetch fails (signed out, network error) and nothing was cached -
+ * same resilience pattern as the rest of Phase 3. */
 async function loadBooking() {
   const id = String(route.params.bookingId)
-  const existing = bookingsStore.getBooking(id)
-  if (existing) {
-    booking.value = existing
-    return
-  }
+  booking.value = bookingsStore.getBooking(id)
+  loading.value = !booking.value
   try {
     booking.value = await bookingsStore.fetchBooking(id)
   } catch {
-    booking.value = getMockBooking(id)
+    booking.value ??= getMockBooking(id)
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(loadBooking)
-watch(() => route.params.bookingId, loadBooking)
+let unsubscribe: (() => void) | null = null
+
+/** Live status (4.67c): the Pal accepting or completing updates the timeline without a refresh. */
+function watchBooking() {
+  unsubscribe?.()
+  const id = String(route.params.bookingId)
+  unsubscribe = bookingsStore.subscribeToBooking(id, (updated) => {
+    if (updated.id === route.params.bookingId) booking.value = updated
+  })
+}
+
+onMounted(() => {
+  void loadBooking()
+  watchBooking()
+})
+watch(
+  () => route.params.bookingId,
+  () => {
+    void loadBooking()
+    watchBooking()
+  },
+)
+onUnmounted(() => unsubscribe?.())
 
 const player = computed(() => mockPlayers.find((p) => p.id === booking.value?.playerId) ?? null)
 const profile = computed(() => (player.value ? getPlayerProfile(player.value) : null))
@@ -164,7 +188,11 @@ async function confirmRefundRequest(payload: DisputePayload) {
 </script>
 
 <template>
-  <div v-if="!booking" class="flex min-h-[60vh] items-center justify-center px-4 py-16">
+  <div v-if="!booking && loading" class="flex min-h-[60vh] items-center justify-center px-4 py-16">
+    <PhSpinnerGap :size="28" class="animate-spin text-slate-400" />
+  </div>
+
+  <div v-else-if="!booking" class="flex min-h-[60vh] items-center justify-center px-4 py-16">
     <UEmpty title="This order could not be found" description="It may have expired. Browse Pals to start a new booking.">
       <template #actions>
         <UButton color="primary" class="rounded-full" @click="router.push('/players')">Browse Players</UButton>

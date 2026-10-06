@@ -1,9 +1,38 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useMessagesStore } from '@/stores/messages'
+import { useNotificationsStore } from '@/stores/notifications'
+import { useWalletStore } from '@/stores/wallet'
 
 const route = useRoute()
+
+const authStore = useAuthStore()
+const messagesStore = useMessagesStore()
+const notificationsStore = useNotificationsStore()
+const walletStore = useWalletStore()
+
+/** Live bell, messages badge and inbox (4.73) and header balance (4.74), for the whole signed-in session. Here rather
+ * than in `AppHeader`, which unmounts on chrome-less routes. Keyed on the id, not the user
+ * object, so a token refresh (which replaces the object) doesn't tear the channels down. */
+watch(
+  () => authStore.user?.id,
+  (userId) => {
+    if (userId) {
+      notificationsStore.subscribeRealtime(userId)
+      messagesStore.subscribeRealtime(userId)
+      walletStore.subscribeRealtime(userId)
+    } else {
+      notificationsStore.unsubscribeRealtime()
+      messagesStore.unsubscribeRealtime()
+      walletStore.unsubscribeRealtime()
+    }
+  },
+  { immediate: true },
+)
 
 /** Kept alive so revisiting a nav-bar tab reuses its existing instance instead of
  * remounting - instant, no re-fetch, no blank flash. Scoped to the 6 top-nav views

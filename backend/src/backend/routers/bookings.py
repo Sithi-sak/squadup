@@ -256,7 +256,7 @@ def create_booking(payload: BookingCreateIn, user_id: str = Depends(get_current_
     created = _fetch_booking(client, booking_id)
     _, buyer_name, pal_user_id, service_name = _booking_names(created)
     if pal_user_id:
-        notify(pal_user_id, "booking", f"{buyer_name} requested to book {service_name}.")
+        notify(pal_user_id, "booking", f"{buyer_name} requested to book {service_name}.", booking_id=booking_id)
     return _booking_out(created)
 
 
@@ -312,7 +312,7 @@ def accept_booking(booking_id: str, user_id: str = Depends(get_current_user_id))
     client.table("bookings").update({"status": "accepted"}).eq("id", booking_id).execute()
     updated = _fetch_booking(client, booking_id)
     pal_name, _, _, service_name = _booking_names(updated)
-    notify(updated["user_id"], "booking", f"{pal_name} accepted your booking for {service_name}.")
+    notify(updated["user_id"], "booking", f"{pal_name} accepted your booking for {service_name}.", booking_id=booking_id)
     return _booking_out(updated)
 
 
@@ -334,7 +334,7 @@ def decline_booking(booking_id: str, user_id: str = Depends(get_current_user_id)
     )
     updated = _fetch_booking(client, booking_id)
     pal_name, _, _, service_name = _booking_names(updated)
-    notify(updated["user_id"], "booking", f"{pal_name} declined your booking for {service_name}.")
+    notify(updated["user_id"], "booking", f"{pal_name} declined your booking for {service_name}.", booking_id=booking_id)
     return _booking_out(updated)
 
 
@@ -365,7 +365,7 @@ def complete_booking(booking_id: str, user_id: str = Depends(get_current_user_id
     )
     updated = _fetch_booking(client, booking_id)
     pal_name, _, _, service_name = _booking_names(updated)
-    notify(updated["user_id"], "booking", f"Your session for {service_name} with {pal_name} is complete.")
+    notify(updated["user_id"], "booking", f"Your session for {service_name} with {pal_name} is complete.", booking_id=booking_id)
     return _booking_out(updated)
 
 
@@ -409,10 +409,10 @@ def cancel_booking(booking_id: str, payload: CancelIn, user_id: str = Depends(ge
     if user_id == updated["user_id"]:
         # the buyer cancelled - notify the Pal
         if pal_user_id:
-            notify(pal_user_id, "booking", f"{buyer_name} cancelled the booking for {service_name}.")
+            notify(pal_user_id, "booking", f"{buyer_name} cancelled the booking for {service_name}.", booking_id=booking_id)
     else:
         # the Pal cancelled - notify the buyer
-        notify(updated["user_id"], "booking", f"{pal_name} cancelled the booking for {service_name}.")
+        notify(updated["user_id"], "booking", f"{pal_name} cancelled the booking for {service_name}.", booking_id=booking_id)
     return _booking_out(updated)
 
 

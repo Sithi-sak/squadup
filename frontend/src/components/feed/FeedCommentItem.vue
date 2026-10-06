@@ -27,7 +27,7 @@ const profileRoute = computed(() => profileRouteFor(props.comment.authorId, auth
         class="shrink-0"
       >
         <UAvatar
-          :src="resolveAvatarUrl(props.comment.authorId || props.comment.author)"
+          :src="resolveAvatarUrl(props.comment.authorId || props.comment.author, props.comment.avatarUrl)"
           size="sm"
           class="bg-white/10 text-slate-300"
         >

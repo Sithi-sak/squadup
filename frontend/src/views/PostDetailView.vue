@@ -10,7 +10,7 @@ const postId = computed(() => String(route.params.postId))
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] px-4 pt-8 pb-14 md:px-6">
-    <div class="mx-auto max-w-2xl">
+    <div class="mx-auto max-w-4xl">
       <FeedPostThread :post-id="postId" @back="router.push('/feed')" />
     </div>
   </div>

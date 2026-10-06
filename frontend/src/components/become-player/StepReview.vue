@@ -68,12 +68,6 @@ const timeWindowLabel = computed(() => {
   return timeRange ? timeRange.trim() : window
 })
 
-const payoutScheduleLabel = computed(() => {
-  if (props.verifyData.payoutSchedule === 'bi-weekly') return 'Bi-weekly'
-  if (props.verifyData.payoutSchedule === 'monthly') return 'Monthly'
-  return 'Weekly'
-})
-
 const reviewSections = computed(() => [
   {
     stepId: 1,
@@ -106,7 +100,7 @@ const reviewSections = computed(() => [
     stepId: 4,
     title: 'Verify & payout',
     line1: `ID ${props.verifyData.idFrontFile ? 'verified' : 'not uploaded'} · Selfie ${props.verifyData.selfieFile ? 'uploaded' : 'not uploaded'}`,
-    line2: `${payoutScheduleLabel.value} payout · connect a payout method after approval`,
+    line2: 'Set up your payout method and schedule in Settings after approval',
   },
 ])
 

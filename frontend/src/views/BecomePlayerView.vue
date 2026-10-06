@@ -89,7 +89,6 @@ async function buildFormData() {
   if (gameSkills[0]?.rank) formData.append('rank', gameSkills[0].rank)
   if (gameSkills[0]?.role) formData.append('role', gameSkills[0].role)
   for (const language of gamesData.value.languages) formData.append('languages', language)
-  formData.append('payout_schedule', verifyData.value.payoutSchedule)
   formData.append('pricing_model', ratesData.value.pricingModel)
   formData.append(
     'rates',

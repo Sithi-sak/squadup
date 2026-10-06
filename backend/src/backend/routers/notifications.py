@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.auth import get_current_user_id
@@ -17,6 +19,21 @@ class NotificationOut(CamelModel):
     read: bool
     created_at: str
     thread_id: str | None = None
+    booking_id: str | None = None
+    # Which side of `booking_id` the reader is on, so a click routes without another fetch:
+    # the Pal goes to their Orders page, the buyer to Order Detail (4.69b). A Pal can also be
+    # a buyer, so this can't come from the reader's account alone.
+    booking_role: Literal["buyer", "pal"] | None = None
+
+
+# `bookings(user_id)` embeds through `notifications.booking_id` - the buyer of the linked order.
+_SELECT = "*, bookings(user_id)"
+
+
+def _notification_out(row: dict, user_id: str) -> dict:
+    booking = row.pop("bookings", None)
+    row["booking_role"] = ("buyer" if booking["user_id"] == user_id else "pal") if booking else None
+    return row
 
 
 # Routes --------------------------------------------------------------------------------------
@@ -26,10 +43,10 @@ class NotificationOut(CamelModel):
 def list_notifications(user_id: str = Depends(get_current_user_id)) -> list[dict]:
     """Header dropdown + `/notifications` page. Rows are created by `core/notify.py`, called from
     bookings/messages/reviews/wallet on the events named in CHECKPOINT.md's 3.10 line."""
-    return (
+    rows = (
         get_supabase_client()
         .table("notifications")
-        .select("*")
+        .select(_SELECT)
         .eq("user_id", user_id)
         .order("created_at", desc=True)
         .limit(50)
@@ -37,6 +54,7 @@ def list_notifications(user_id: str = Depends(get_current_user_id)) -> list[dict
         .data
         or []
     )
+    return [_notification_out(row, user_id) for row in rows]
 
 
 @router.post("/read-all", status_code=status.HTTP_204_NO_CONTENT)
@@ -87,7 +105,8 @@ def mark_read(notification_id: str, user_id: str = Depends(get_current_user_id))
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
 
     client.table("notifications").update({"read": True}).eq("id", notification_id).execute()
-    return client.table("notifications").select("*").eq("id", notification_id).single().execute().data
+    row = client.table("notifications").select(_SELECT).eq("id", notification_id).single().execute().data
+    return _notification_out(row, user_id)
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)

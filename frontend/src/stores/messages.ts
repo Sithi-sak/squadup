@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { api } from '@/lib/api'
@@ -45,6 +45,12 @@ export const useMessagesStore = defineStore('messages', () => {
   const threads = ref<MessageThread[]>([])
   const threadsLoading = ref(false)
   const threadsError = ref<string | null>(null)
+  /** Whether `fetchThreads` has ever succeeded - until then there's no inbox to keep live, and
+   * `MessagesPanel` loads it fresh on mount anyway. */
+  const threadsLoaded = ref(false)
+  /** `MessagesPanel` is mounted, i.e. the active conversation is actually on screen rather than
+   * just remembered from an earlier visit. Set by the panel itself. */
+  const panelOpen = ref(false)
 
   const activeThreadId = ref<string | null>(null)
   const messagesByThread = ref<Record<string, ChatMessage[]>>({})
@@ -64,10 +70,7 @@ export const useMessagesStore = defineStore('messages', () => {
     activeThreadId.value ? (hasMoreByThread.value[activeThreadId.value] ?? false) : false,
   )
 
-  function appendMessage(threadId: string, message: ChatMessage) {
-    const existing = (messagesByThread.value[threadId] ??= [])
-    if (existing.some((m) => m.id === message.id)) return
-    existing.push(message)
+  function setPreview(threadId: string, message: ChatMessage) {
     const thread = threads.value.find((t) => t.id === threadId)
     if (thread) {
       // An image-only message has an empty body, same as the backend's own `_preview`.
@@ -76,9 +79,49 @@ export const useMessagesStore = defineStore('messages', () => {
     }
   }
 
-  // Live updates for the open thread (CHECKPOINT.md 3.5b's RLS policies authorize each event
-  // against the viewer's own JWT), replacing polling - subscribes/unsubscribes as
-  // `activeThreadId` changes rather than staying on one thread's channel forever.
+  /** False when the message was already held (the sender's own POST response and its Realtime
+   * echo both land here). */
+  function appendMessage(threadId: string, message: ChatMessage) {
+    const existing = (messagesByThread.value[threadId] ??= [])
+    if (existing.some((m) => m.id === message.id)) return false
+    existing.push(message)
+    setPreview(threadId, message)
+    return true
+  }
+
+  /** Adds threads the server has that the inbox doesn't yet (someone messaged you for the first
+   * time, or revived a chat you'd deleted). Leaves the rest alone, so the open conversation's
+   * locally-cleared unread count isn't overwritten by a server tally from before it was read. */
+  async function fetchNewThreads() {
+    try {
+      const fetched = await api.get<MessageThread[]>('/messages/threads')
+      const known = new Set(threads.value.map((t) => t.id))
+      threads.value.push(...fetched.filter((t) => !known.has(t.id)))
+    } catch {
+      // The next Messages page visit refetches the whole list.
+    }
+  }
+
+  function receiveMessage(message: ChatMessage, userId: string) {
+    const { threadId } = message
+    const thread = threads.value.find((t) => t.id === threadId)
+    if (!thread) {
+      if (threadsLoaded.value) void fetchNewThreads()
+      return
+    }
+    // Only a transcript that's already been loaded gets the message appended; one that hasn't
+    // is fetched whole when opened, and a one-message stub would skip its loading state.
+    let isNew = true
+    if (messagesByThread.value[threadId]) isNew = appendMessage(threadId, message)
+    else setPreview(threadId, message)
+    const onScreen = panelOpen.value && activeThreadId.value === threadId
+    if (isNew && message.senderId !== userId && !onScreen) thread.unreadCount += 1
+  }
+
+  // Live inbox (4.73c, on 3.5b's RLS policies, which authorize each event against the viewer's
+  // own JWT). One channel per signed-in user, started from `App.vue`, with no thread filter:
+  // RLS already narrows it to the viewer's threads, so the open conversation, every other
+  // thread's preview/unread/order, and brand-new threads all come through the one subscription.
   let realtimeChannel: RealtimeChannel | null = null
 
   function unsubscribeRealtime() {
@@ -88,36 +131,29 @@ export const useMessagesStore = defineStore('messages', () => {
     }
   }
 
-  function subscribeRealtime(threadId: string) {
+  function subscribeRealtime(userId: string) {
     unsubscribeRealtime()
     realtimeChannel = supabase
-      .channel(`messages:${threadId}`)
+      .channel(`messages:${userId}`)
       .on<MessageRow>(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `thread_id=eq.${threadId}`,
-        },
+        { event: 'INSERT', schema: 'public', table: 'messages' },
         ({ new: row }) => {
-          appendMessage(threadId, {
-            id: row.id,
-            threadId: row.thread_id,
-            senderId: row.sender_id,
-            body: row.body,
-            imageUrl: row.image_url,
-            createdAt: row.created_at,
-          })
+          receiveMessage(
+            {
+              id: row.id,
+              threadId: row.thread_id,
+              senderId: row.sender_id,
+              body: row.body,
+              imageUrl: row.image_url,
+              createdAt: row.created_at,
+            },
+            userId,
+          )
         },
       )
       .subscribe()
   }
-
-  watch(activeThreadId, (id) => {
-    if (id) subscribeRealtime(id)
-    else unsubscribeRealtime()
-  })
 
   /** Messages page's thread list. Falls back to `mockThreads` if the request fails (signed out,
    * network error, backend down), same resilience convention as 3.1j/3.2d/3.4c. */
@@ -132,6 +168,7 @@ export const useMessagesStore = defineStore('messages', () => {
       const active = threads.value.find((t) => t.id === activeThreadId.value)
       threads.value =
         active && !fetched.some((t) => t.id === active.id) ? [active, ...fetched] : fetched
+      threadsLoaded.value = true
     } catch (err) {
       threadsError.value = err instanceof Error ? err.message : 'Failed to load chats'
       threads.value = [...mockThreads]
@@ -272,6 +309,7 @@ export const useMessagesStore = defineStore('messages', () => {
     threads,
     threadsLoading,
     threadsError,
+    panelOpen,
     activeThreadId,
     activeThread,
     messagesByThread,
@@ -288,5 +326,7 @@ export const useMessagesStore = defineStore('messages', () => {
     sendMessage,
     muteThread,
     deleteThread,
+    subscribeRealtime,
+    unsubscribeRealtime,
   }
 })

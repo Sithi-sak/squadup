@@ -97,13 +97,10 @@ export function createRatesStepData(): RatesStepData {
   }
 }
 
-export type PayoutSchedule = 'weekly' | 'bi-weekly' | 'monthly'
-
 export interface VerifyStepData {
   idFrontFile: File | null
   idBackFile: File | null
   selfieFile: File | null
-  payoutSchedule: PayoutSchedule
 }
 
 export function createVerifyStepData(): VerifyStepData {
@@ -111,7 +108,6 @@ export function createVerifyStepData(): VerifyStepData {
     idFrontFile: null,
     idBackFile: null,
     selfieFile: null,
-    payoutSchedule: 'weekly',
   }
 }
 

@@ -37,6 +37,8 @@ class PlayerServiceListing(CamelModel):
     price_unit: str
     active: bool
     cover_image_url: str | None
+    # The rank this service is offered at (4.68), shown as a chip on the card.
+    rank: str | None = None
     # Structured counterpart to `promo_badge`, for prefilling the Edit Service form's promo
     # toggles rather than parsing them back out of the display label.
     first_order_free: bool
@@ -54,6 +56,7 @@ class PlayerServiceDetail(CamelModel):
     whats_included: list[str]
     avg_response_time: str
     cover_image_url: str | None
+    rank: str | None = None
 
 
 class PlayerSummaryOut(CamelModel):
@@ -147,6 +150,7 @@ class ServiceOut(CamelModel):
     price_coins: int
     price_unit: str
     cover_image_url: str | None
+    rank: str | None = None
     first_order_free: bool
     percent_off: float | None
 
@@ -257,6 +261,7 @@ def _service_listing(service: dict) -> dict:
         "price_unit": first["price_unit"] if first else "/game",
         "active": service["active"],
         "cover_image_url": service.get("cover_image_url"),
+        "rank": service.get("rank"),
         "first_order_free": first_order_free,
         "percent_off": percent_off,
     }
@@ -283,6 +288,7 @@ def _service_detail(service: dict) -> dict:
         "whats_included": service["whats_included"],
         "avg_response_time": service["avg_response_time"] or "",
         "cover_image_url": service.get("cover_image_url"),
+        "rank": service.get("rank"),
     }
 
 
@@ -880,6 +886,7 @@ async def create_my_service(
     pricing_options: str = Form(...),
     first_order_free: bool = Form(False),
     percent_off: float | None = Form(None),
+    rank: str | None = Form(None),
     cover: UploadFile | None = File(None),  # noqa: B008
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
@@ -909,6 +916,7 @@ async def create_my_service(
             "styles": styles,
             "platforms": platforms,
             "cover_image_url": cover_url,
+            "rank": rank.strip() if rank and rank.strip() else None,
         }
     ).execute()
 
@@ -958,12 +966,15 @@ async def update_my_service(
     first_order_free: bool | None = Form(None),
     percent_off: float | None = Form(None),
     active: bool | None = Form(None),
+    rank: str | None = Form(None),
     cover: UploadFile | None = File(None),  # noqa: B008
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     """Partial update - every field is optional and only the ones present in the form are
     touched, so this backs both the lightweight active-toggle (just `active`) and the full
-    Edit Service form (everything `create_my_service` accepts, resubmitted wholesale)."""
+    Edit Service form (everything `create_my_service` accepts, resubmitted wholesale).
+    `rank` is the exception: it's written whenever `platforms` is, since FastAPI reads a blank
+    form field as None and a cleared rank couldn't reach here otherwise (4.68b)."""
     client = get_supabase_client()
     service = _get_owned_service(user_id, service_id)
 
@@ -985,6 +996,7 @@ async def update_my_service(
         updates["styles"] = styles
     if platforms is not None:
         updates["platforms"] = platforms
+        updates["rank"] = rank.strip() if rank and rank.strip() else None
     if active is not None:
         updates["active"] = active
     if cover is not None:

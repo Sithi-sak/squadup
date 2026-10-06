@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { PhArrowUp, PhCheck, PhLock } from '@phosphor-icons/vue'
-import type { PayoutSchedule, VerifyStepData } from './types'
+import type { VerifyStepData } from './types'
 
 const data = defineModel<VerifyStepData>({ required: true })
 
@@ -23,17 +23,11 @@ function onFileSelected(event: Event, side: 'front' | 'back' | 'selfie') {
   else data.value.selfieFile = file
 }
 
-const payoutScheduleOptions: { label: string; value: PayoutSchedule }[] = [
-  { label: 'Weekly', value: 'weekly' },
-  { label: 'Bi-weekly', value: 'bi-weekly' },
-  { label: 'Monthly', value: 'monthly' },
-]
-
 const canSubmit = computed(() => data.value.idFrontFile !== null)
 </script>
 
 <template>
-  <h2 class="text-2xl font-semibold text-white sm:text-3xl">Verify your identity &amp; payout</h2>
+  <h2 class="text-2xl font-semibold text-white sm:text-3xl">Verify your identity</h2>
   <p class="mt-2 text-slate-400">
     We verify every Pal to keep SquadUp safe. You'll connect how you get paid after you're
     approved.
@@ -154,26 +148,6 @@ const canSubmit = computed(() => data.value.idFrontFile !== null)
         class="hidden"
         @change="onFileSelected($event, 'selfie')"
       />
-    </div>
-
-    <div class="flex flex-col gap-3">
-      <label class="text-sm font-medium text-white">Payout schedule</label>
-      <div class="flex flex-wrap items-center gap-3">
-        <button
-          v-for="option in payoutScheduleOptions"
-          :key="option.value"
-          type="button"
-          class="cursor-pointer rounded-full px-5 py-1.5 text-sm font-medium transition-colors"
-          :class="
-            data.payoutSchedule === option.value
-              ? 'bg-brand-600 text-white'
-              : 'bg-gray-800 text-slate-300 hover:bg-gray-800/70'
-          "
-          @click="data.payoutSchedule = option.value"
-        >
-          {{ option.label }}
-        </button>
-      </div>
     </div>
 
     <USeparator />

@@ -3610,6 +3610,125 @@ kind of Stripe id.
           from 16 to 15 errors (the editor's `pendingGame` is `string | undefined`, which fixes
           the old `StepGames` one). `PATCH` payload parsing sanity-checked. Not run in the
           browser per [[feedback_no_build_or_run_skill]].
+  - [x] 4.66 Become a Pal Verify step drops the payout schedule picker (user request,
+        2026-10-06). New Pals start on the `weekly` default and change it in Settings > Payments,
+        which is unchanged. Review step's line points there instead.
+  - [x] 4.67 Live Order Detail status (reported 2026-10-06). The buyer had to refresh to see the
+        Pal accept/complete, and a refresh flashed "This order could not be found" before the
+        order loaded.
+    - [x] 4.67a `20261006120000_bookings_realtime_rls.sql`: select policies for the buyer (`user_id`) and the
+          Pal (`players.user_id`, visible through "Players can view their own row"), and
+          `bookings` added to `supabase_realtime`. Writes still go through the service-role
+          backend.
+    - [x] 4.67b Order Detail: loading state so a refresh shows a spinner instead of the
+          not-found card; always refetch on open (the cached store copy could be stale).
+    - [x] 4.67c Order Detail subscribes to `UPDATE`s on its booking id and refetches
+          `GET /bookings/{id}` on each (the row has none of the joined display fields), then
+          syncs the store's lists. Unsubscribes on leave/route change.
+    - [x] 4.67d Verification: `eslint` clean on touched files; `vue-tsc` total unchanged (15).
+          Not run in the browser per [[feedback_no_build_or_run_skill]]. Migration not pushed
+          yet (project unlinked, see [[project_squadup_supabase_setup]]); until it is, the
+          subscription gets no events and the page behaves as before, minus the not-found flash.
+  - [x] 4.68 Rank per service (user request, 2026-10-06). A Pal picks the rank a service is
+        offered at (e.g. a Valorant service at Immortal) and it shows as a chip on the card.
+        Separate from the Pal's own per-game rank (4.64) so two services for one game can
+        differ. Deploy order: push the migration before the backend (writes `rank`).
+    - [x] 4.68a `20261006130000_services_rank.sql`: nullable `services.rank text`.
+          `erd_schema.sql` updated.
+    - [x] 4.68b Backend: create/update service take an optional `rank` form field. Update sets it
+          whenever `platforms` is sent (the full Edit form; a blank form field arrives as None,
+          so that's how a cleared rank gets through) and leaves it alone otherwise (active
+          toggle). Listing/detail/`ServiceOut` add `rank`.
+    - [x] 4.68c Create/Edit Service: optional Rank field next to Game, the game's ladder where it
+          has one and free text otherwise. Defaults to the Pal's own rank for that game on
+          create and on a game change; prefilled from the service on edit. Live preview chip.
+    - [x] 4.68d Rank chip on My Services cards, the profile service sidebar and services tab, and
+          Service Detail's tags.
+    - [x] 4.68e Verification: `ruff check` clean, router imports, `_service_listing` carries
+          `rank`; FastAPI 0.141's blank-form-field-as-None confirmed in its source. `eslint`
+          clean on touched files; `vue-tsc` total unchanged (15). Chip is a shared
+          `ServiceRankChip.vue`. Not run in the browser per [[feedback_no_build_or_run_skill]].
+          Migration not pushed yet.
+  - [x] 4.69 Booking notifications open the order (user request, 2026-10-06). Clicking "X
+        requested to book Y" only marked it read. Deploy order: migration before the backend
+        (`notify` writes `booking_id`, and a failed insert would fail the booking request; the
+        list endpoint's embed also needs the column).
+    - [x] 4.69a `20261006140000_notification_booking_id.sql`: nullable
+          `notifications.booking_id`, `on delete set null`, same shape as `thread_id`.
+          `erd_schema.sql` updated.
+    - [x] 4.69b Backend: `notify()` takes `booking_id`; all six booking notifications pass it.
+          List and mark-read select `*, bookings(user_id)` and return `bookingId` plus
+          `bookingRole` (`buyer` when the reader placed the order, else `pal`). It has to be per
+          booking: a Pal can also be a buyer.
+    - [x] 4.69c Frontend: shared `useOpenNotification` marks read and routes with no fetch first
+          (same rule as `usePalChat`): the Pal to `/dashboard/player/orders?booking=<id>`, the
+          buyer to `/bookings/<id>`. The dropdown closes when it navigates. `/notifications`
+          rows are now buttons using it (they did nothing before, not even mark read). Pal
+          Orders opens the View modal from `?booking=` (falls back to `GET /bookings/{id}`,
+          watches the query for clicks while already there, drops it when the modal closes).
+    - [x] 4.69d Verification: `ruff check` clean, routers import, `_notification_out` checked
+          for buyer/pal/no booking. `eslint` clean on touched files; `vue-tsc` total unchanged
+          (15). Not run in the browser per [[feedback_no_build_or_run_skill]]. Old
+          notifications have no `booking_id` and still only mark read. Migration not pushed yet.
+  - [x] 4.70 Game browse page: rank filter and cover banner (user request, 2026-10-06).
+    - [x] 4.70a `PlayersView` game mode: "Rank" select next to Sort by, only for games with a
+          ladder in `data/games.ts`. Matches the Pal's rank in that game via `gameSkillsOf`
+          (4.64). Resets when the game changes.
+    - [x] 4.70b Header shows the game's cover (`gameCoverForName`) centered behind a centered
+          title, with a mask that fades it out on the left and right. No cover, no banner.
+    - [x] 4.70c Verification: `eslint` clean; `vue-tsc` total unchanged (15). Not run in the
+          browser per [[feedback_no_build_or_run_skill]].
+  - [x] 4.71 Create Post "Add" game menu cut off game names (reported 2026-10-06). The menu
+        took the width of the small "+ Add" trigger; it's now `w-72`, aligned to the trigger's
+        left edge.
+  - [x] 4.72 Explore grid tiles were blank (reported 2026-10-06 off a screenshot). The tile
+        template never rendered any media, only the badge and author/likes footer.
+    - [x] 4.72a Tile shows the clip poster or first image, `object-cover`, with a play icon on
+          clips and a stack icon on multi-image posts.
+    - [x] 4.72b Fallbacks: text posts show their clamped text on a category-tinted gradient,
+          then the tagged game's `coverUrl`, then a plain gradient. Processing/failed clips
+          (author only) get a spinner/warning tile.
+    - [x] 4.72c `status` posts left out of Explore.
+    - [x] 4.72d Verification: `eslint` clean on the touched file; `vue-tsc` total unchanged (15).
+          Not run in the browser per [[feedback_no_build_or_run_skill]].
+  - [x] 4.73 Real-time messaging beyond the open chat (user request, 2026-10-06). Only the open
+        conversation was live (3.5b); the inbox, the messages badge and the bell updated on
+        reload only.
+    - [x] 4.73a `20261006150000_notifications_realtime_rls.sql`: select policy for the owner
+          (`user_id`) and `notifications` added to `supabase_realtime`. Writes still go through
+          the service-role backend.
+    - [x] 4.73b Notifications store: one channel per signed-in user on its `INSERT`s, each
+          refetching `GET /notifications` quietly (no loading flip, no mock fallback; the raw row
+          lacks `bookingRole`). A message notification for the conversation open on screen is
+          marked read straight away so it doesn't raise the badge.
+    - [x] 4.73c Messages store: the per-thread channel is replaced by one unfiltered `messages`
+          `INSERT` channel per user (RLS narrows it). Updates preview/order, bumps `unreadCount`
+          unless the thread is on screen (`panelOpen`, set by `MessagesPanel`), appends only to
+          loaded transcripts, and pulls in unknown threads without overwriting known ones.
+          Backend `send_message` now un-hides a deleted thread before the insert, so the
+          recipient's refetch sees it.
+    - [x] 4.73d Both channels start in `App.vue` keyed on the user id (the header unmounts on
+          chrome-less routes; a token refresh mustn't resubscribe). `MessagesPanel` reselects a
+          remembered conversation on remount so messages that came in while away get marked read.
+    - [x] 4.73e Verification: `ruff check` clean, router imports; `eslint` clean on touched files;
+          `vue-tsc` total unchanged (15). Not run in the browser per
+          [[feedback_no_build_or_run_skill]]. Migration not pushed yet; until it is, the
+          notifications channel gets no events and the bell/badge behave as before (the inbox
+          channel works already, `messages` is published since 3.5b).
+  - [x] 4.74 Live header balance (user request, 2026-10-06). The coin pill only refetched when
+        the header remounted, so completing an order (or a refund, top-up, payout) left a stale
+        balance until reload.
+    - [x] 4.74a `20261006160000_users_realtime.sql`: `users` added to `supabase_realtime`. The
+          existing "Users can view their own row" policy already scopes events to the owner.
+    - [x] 4.74b Wallet store: one channel per signed-in user on its own `users` row's `UPDATE`s.
+          Takes `coin_balance` straight off the row, then quietly refetches `/wallet/me` (no
+          loading flip, no mock fallback) for pending clearance and activity.
+    - [x] 4.74c Started from `App.vue` next to the notifications/messages channels.
+          `completeBooking` also refreshes the wallet directly, so the Pal's own completion
+          lands even before the migration is pushed.
+    - [x] 4.74d Verification: `eslint` clean on touched files; `vue-tsc` total unchanged (15). Not
+          run in the browser per [[feedback_no_build_or_run_skill]]. Migration not pushed yet;
+          until it is, only the Pal's own completion refreshes live (via `completeBooking`).
 
 ---
 

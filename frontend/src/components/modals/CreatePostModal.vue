@@ -618,7 +618,9 @@ async function submitPost() {
               variant="none"
               :ui="{
                 base: 'gap-1.5 rounded-full bg-gray-800/70 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-gray-800',
+                content: 'w-72',
               }"
+              :content="{ align: 'start' }"
             >
               <template #default>
                 <span class="flex items-center gap-1.5">

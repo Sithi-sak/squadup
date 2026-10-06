@@ -4,6 +4,7 @@ import { PhMagnifyingGlass } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { gameCoverForName } from '@/lib/covers'
 import type { PlayerServiceListing } from '@/stores/players'
+import ServiceRankChip from '@/components/players/ServiceRankChip.vue'
 
 const props = defineProps<{ services: PlayerServiceListing[]; selectedId: string }>()
 defineEmits<{ select: [id: string] }>()
@@ -80,10 +81,13 @@ function thumbSrc(service: PlayerServiceListing): string | undefined {
               {{ service.promoBadge }}
             </UBadge>
           </div>
-          <p class="mt-0.5 inline-flex items-center gap-1 text-sm text-slate-400">
-            <img :src="coinIcon" alt="" class="h-4 w-4" />
-            {{ service.priceCoins }}{{ service.priceUnit }}
-          </p>
+          <div class="mt-0.5 flex items-center gap-2">
+            <p class="inline-flex items-center gap-1 text-sm text-slate-400">
+              <img :src="coinIcon" alt="" class="h-4 w-4" />
+              {{ service.priceCoins }}{{ service.priceUnit }}
+            </p>
+            <ServiceRankChip v-if="service.rank" :rank="service.rank" size="sm" />
+          </div>
         </div>
       </button>
 

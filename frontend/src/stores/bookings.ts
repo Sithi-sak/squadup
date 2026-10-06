@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ApiError, api } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { mockBookings, mockIncomingBookings } from '@/mocks/bookings'
 import { isRealId } from '@/utils/id'
 import { useWalletStore } from '@/stores/wallet'
@@ -164,8 +165,26 @@ export const useBookingsStore = defineStore('bookings', () => {
   /** Order Detail direct/deep-link fallback when the booking isn't already in `list`/`incoming`
    * (e.g. a page refresh before either list was fetched). */
   async function fetchBooking(id: string) {
-    current.value = await api.get<Booking>(`/bookings/${id}`)
-    return current.value
+    const booking = await api.get<Booking>(`/bookings/${id}`)
+    current.value = booking
+    replaceInPlace(booking)
+    return booking
+  }
+
+  /** Live status for Order Detail (CHECKPOINT.md 4.67c): fires `onChange` with the refetched
+   * booking whenever its row is updated (Pal accepts/declines/completes, buyer cancels).
+   * Refetches rather than mapping the raw row, which has none of the joined display fields.
+   * Returns the unsubscribe function. */
+  function subscribeToBooking(id: string, onChange: (booking: Booking) => void) {
+    const channel = supabase
+      .channel(`bookings:${id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${id}` }, () => {
+        fetchBooking(id).then(onChange, () => {})
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }
 
   /** Checkout's "Place order" - the point where a draft actually becomes a submitted booking.
@@ -200,6 +219,8 @@ export const useBookingsStore = defineStore('bookings', () => {
   async function completeBooking(id: string) {
     const booking = await api.post<Booking>(`/bookings/${id}/complete`)
     replaceInPlace(booking)
+    // The Pal's earnings land on completion; don't wait on the Realtime `users` event (4.74).
+    void useWalletStore().refresh()
     return booking
   }
 
@@ -248,6 +269,7 @@ export const useBookingsStore = defineStore('bookings', () => {
     fetchList,
     fetchIncoming,
     fetchBooking,
+    subscribeToBooking,
     placeOrder,
     acceptBooking,
     declineBooking,

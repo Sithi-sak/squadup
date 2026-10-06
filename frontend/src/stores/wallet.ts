@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { api } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { mockCurrentUser } from '@/mocks/users'
 import type { WalletActivity as MockWalletActivity, WalletActivityIcon } from '@/mocks/wallet'
 import {
@@ -172,6 +174,55 @@ export const useWalletStore = defineStore('wallet', () => {
     }
   }
 
+  /** Background refresh for a Realtime event: no `loading` flip and no mock fallback (a dropped
+   * request mustn't swap the real balance for mocks), same as `notificationsStore.refresh`. */
+  async function refresh() {
+    try {
+      const result = await api.get<{
+        balanceCoins: number
+        pendingClearanceCoins: number
+        lockedPayoutCoins: number
+        activity: WalletActivity[]
+      }>('/wallet/me')
+      balance.value = result.balanceCoins
+      pendingClearanceCoins.value = result.pendingClearanceCoins
+      lockedPayoutCoins.value = result.lockedPayoutCoins
+      activity.value = result.activity
+    } catch {
+      // Keep what's on screen; the next event or page load catches up.
+    }
+  }
+
+  // Live header balance (4.74). One channel per signed-in user on their own `users` row, started
+  // from `App.vue` like the notifications channel. Every balance write (order earnings, refunds,
+  // top-ups, payouts) lands there, so the new `coin_balance` is applied straight off the row and
+  // `/wallet/me` is refetched for pending clearance and activity.
+  let realtimeChannel: RealtimeChannel | null = null
+
+  function unsubscribeRealtime() {
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel)
+      realtimeChannel = null
+    }
+  }
+
+  function subscribeRealtime(userId: string) {
+    unsubscribeRealtime()
+    realtimeChannel = supabase
+      .channel(`wallet:${userId}`)
+      .on<{ coin_balance: number }>(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${userId}` },
+        ({ new: row }) => {
+          // `users` also changes for counters and profile edits; only a balance move matters here.
+          if (typeof row.coin_balance !== 'number' || row.coin_balance === balance.value) return
+          balance.value = row.coin_balance
+          void refresh()
+        },
+      )
+      .subscribe()
+  }
+
   /** Top-up tiers (`/wallet/topup-packages`), public. Falls back to `mockTopUpPackages`. */
   async function fetchTopupPackages() {
     topupPackagesLoading.value = true
@@ -301,6 +352,9 @@ export const useWalletStore = defineStore('wallet', () => {
     withdrawalsLoading,
     withdrawalsError,
     fetchWallet,
+    refresh,
+    subscribeRealtime,
+    unsubscribeRealtime,
     fetchTopupPackages,
     createCardCheckout,
     getCardTopupStatus,

@@ -115,6 +115,7 @@ create table services (
   name text not null,
   description text,
   cover_image_url text,
+  rank text,
   styles text[] not null default '{}',
   platforms text[] not null default '{}',
   whats_included text[] not null default '{}',
@@ -397,6 +398,7 @@ create table notifications (
   type notification_type not null,
   message text not null,
   thread_id uuid references message_threads (id) on delete set null,
+  booking_id uuid references bookings (id) on delete set null,
   read boolean not null default false,
   created_at timestamptz not null default now()
 );

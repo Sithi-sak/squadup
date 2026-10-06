@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useOpenNotification } from '@/composables/useOpenNotification'
 import {
   notificationIcon,
   notificationTone,
@@ -11,6 +12,7 @@ import {
 
 const store = useNotificationsStore()
 const toast = useToast()
+const openNotification = useOpenNotification()
 
 const tab = ref<'all' | 'unread'>('all')
 
@@ -94,10 +96,12 @@ async function markAllRead() {
       <div v-else class="mt-6 overflow-hidden rounded-xl bg-gray-800/70">
         <template v-if="today.length > 0">
           <p class="px-5 pt-4 pb-2 text-sm font-medium text-slate-400">Today</p>
-          <div
+          <button
             v-for="notification in today"
             :key="notification.id"
-            class="flex items-start gap-3 border-b border-white/5 px-5 py-4 last:border-b-0 hover:bg-white/5"
+            type="button"
+            class="flex w-full cursor-pointer items-start gap-3 border-b border-white/5 px-5 py-4 text-left last:border-b-0 hover:bg-white/5"
+            @click="openNotification(notification)"
           >
             <span
               class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
@@ -105,20 +109,22 @@ async function markAllRead() {
             >
               <component :is="notificationIcon[notification.type]" :size="20" weight="bold" />
             </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-white">{{ notification.message }}</p>
-              <p class="mt-0.5 text-sm text-slate-400">{{ formatNotificationTime(notification.createdAt) }}</p>
-            </div>
+            <span class="min-w-0 flex-1">
+              <span class="block text-white">{{ notification.message }}</span>
+              <span class="mt-0.5 block text-sm text-slate-400">{{ formatNotificationTime(notification.createdAt) }}</span>
+            </span>
             <span v-if="!notification.read" class="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-400" />
-          </div>
+          </button>
         </template>
 
         <template v-if="earlier.length > 0">
           <p class="px-5 pt-4 pb-2 text-sm font-medium text-slate-400">Earlier</p>
-          <div
+          <button
             v-for="notification in earlier"
             :key="notification.id"
-            class="flex items-start gap-3 border-b border-white/5 px-5 py-4 last:border-b-0 hover:bg-white/5"
+            type="button"
+            class="flex w-full cursor-pointer items-start gap-3 border-b border-white/5 px-5 py-4 text-left last:border-b-0 hover:bg-white/5"
+            @click="openNotification(notification)"
           >
             <span
               class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
@@ -126,12 +132,12 @@ async function markAllRead() {
             >
               <component :is="notificationIcon[notification.type]" :size="20" weight="bold" />
             </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-white">{{ notification.message }}</p>
-              <p class="mt-0.5 text-sm text-slate-400">{{ formatNotificationTime(notification.createdAt) }}</p>
-            </div>
+            <span class="min-w-0 flex-1">
+              <span class="block text-white">{{ notification.message }}</span>
+              <span class="mt-0.5 block text-sm text-slate-400">{{ formatNotificationTime(notification.createdAt) }}</span>
+            </span>
             <span v-if="!notification.read" class="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-400" />
-          </div>
+          </button>
         </template>
       </div>
     </div>

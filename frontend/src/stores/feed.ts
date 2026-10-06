@@ -53,6 +53,7 @@ export interface FeedComment {
   postId: string
   authorId: string
   author: string
+  avatarUrl: string | null
   parentCommentId: string | null
   text: string
   likes: number
@@ -144,6 +145,7 @@ function feedCommentFromMock(postId: string, comment: MockFeedComment): FeedComm
     postId,
     authorId: comment.id,
     author: comment.author,
+    avatarUrl: null,
     parentCommentId: null,
     text: comment.text,
     likes: comment.likes,

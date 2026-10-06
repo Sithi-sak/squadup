@@ -66,6 +66,7 @@ class CommentOut(CamelModel):
     post_id: str
     author_id: str
     author: str
+    avatar_url: str | None = None
     parent_comment_id: str | None
     text: str
     likes: int
@@ -314,13 +315,20 @@ def _refresh_comments_count(client, post_id: str) -> None:
     client.table("posts").update({"comments_count": count}).eq("id", post_id).execute()
 
 
-def _comment_out(row: dict, *, liked: bool, creator_user_id: str | None) -> dict:
+def _comment_avatars(client, rows: list[dict]) -> dict[str, str | None]:
+    """Comment authors' avatars live on `players` (a plain buyer has none), keyed by user id."""
+    _, players_by_user_id = _resolve_authors(client, {r["author_id"] for r in rows})
+    return {user_id: p.get("avatar_url") for user_id, p in players_by_user_id.items()}
+
+
+def _comment_out(row: dict, *, liked: bool, creator_user_id: str | None, avatar_url: str | None = None) -> dict:
     author = (row.get("users") or {}).get("display_name") or "SquadUp user"
     return {
         "id": row["id"],
         "post_id": row["post_id"],
         "author_id": row["author_id"],
         "author": author,
+        "avatar_url": avatar_url,
         "parent_comment_id": row["parent_comment_id"],
         "text": row["text"],
         "likes": row["likes_count"],
@@ -365,7 +373,8 @@ def _refresh_comment(client, comment_id: str, *, liked: bool) -> dict:
     """Same atomic-RPC fix as `_refresh_post`, for comment likes."""
     client.rpc("refresh_comment_likes_count", {"target_comment_id": comment_id}).execute()
     row, creator_user_id = _get_comment_with_creator(client, comment_id)
-    return _comment_out(row, liked=liked, creator_user_id=creator_user_id)
+    avatars = _comment_avatars(client, [row])
+    return _comment_out(row, liked=liked, creator_user_id=creator_user_id, avatar_url=avatars.get(row["author_id"]))
 
 
 def _refresh_follow(client, target_id: str, follower_id: str, *, following: bool) -> dict:
@@ -664,7 +673,13 @@ def list_comments(post_id: str, user_id: str | None = Depends(get_optional_user_
             or []
         }
 
-    out_rows = [_comment_out(r, liked=r["id"] in liked_ids, creator_user_id=creator_user_id) for r in rows]
+    avatars = _comment_avatars(client, rows)
+    out_rows = [
+        _comment_out(
+            r, liked=r["id"] in liked_ids, creator_user_id=creator_user_id, avatar_url=avatars.get(r["author_id"])
+        )
+        for r in rows
+    ]
     return _build_comment_tree(out_rows)
 
 
@@ -702,7 +717,8 @@ def create_comment(post_id: str, payload: CommentCreateIn, user_id: str = Depend
 
     row = client.table("comments").select(_COMMENT_SELECT).eq("id", comment_id).single().execute().data
     creator_user_id = post["author_id"]
-    return _comment_out(row, liked=False, creator_user_id=creator_user_id)
+    avatars = _comment_avatars(client, [row])
+    return _comment_out(row, liked=False, creator_user_id=creator_user_id, avatar_url=avatars.get(user_id))
 
 
 @router.post("/comments/{comment_id}/like", response_model=CommentOut)

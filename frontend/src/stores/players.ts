@@ -51,6 +51,9 @@ export interface PlayerServiceListing {
   /** Whether buyers can currently book this service, shown as the toggle on My Services (Pal Dashboard). */
   active?: boolean
   coverImageUrl: string | null
+  /** The rank this service is offered at (4.68), shown as a chip on the card. Absent on mock
+   * fixtures and an older backend. */
+  rank?: string | null
   /** Structured counterpart to `promoBadge`, for prefilling Edit Service's promo toggles. */
   firstOrderFree?: boolean
   percentOff?: number | null
@@ -76,6 +79,7 @@ export interface PlayerServiceDetail {
   whatsIncluded: string[]
   avgResponseTime: string
   coverImageUrl?: string | null
+  rank?: string | null
 }
 
 export interface PlayerReview {

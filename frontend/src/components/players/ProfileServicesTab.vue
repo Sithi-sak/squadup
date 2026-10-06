@@ -8,6 +8,7 @@ import { usePalChat } from '@/composables/usePalChat'
 import { gameCoverForName } from '@/lib/covers'
 import ProfileServiceSidebar from '@/components/players/ProfileServiceSidebar.vue'
 import ServiceReviewsPanel from '@/components/players/ServiceReviewsPanel.vue'
+import ServiceRankChip from '@/components/players/ServiceRankChip.vue'
 
 /** The service picker lives in this tab, not in the page shell: it only means anything beside a
  * service detail, and rendering it page-level left it stranded on Feeds/Album/Wish. */
@@ -47,11 +48,14 @@ const coverSrc = computed(() => props.detail.coverImageUrl ?? gameCoverForName(p
     <div class="flex flex-col gap-4">
       <div class="rounded-xl bg-gray-800/70 p-5">
         <h2 class="text-2xl font-bold text-white">{{ detail.title }}</h2>
-        <p class="mt-2 inline-flex items-center gap-1.5 text-sm text-slate-400">
-          <PhStar :size="14" weight="fill" class="text-amber-400" />
-          {{ detail.rating ? detail.rating.toFixed(1) : '--' }}
-          <span>· {{ detail.servedCount.toLocaleString() }} Served</span>
-        </p>
+        <div class="mt-2 flex flex-wrap items-center gap-3">
+          <p class="inline-flex items-center gap-1.5 text-sm text-slate-400">
+            <PhStar :size="14" weight="fill" class="text-amber-400" />
+            {{ detail.rating ? detail.rating.toFixed(1) : '--' }}
+            <span>· {{ detail.servedCount.toLocaleString() }} Served</span>
+          </p>
+          <ServiceRankChip v-if="detail.rank" :rank="detail.rank" />
+        </div>
         <p class="mt-4 text-sm leading-relaxed text-slate-300">{{ detail.description }}</p>
 
         <div class="mt-4 flex flex-col gap-2 text-sm">

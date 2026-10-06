@@ -3,8 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { PhCaretLeft, PhLightning, PhPlus, PhStar, PhTrophy, PhUserCircle, PhX } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
-import { usePlayersStore, type ServiceTypeOption } from '@/stores/players'
+import ServiceRankChip from '@/components/players/ServiceRankChip.vue'
+import { gameSkillsOf, usePlayersStore, type ServiceTypeOption } from '@/stores/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { gameRankOptions } from '@/utils/gameSkills'
 import { games } from '@/data/games'
 
 const router = useRouter()
@@ -23,6 +25,7 @@ const prefillError = ref<string | null>(null)
 onMounted(async () => {
   if (!playersStore.mine) await playersStore.fetchMine()
   if (editingId.value) prefillFromExisting(editingId.value)
+  else rank.value = palRankFor(game.value)
 })
 
 function prefillFromExisting(serviceId: string) {
@@ -35,6 +38,7 @@ function prefillFromExisting(serviceId: string) {
   title.value = service.name
   description.value = detail.description
   game.value = detail.platforms[0] ?? gameOptions[0]!
+  rank.value = service.rank ?? ''
   coverPreviewUrl.value = service.coverImageUrl
   firstOrderFree.value = service.firstOrderFree ?? false
   percentageDiscount.value = service.percentOff != null
@@ -52,6 +56,21 @@ const category = ref(categoryOptions[0]!)
 const game = ref(gameOptions[0]!)
 const title = ref('')
 const description = ref('')
+
+/** Optional rank the service is offered at (4.68c): the game's ladder where it has one, free
+ * text otherwise. Separate from the Pal's own rank, which only seeds it. */
+const rank = ref('')
+const rankOptions = computed(() => gameRankOptions(game.value))
+
+function palRankFor(gameName: string) {
+  const mine = playersStore.mine
+  return (mine && gameSkillsOf(mine).find((skill) => skill.game === gameName)?.rank) || ''
+}
+
+/** Runs on a user pick only (not on prefill), so an edited service keeps its saved rank. */
+function onGameChange(gameName: string) {
+  rank.value = palRankFor(gameName)
+}
 
 const coverInput = ref<HTMLInputElement | null>(null)
 const coverPreviewUrl = ref<string | null>(null)
@@ -113,6 +132,7 @@ const discountPct = ref(15)
 const primaryType = computed(() => serviceTypes.value.find((row) => row.priceCoins !== null) ?? serviceTypes.value[0])
 
 const previewTags = computed(() => [game.value, category.value].filter(Boolean))
+const previewRank = computed(() => rank.value.trim())
 
 const previewPromoBadge = computed(() => {
   if (firstOrderFree.value) return '1st Order Free'
@@ -152,6 +172,7 @@ async function submit() {
   formData.append('name', title.value.trim())
   if (isEdit.value || description.value.trim()) formData.append('description', description.value.trim())
   formData.append('platforms', game.value)
+  if (rank.value.trim()) formData.append('rank', rank.value.trim())
   formData.append(
     'pricing_options',
     JSON.stringify(
@@ -242,8 +263,48 @@ async function submit() {
                   size="md"
                   class="w-full sm:w-auto"
                   :ui="selectUi"
+                  @update:model-value="onGameChange"
                 />
               </div>
+            </div>
+
+            <div class="mt-5 flex flex-col gap-2">
+              <label for="service-rank" class="text-sm font-medium text-slate-300">
+                Rank <span class="font-normal text-slate-500">(optional)</span>
+              </label>
+              <div class="flex items-center gap-3">
+                <USelectMenu
+                  v-if="rankOptions"
+                  id="service-rank"
+                  v-model="rank"
+                  :items="rankOptions"
+                  placeholder="Select a rank"
+                  variant="subtle"
+                  size="md"
+                  class="w-full"
+                  :ui="selectUi"
+                />
+                <UInput
+                  v-else
+                  id="service-rank"
+                  v-model="rank"
+                  placeholder="e.g. Grandmaster"
+                  variant="subtle"
+                  size="lg"
+                  class="w-full"
+                  :ui="fieldUi"
+                />
+                <button
+                  v-if="rank"
+                  type="button"
+                  aria-label="Clear rank"
+                  class="shrink-0 cursor-pointer text-slate-500 hover:text-slate-300"
+                  @click="rank = ''"
+                >
+                  <PhX :size="16" weight="bold" />
+                </button>
+              </div>
+              <p class="text-xs text-slate-500">Shown as a chip on your service card.</p>
             </div>
 
             <div class="mt-5 flex flex-col gap-2">
@@ -415,10 +476,11 @@ async function submit() {
               New · 0 orders
             </p>
 
-            <div v-if="previewTags.length" class="mt-3 flex flex-wrap gap-1.5">
+            <div v-if="previewTags.length || previewRank" class="mt-3 flex flex-wrap gap-1.5">
               <UBadge v-for="tag in previewTags" :key="tag" color="neutral" variant="soft" size="md" class="rounded-full">
                 {{ tag }}
               </UBadge>
+              <ServiceRankChip v-if="previewRank" :rank="previewRank" />
             </div>
 
             <p class="mt-3 line-clamp-2 text-sm text-slate-400">

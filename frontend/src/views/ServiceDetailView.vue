@@ -8,6 +8,7 @@ import { resolveAvatarUrl } from '@/utils/avatar'
 import { fallbackServiceDetail } from '@/mocks/playerProfiles'
 import { usePlayerProfileData } from '@/composables/usePlayerProfileData'
 import ServiceReviewsPanel from '@/components/players/ServiceReviewsPanel.vue'
+import ServiceRankChip from '@/components/players/ServiceRankChip.vue'
 import BookingModal from '@/components/players/BookingModal.vue'
 import { usePalChat } from '@/composables/usePalChat'
 
@@ -117,7 +118,12 @@ function handleMessage() {
                 </UButton>
               </div>
 
-              <div v-if="tags.length" class="mt-4 flex flex-wrap gap-2">
+              <div v-if="tags.length || service.rank" class="mt-4 flex flex-wrap gap-2">
+                <ServiceRankChip
+                  v-if="service.rank"
+                  :rank="service.rank"
+                  class="bg-white/10 text-sm text-white"
+                />
                 <UBadge
                   v-for="tag in tags"
                   :key="tag"

@@ -310,6 +310,12 @@ def send_message(
         upload_image_as_webp("message-images", f"{user_id}/{uuid4()}", image) if image else None
     )
 
+    # A new message un-hides the thread for whoever deleted it, so it isn't lost off their list
+    # forever - mirrors `start_thread`'s own revive-on-restart behavior. Done before the insert:
+    # the recipient's Realtime subscription refetches the inbox the moment the row lands
+    # (4.73c), and the thread has to be visible to `message_thread_summaries` by then.
+    _set_thread_state(client, thread_id, other_id, deleted_at=None)
+
     created = (
         client.table("messages")
         .insert({"thread_id": thread_id, "sender_id": user_id, "body": body, "image_url": image_url})
@@ -326,10 +332,6 @@ def send_message(
     else:
         message = f"{sender_name} sent you a photo"
     notify(other_user_id, "message", message, thread_id=thread_id)
-
-    # A new message un-hides the thread for whoever deleted it, so it isn't lost off their list
-    # forever - mirrors `start_thread`'s own revive-on-restart behavior.
-    _set_thread_state(client, thread_id, other_user_id, deleted_at=None)
 
     return created.data[0]
 

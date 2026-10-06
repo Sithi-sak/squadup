@@ -5,6 +5,7 @@ import { PhX } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { useNotificationsStore, type AppNotification } from '@/stores/notifications'
 import { notificationIcon, notificationTone, formatNotificationTime } from '@/utils/notifications'
+import { useOpenNotification } from '@/composables/useOpenNotification'
 
 const props = defineProps<{ close?: () => void }>()
 
@@ -76,18 +77,12 @@ async function dismiss(id: string) {
   }
 }
 
-async function markRead(id: string) {
-  try {
-    await store.markRead(id)
-  } catch {
-    // silent - a stray unread dot on a panel row isn't worth a toast
-  }
-}
+const openNotification = useOpenNotification()
 
 // Chat never reaches this panel (it alerts on the header's messages button), so a row click
-// only settles its unread state.
+// settles its unread state and, for a booking, opens the order (4.69c).
 function handleClick(notification: AppNotification) {
-  markRead(notification.id)
+  if (openNotification(notification)) props.close?.()
 }
 </script>
 

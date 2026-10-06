@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhStar, PhTrash } from '@phosphor-icons/vue'
 import ConfirmModal from '@/components/modals/ConfirmModal.vue'
+import ServiceRankChip from '@/components/players/ServiceRankChip.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { gameCoverForName } from '@/lib/covers'
 import { usePlayersStore } from '@/stores/players'
@@ -153,6 +154,7 @@ async function handleDelete() {
                 @update:model-value="toggleActive(service.id, $event)"
               />
             </div>
+            <ServiceRankChip v-if="service.rank" :rank="service.rank" class="mt-2" />
             <p class="mt-1 line-clamp-2 text-sm text-slate-400">{{ detail?.description }}</p>
             <div class="mt-4 flex items-center justify-between text-sm">
               <span class="inline-flex items-center gap-1 font-semibold text-white">

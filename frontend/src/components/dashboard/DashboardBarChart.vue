@@ -12,9 +12,9 @@ const max = computed(() => Math.max(...props.bars.map((b) => b.value), 1))
 </script>
 
 <template>
-  <div class="flex h-full items-end gap-3">
+  <div class="flex h-full gap-3">
     <div v-for="(bar, index) in bars" :key="`${bar.label}-${index}`" class="flex flex-1 flex-col items-center gap-2">
-      <div class="flex h-full w-full items-end">
+      <div class="flex min-h-0 w-full flex-1 items-end">
         <div
           class="w-full rounded-full transition-all"
           :class="index === highlighted ? 'bg-brand-500' : 'bg-white/10'"

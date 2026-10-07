@@ -211,6 +211,7 @@ class EarningsOut(CamelModel):
     response_rate_pct: int
     earnings_this_week: list[EarningsBar]
     earnings_overview: list[EarningsBar]
+    earnings_overview_weekly: list[EarningsBar]
     payout_schedule: str
     next_payout_date: str
 
@@ -534,6 +535,14 @@ def _compute_earnings(bookings: list[dict], payout_schedule: str) -> dict:
             {"label": datetime(key[0], key[1], 1, tzinfo=UTC).strftime("%b"), "coins": month_totals.get(key, 0)}
         )
 
+    # Same 8-bar window as the monthly overview, but Monday-start weeks labelled by their Monday.
+    this_monday = now.date() - timedelta(days=now.weekday())
+    earnings_overview_weekly = []
+    for i in range(7, -1, -1):
+        monday = this_monday - timedelta(weeks=i)
+        coins = sum(day_totals.get((monday + timedelta(days=d)).isoformat(), 0) for d in range(7))
+        earnings_overview_weekly.append({"label": f"{monday:%b} {monday.day}", "coins": coins})
+
     orders_completed_this_week = sum(
         1 for b in completed if datetime.fromisoformat(b["created_at"]) >= week_start
     )
@@ -550,6 +559,7 @@ def _compute_earnings(bookings: list[dict], payout_schedule: str) -> dict:
         "response_rate_pct": response_rate_pct,
         "earnings_this_week": earnings_this_week,
         "earnings_overview": earnings_overview,
+        "earnings_overview_weekly": earnings_overview_weekly,
         "payout_schedule": payout_schedule,
         "next_payout_date": _next_payout_date(payout_schedule, now),
     }

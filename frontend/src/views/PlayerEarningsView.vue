@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { usePlayersStore } from '@/stores/players'
@@ -17,16 +17,18 @@ onMounted(() => {
 
 const earnings = computed(() => playersStore.earnings)
 
-const scheduleLabels: Record<string, string> = {
-  weekly: 'Weekly',
-  bi_weekly: 'Bi-weekly',
-  monthly: 'Monthly',
-}
-/** Both rows come from `players.payout_schedule` now (4.51); the Payments tab in Settings is
- * where it gets changed. */
-const payoutScheduleLabel = computed(
-  () => scheduleLabels[earnings.value?.payoutSchedule ?? ''] ?? '-',
+const overviewPeriods = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+] as const
+const overviewPeriod = ref<'weekly' | 'monthly'>('monthly')
+const overviewBars = computed(() =>
+  (overviewPeriod.value === 'weekly'
+    ? (earnings.value?.earningsOverviewWeekly ?? [])
+    : (earnings.value?.earningsOverview ?? [])
+  ).map((b) => ({ label: b.label, value: b.coins })),
 )
+
 const defaultPayoutMethod = computed(
   () => walletStore.payoutMethods.find((m) => m.isDefault) ?? walletStore.payoutMethods[0] ?? null,
 )
@@ -88,18 +90,24 @@ function formatDate(iso: string) {
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
       <div class="rounded-xl bg-gray-800/70 p-5">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <h2 class="text-lg font-semibold text-white">Earnings overview</h2>
-          <span class="text-sm text-slate-400"
-            >Last {{ (earnings?.earningsOverview ?? []).length }} months</span
-          >
+          <div class="flex items-center gap-2">
+            <UButton
+              v-for="option in overviewPeriods"
+              :key="option.value"
+              :color="overviewPeriod === option.value ? 'primary' : 'neutral'"
+              :variant="overviewPeriod === option.value ? 'solid' : 'soft'"
+              size="sm"
+              class="rounded-full"
+              @click="overviewPeriod = option.value"
+            >
+              {{ option.label }}
+            </UButton>
+          </div>
         </div>
         <div class="mt-6 h-48">
-          <DashboardBarChart
-            :bars="
-              (earnings?.earningsOverview ?? []).map((b) => ({ label: b.label, value: b.coins }))
-            "
-          />
+          <DashboardBarChart :bars="overviewBars" />
         </div>
       </div>
 
@@ -116,18 +124,6 @@ function formatDate(iso: string) {
           </div>
         </div>
         <p v-else class="mt-3 text-sm text-slate-400">No payout method on file yet.</p>
-        <div class="mt-4 flex flex-col gap-2 text-sm">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Next payout</span>
-            <span class="font-medium text-white">{{
-              earnings ? formatDate(earnings.nextPayoutDate) : '-'
-            }}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Schedule</span>
-            <span class="font-medium text-white">{{ payoutScheduleLabel }}</span>
-          </div>
-        </div>
         <UButton
           color="neutral"
           variant="soft"

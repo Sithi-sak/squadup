@@ -297,6 +297,8 @@ export interface PlayerEarnings {
   responseRatePct: number
   earningsThisWeek: { label: string; coins: number }[]
   earningsOverview: { label: string; coins: number }[]
+  /** Last 8 Monday-start weeks, labelled by their Monday ("Sep 8"). */
+  earningsOverviewWeekly: { label: string; coins: number }[]
   /** Enum value as stored: 'weekly' | 'bi_weekly' | 'monthly'. */
   payoutSchedule: string
   /** ISO date of the next payout run implied by `payoutSchedule`. */

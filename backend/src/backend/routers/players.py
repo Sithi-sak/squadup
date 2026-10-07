@@ -212,6 +212,7 @@ class EarningsOut(CamelModel):
     earnings_this_week: list[EarningsBar]
     earnings_overview: list[EarningsBar]
     earnings_overview_weekly: list[EarningsBar]
+    earnings_overview_daily: list[EarningsBar]
     payout_schedule: str
     next_payout_date: str
 
@@ -543,6 +544,11 @@ def _compute_earnings(bookings: list[dict], payout_schedule: str) -> dict:
         coins = sum(day_totals.get((monday + timedelta(days=d)).isoformat(), 0) for d in range(7))
         earnings_overview_weekly.append({"label": f"{monday:%b} {monday.day}", "coins": coins})
 
+    earnings_overview_daily = []
+    for i in range(29, -1, -1):
+        day = now.date() - timedelta(days=i)
+        earnings_overview_daily.append({"label": f"{day:%b} {day.day}", "coins": day_totals.get(day.isoformat(), 0)})
+
     orders_completed_this_week = sum(
         1 for b in completed if datetime.fromisoformat(b["created_at"]) >= week_start
     )
@@ -560,6 +566,7 @@ def _compute_earnings(bookings: list[dict], payout_schedule: str) -> dict:
         "earnings_this_week": earnings_this_week,
         "earnings_overview": earnings_overview,
         "earnings_overview_weekly": earnings_overview_weekly,
+        "earnings_overview_daily": earnings_overview_daily,
         "payout_schedule": payout_schedule,
         "next_payout_date": _next_payout_date(payout_schedule, now),
     }

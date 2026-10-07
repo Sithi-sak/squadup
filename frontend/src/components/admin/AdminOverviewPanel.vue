@@ -126,7 +126,7 @@ const openDisputeCount = computed(
         <div class="flex flex-col rounded-xl bg-gray-800/70 p-5">
           <h2 class="text-lg font-semibold text-white">Reports this week</h2>
           <div class="mt-4 h-32">
-            <DashboardBarChart :bars="adminStore.overview.reportsThisWeek.map((b) => ({ label: b.day, value: b.count }))" />
+            <DashboardBarChart name="Reports" :bars="adminStore.overview.reportsThisWeek.map((b) => ({ label: b.day, value: b.count }))" />
           </div>
         </div>
       </div>

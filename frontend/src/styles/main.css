@@ -17,6 +17,28 @@ body {
     sans-serif;
 }
 
+/* Unovis (vue-chrts) chart theme. `html:root` rather than `:root` because Unovis injects its own
+   light-theme `:root` defaults at runtime, after this file, and would otherwise win. */
+html:root {
+  --vis-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --vis-axis-font-family: var(--vis-font-family);
+  --vis-axis-tick-label-color: oklch(70.4% 0.04 256.788);
+  --vis-axis-tick-label-font-size: 12px;
+  --vis-axis-grid-color: rgb(255 255 255 / 0.08);
+  --vis-axis-grid-line-dasharray: 3 3;
+  --vis-axis-domain-color: transparent;
+  --vis-axis-tick-color: transparent;
+  --vis-tooltip-background-color: oklch(21% 0.034 264.665);
+  --vis-tooltip-border-color: rgb(255 255 255 / 0.1);
+  --vis-tooltip-text-color: #fff;
+  --vis-tooltip-shadow-color: rgb(0 0 0 / 0.4);
+  --vis-tooltip-border-radius: 8px;
+  --vis-tooltip-padding: 0;
+  --vis-tooltip-title-color: #fff;
+  --vis-tooltip-title-border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  --vis-tooltip-label-color: oklch(70.4% 0.04 256.788);
+}
+
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;

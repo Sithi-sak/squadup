@@ -299,6 +299,8 @@ export interface PlayerEarnings {
   earningsOverview: { label: string; coins: number }[]
   /** Last 8 Monday-start weeks, labelled by their Monday ("Sep 8"). */
   earningsOverviewWeekly: { label: string; coins: number }[]
+  /** Last 30 days, oldest first, ending today. */
+  earningsOverviewDaily: { label: string; coins: number }[]
   /** Enum value as stored: 'weekly' | 'bi_weekly' | 'monthly'. */
   payoutSchedule: string
   /** ISO date of the next payout run implied by `payoutSchedule`. */

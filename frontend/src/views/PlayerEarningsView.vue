@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import DashboardBarChart from '@/components/dashboard/DashboardBarChart.vue'
+import DashboardAreaChart from '@/components/dashboard/DashboardAreaChart.vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import { usePlayersStore } from '@/stores/players'
 import { useWalletStore } from '@/stores/wallet'
@@ -18,16 +18,20 @@ onMounted(() => {
 const earnings = computed(() => playersStore.earnings)
 
 const overviewPeriods = [
+  { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
 ] as const
-const overviewPeriod = ref<'weekly' | 'monthly'>('monthly')
-const overviewBars = computed(() =>
-  (overviewPeriod.value === 'weekly'
-    ? (earnings.value?.earningsOverviewWeekly ?? [])
-    : (earnings.value?.earningsOverview ?? [])
-  ).map((b) => ({ label: b.label, value: b.coins })),
-)
+type OverviewPeriod = (typeof overviewPeriods)[number]['value']
+const overviewPeriod = ref<OverviewPeriod>('monthly')
+const overviewPoints = computed(() => {
+  const source = {
+    daily: earnings.value?.earningsOverviewDaily,
+    weekly: earnings.value?.earningsOverviewWeekly,
+    monthly: earnings.value?.earningsOverview,
+  }[overviewPeriod.value]
+  return (source ?? []).map((b) => ({ label: b.label, value: b.coins }))
+})
 
 const defaultPayoutMethod = computed(
   () => walletStore.payoutMethods.find((m) => m.isDefault) ?? walletStore.payoutMethods[0] ?? null,
@@ -107,7 +111,12 @@ function formatDate(iso: string) {
           </div>
         </div>
         <div class="mt-6 h-48">
-          <DashboardBarChart :bars="overviewBars" />
+          <DashboardAreaChart
+            :points="overviewPoints"
+            :height="192"
+            name="Coins"
+            :label-every="overviewPeriod === 'daily' ? 5 : 1"
+          />
         </div>
       </div>
 

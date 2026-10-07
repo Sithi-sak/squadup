@@ -1,27 +1,53 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { BarChart } from 'vue-chrts'
 
-const props = defineProps<{
-  bars: { label: string; value: number }[]
-  /** Index of the bar to highlight in brand green; defaults to the last bar (the current period). */
-  highlightIndex?: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    bars: { label: string; value: number }[]
+    /** Chart height in px; Unovis needs a fixed number rather than filling its parent. */
+    height?: number
+    /** Series name shown in the hover tooltip, e.g. "Coins". */
+    name?: string
+  }>(),
+  { height: 128, name: 'Value' },
+)
 
-const highlighted = computed(() => props.highlightIndex ?? props.bars.length - 1)
-const max = computed(() => Math.max(...props.bars.map((b) => b.value), 1))
+type Row = { label: string; value: number }
+
+const data = computed<Row[]>(() => props.bars.map((b) => ({ label: b.label, value: b.value })))
+
+const categories = computed(() => ({
+  value: { name: props.name, color: 'var(--color-brand-500)' },
+}))
+
+const xTicks = computed(() => props.bars.map((_, i) => i))
+
+// An all-zero series would otherwise collapse the y-domain to [0, 0].
+const yDomain = computed<[number, number | undefined]>(() => [
+  0,
+  props.bars.some((b) => b.value > 0) ? undefined : 1,
+])
+
+const xFormatter = (tick: number | Date) => props.bars[Number(tick)]?.label ?? ''
+const yFormatter = (tick: number | Date) => Number(tick).toLocaleString()
 </script>
 
 <template>
-  <div class="flex h-full gap-3">
-    <div v-for="(bar, index) in bars" :key="`${bar.label}-${index}`" class="flex flex-1 flex-col items-center gap-2">
-      <div class="flex min-h-0 w-full flex-1 items-end">
-        <div
-          class="w-full rounded-full transition-all"
-          :class="index === highlighted ? 'bg-brand-500' : 'bg-white/10'"
-          :style="{ height: `${Math.max((bar.value / max) * 100, 4)}%` }"
-        />
-      </div>
-      <span class="text-xs text-slate-400">{{ bar.label }}</span>
-    </div>
-  </div>
+  <BarChart
+    :data="data"
+    :height="height"
+    :categories="categories"
+    :y-axis="['value']"
+    :x-formatter="xFormatter"
+    :y-formatter="yFormatter"
+    :x-explicit-ticks="xTicks"
+    :y-num-ticks="4"
+    :y-domain="yDomain"
+    :bar-padding="0.4"
+    :radius="4"
+    :tooltip-title-formatter="(d: Row) => d.label"
+    hide-legend
+    y-grid-line
+  />
 </template>

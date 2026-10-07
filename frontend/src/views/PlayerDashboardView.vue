@@ -226,7 +226,7 @@ function formatScheduled(iso: string) {
           <div class="rounded-xl bg-gray-800/70 p-5">
             <h2 class="text-lg font-semibold text-white">Earnings this week</h2>
             <div class="mt-4 h-32">
-              <DashboardBarChart :bars="(earnings?.earningsThisWeek ?? []).map((b) => ({ label: b.label, value: b.coins }))" />
+              <DashboardBarChart name="Coins" :bars="(earnings?.earningsThisWeek ?? []).map((b) => ({ label: b.label, value: b.coins }))" />
             </div>
           </div>
 

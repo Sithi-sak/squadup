@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from '@nuxt/ui/composables/useToast'
 import { PhCaretLeft, PhBank, PhCheck, PhCreditCard } from '@phosphor-icons/vue'
@@ -41,6 +41,12 @@ const receiveUsd = computed(() => coinsToUsd(receiveCoins.value))
 /** Below the minimum (4.75) the Pal cannot withdraw anything, not even their whole balance. */
 const belowMinimum = computed(() => availableCoins.value < minWithdrawalCoins)
 const amountValid = computed(() => amount.value >= minWithdrawalCoins && amount.value <= availableCoins.value)
+
+/** The balance updates live (4.74), so it can drop under the minimum with an amount already
+ * typed in; the input locks then, so put back the real balance rather than a stale figure. */
+watch(belowMinimum, (below) => {
+  if (below) amount.value = availableCoins.value
+})
 
 /** Mirrors the `withdrawal_status` enum (4.28b) - `requested` is a payout waiting on an admin,
  * `in_progress` one they approved that is with the payment provider. */
@@ -148,6 +154,7 @@ async function submitWithdrawal() {
                 type="number"
                 :min="minWithdrawalCoins"
                 :max="availableCoins"
+                :disabled="belowMinimum"
                 variant="none"
                 size="xl"
                 class="w-32"
@@ -156,7 +163,8 @@ async function submitWithdrawal() {
             </div>
             <button
               type="button"
-              class="cursor-pointer text-sm font-semibold text-brand-400 hover:text-brand-300"
+              class="cursor-pointer text-sm font-semibold text-brand-400 hover:text-brand-300 disabled:cursor-not-allowed disabled:text-slate-500"
+              :disabled="belowMinimum"
               @click="amount = availableCoins"
             >
               Max

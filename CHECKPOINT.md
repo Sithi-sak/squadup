@@ -3739,6 +3739,10 @@ kind of Stripe id.
     - [x] 4.75c Verification: `ruff check` and `eslint` clean on touched files; `vue-tsc` total
           unchanged (15). Not run in the
           browser per [[feedback_no_build_or_run_skill]].
+    - [x] 4.75d Follow-up (reported by the user off a screenshot): with 360 SC available the
+          amount field still took input, and the number spinner jumped to the 1,000 `min`. The
+          amount field and Max are now disabled below the minimum, and a watch puts the real
+          balance back if a live balance update drops it under 1,000 mid-edit.
 
 ---
 

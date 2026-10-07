@@ -27,6 +27,24 @@ export interface AdminFlaggedPlayer {
   isBanned: boolean
 }
 
+/** Mirrors `AdminPostReportOut` (`routers/admin.py`, 4.77c). `postId` is null once the post has been
+ * removed; `postText` is the copy taken when the report was filed, so the row still reads. */
+export interface AdminPostReport {
+  id: string
+  postId: string | null
+  authorId: string | null
+  authorName: string
+  authorAvatarUrl: string | null
+  postText: string | null
+  postImageUrl: string | null
+  reason: string
+  details: string | null
+  reportedBy: string
+  reportCount: number
+  reportedAt: string
+  status: FlaggedPlayerStatus
+}
+
 export interface AdminPalApplication {
   id: string
   displayName: string
@@ -84,7 +102,7 @@ export interface AdminWithdrawal {
 export type AdminNotificationType = 'report' | 'dispute' | 'payout' | 'application'
 
 /** The Admin panel's tabs (`AdminView.vue`), named here so an alert can point at one. */
-export type AdminTabKey = 'overview' | 'applications' | 'flagged' | 'disputes' | 'payouts'
+export type AdminTabKey = 'overview' | 'applications' | 'flagged' | 'posts' | 'disputes' | 'payouts'
 
 export interface AdminNotification {
   id: string

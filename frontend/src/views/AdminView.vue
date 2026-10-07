@@ -6,6 +6,7 @@ import SettingsNav from '@/components/settings/SettingsNav.vue'
 import AdminOverviewPanel from '@/components/admin/AdminOverviewPanel.vue'
 import AdminPalApplicationsPanel from '@/components/admin/AdminPalApplicationsPanel.vue'
 import AdminFlaggedPlayersPanel from '@/components/admin/AdminFlaggedPlayersPanel.vue'
+import AdminPostReportsPanel from '@/components/admin/AdminPostReportsPanel.vue'
 import AdminDisputesPanel from '@/components/admin/AdminDisputesPanel.vue'
 import AdminWithdrawalsPanel from '@/components/admin/AdminWithdrawalsPanel.vue'
 import AdminNotificationPanel from '@/components/admin/AdminNotificationPanel.vue'
@@ -38,6 +39,7 @@ const baseTabs: { key: AdminTabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'applications', label: 'Pal applications' },
   { key: 'flagged', label: 'Flagged players' },
+  { key: 'posts', label: 'Reported posts' },
   { key: 'disputes', label: 'Disputes' },
   { key: 'payouts', label: 'Payouts' },
 ]
@@ -209,6 +211,7 @@ function openTab(tab: AdminTabKey) {
         <AdminOverviewPanel v-if="activeTab === 'overview'" @view-all="openTab" />
         <AdminPalApplicationsPanel v-else-if="activeTab === 'applications'" />
         <AdminFlaggedPlayersPanel v-else-if="activeTab === 'flagged'" />
+        <AdminPostReportsPanel v-else-if="activeTab === 'posts'" />
         <AdminDisputesPanel v-else-if="activeTab === 'disputes'" />
         <AdminWithdrawalsPanel v-else />
       </div>

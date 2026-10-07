@@ -3743,6 +3743,43 @@ kind of Stripe id.
           amount field still took input, and the number spinner jumped to the 1,000 `min`. The
           amount field and Max are now disabled below the minimum, and a watch puts the real
           balance back if a live balance update drops it under 1,000 mid-edit.
+  - [x] 4.76 Post "..." menu and save button (user request, 2026-10-07, off a screenshot).
+    - [x] 4.76a `FeedPostCard`: a "..." menu after the `action` slot on other people's posts
+          (signed in, non-status). Its only entry is "Report post", which just toasts "coming
+          soon" because there's no post-report table or endpoint yet (`admin_flags` covers
+          players only). Own posts keep `PostAuthorMenu`'s "..." so there's never two.
+    - [x] 4.76b Bookmark button left of Share, wired to the existing `/feed/saved` backend via
+          `feedStore.toggleSaved`. New `feedStore.ensureSaved(userId)` loads the saved list once
+          per signed-in user so every card knows its state. Hidden when signed out.
+    - [x] 4.76c `FeedSavedView`: dropped its own bookmark in the post card's `action` slot, now
+          redundant with the card's button (services keep theirs).
+    - [x] 4.76d Verification: `eslint` clean on touched files; `vue-tsc` total unchanged (15).
+          Not run in the browser per [[feedback_no_build_or_run_skill]].
+    - [x] 4.76e Follow-up (reported by the user): the bookmark felt laggy because it waited on
+          the request. `toggleSaved` is now optimistic (a `pending-` placeholder row on save,
+          rolled back on failure, the removed row put back if an unsave fails), and the card no
+          longer dims the button while the request is out.
+  - [x] 4.77 Working post reports (user request, 2026-10-07). 4.76a's "Report post" was a
+        "coming soon" toast; `admin_flags` can't hold it since it's keyed on `player_id` and any
+        user can post.
+    - [x] 4.77a Migration `post_reports`: reporter, reason, details, `report_count`, status (reuses
+          `flagged_player_status`), plus `author_id`/`post_text` snapshotted at report time.
+          `post_id` is `on delete set null` so a removed post's report stays in the queue's history.
+    - [x] 4.77b `POST /feed/posts/{id}/report`: same collapse rule as `report_player` (one pending
+          row per post and reason, a repeat reporter doesn't bump the count). Can't report your
+          own post.
+    - [x] 4.77c Admin backend: `GET /admin/post-reports`, `PATCH .../{id}/status`, and
+          `POST .../{id}/remove-post` (deletes the post, marks every pending/reviewing report on
+          it actioned, sends the author a `moderation` notification). Post reports join the
+          admin bell and the overview's "reports this week".
+    - [x] 4.77d Frontend: `ReportProfileModal` takes a subject so posts reuse it ("Also block"
+          blocks the author via `usersStore.blockUser`). `FeedPostCard`'s "Report post" opens it.
+    - [x] 4.77e Admin frontend: "Reported posts" tab, same layout as Flagged players.
+    - [x] 4.77f Verification: `ruff check` clean and the backend imports; `eslint` clean on touched
+          files; `vue-tsc` total unchanged (15). Not run in the browser per
+          [[feedback_no_build_or_run_skill]]. Migration `20261007090000_post_reports.sql` not
+          pushed yet (project is unlinked, see [[project_squadup_supabase_setup]]); until it is,
+          reporting a post returns an error toast and the admin tab shows its error state.
 
 ---
 

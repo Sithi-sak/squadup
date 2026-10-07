@@ -8,6 +8,7 @@ import {
   mockAdminWithdrawals,
   mockAdminNotifications,
   type AdminFlaggedPlayer,
+  type AdminPostReport,
   type FlaggedPlayerStatus,
   type AdminDispute,
   type DisputeStatus,
@@ -75,6 +76,10 @@ export const useAdminStore = defineStore('admin', () => {
   const flaggedPlayers = ref<AdminFlaggedPlayer[]>([])
   const flaggedPlayersLoading = ref(false)
   const flaggedPlayersError = ref<string | null>(null)
+
+  const postReports = ref<AdminPostReport[]>([])
+  const postReportsLoading = ref(false)
+  const postReportsError = ref<string | null>(null)
 
   const disputes = ref<AdminDispute[]>([])
   const disputesLoading = ref(false)
@@ -170,6 +175,37 @@ export const useAdminStore = defineStore('admin', () => {
     })
     const index = flaggedPlayers.value.findIndex((flag) => flag.id === id)
     if (index !== -1) flaggedPlayers.value[index] = updated
+    return updated
+  }
+
+  /** Reported posts tab (`GET /admin/post-reports`, 4.77e). No mock fallback: the tab is newer
+   * than the mocks, and its error state already offers a retry. */
+  async function fetchPostReports() {
+    postReportsLoading.value = true
+    postReportsError.value = null
+    try {
+      postReports.value = await api.get<AdminPostReport[]>('/admin/post-reports')
+    } catch (err) {
+      postReportsError.value = err instanceof Error ? err.message : 'Failed to load reported posts'
+    } finally {
+      postReportsLoading.value = false
+    }
+  }
+
+  /** Dismiss/Reviewing buttons (`PATCH /admin/post-reports/{id}/status`). Patched in place. */
+  async function updatePostReportStatus(id: string, status: FlaggedPlayerStatus) {
+    const updated = await api.patch<AdminPostReport>(`/admin/post-reports/${id}/status`, { status })
+    const index = postReports.value.findIndex((report) => report.id === id)
+    if (index !== -1) postReports.value[index] = updated
+    return updated
+  }
+
+  /** "Remove post" (`POST /admin/post-reports/{id}/remove-post`). The server also marks every
+   * other open report on the same post actioned, so the whole list is refetched rather than just
+   * this row patched. */
+  async function removeReportedPost(id: string) {
+    const updated = await api.post<AdminPostReport>(`/admin/post-reports/${id}/remove-post`)
+    await fetchPostReports()
     return updated
   }
 
@@ -283,6 +319,12 @@ export const useAdminStore = defineStore('admin', () => {
     updateFlaggedPlayerStatus,
     warnFlaggedPlayer,
     banPlayer,
+    postReports,
+    postReportsLoading,
+    postReportsError,
+    fetchPostReports,
+    updatePostReportStatus,
+    removeReportedPost,
     disputes,
     disputesLoading,
     disputesError,

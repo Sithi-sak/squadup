@@ -198,6 +198,9 @@ export const useFeedStore = defineStore('feed', () => {
   const saved = ref<FeedSavedItem[]>([])
   const savedLoading = ref(false)
   const savedError = ref<string | null>(null)
+  /** Whose list `saved` holds, so `ensureSaved` loads it once per signed-in user instead of once
+   * per post card. */
+  let savedLoadedFor: string | null = null
 
   const current = ref<FeedPost | null>(null)
 
@@ -381,6 +384,22 @@ export const useFeedStore = defineStore('feed', () => {
     bumpMyCounts({ posts: -1 })
   }
 
+  /** "Report post" (`POST /feed/posts/{id}/report`, 4.77). Throws so the caller can toast, same
+   * as `playersStore.reportPlayer`. Lands in `post_reports`, the admin Reported posts tab. */
+  async function reportPost(postId: string, payload: { reason: string; details: string }) {
+    return api.post<{ id: string; status: string; reportCount: number }>(`/feed/posts/${postId}/report`, {
+      reason: payload.reason,
+      details: payload.details || null,
+    })
+  }
+
+  /** After a block, the backend already leaves the author out of the next feed fetch; this takes
+   * their posts out of the lists already on screen so the block shows without a reload. */
+  function dropAuthor(authorId: string) {
+    posts.value = posts.value.filter((p) => p.authorId !== authorId)
+    following.value = following.value.filter((p) => p.authorId !== authorId)
+  }
+
   /** Flips `liked`/`likes` locally before the request lands (`patchPost`) so the button responds
    * instantly instead of waiting on the backend's recount-and-refetch round trip, then reconciles
    * with the server's real counts once they arrive - or reverts on failure. Requests for the same
@@ -499,6 +518,14 @@ export const useFeedStore = defineStore('feed', () => {
     }
   }
 
+  /** `FeedPostCard`'s bookmark needs the saved list to show its state. Every card calls this;
+   * only the first call per user hits the network. */
+  function ensureSaved(userId: string) {
+    if (savedLoadedFor === userId) return
+    savedLoadedFor = userId
+    fetchSaved()
+  }
+
   function findSaved(kind: 'post' | 'service', id: string) {
     return saved.value.find((item) =>
       kind === 'post'
@@ -510,20 +537,42 @@ export const useFeedStore = defineStore('feed', () => {
   /** Toggles a post or service's saved state (`FeedPostCard`'s bookmark action, `FeedSavedView`'s
    * "Unsave" button, and Service Detail's save-to-Wish-style bookmark). Finds the existing saved
    * row first since the backend keys deletes on the `saved_items` row id, not the post/service id. */
+  /** Optimistic: `saved` flips before the request goes out so the bookmark responds on click, and
+   * is put back if the request fails. A new save holds a `pending-` placeholder row until the
+   * server's row replaces it. */
   async function toggleSaved(kind: 'post' | 'service', id: string) {
     const existing = findSaved(kind, id)
     if (existing) {
-      await api.delete(`/feed/saved/${existing.id}`)
+      const index = saved.value.indexOf(existing)
       saved.value = saved.value.filter((item) => item.id !== existing.id)
+      try {
+        await api.delete(`/feed/saved/${existing.id}`)
+      } catch (err) {
+        saved.value.splice(index, 0, existing)
+        throw err
+      }
       return null
     }
-    const created = await api.post<FeedSavedItem>('/feed/saved', {
+    const placeholder: FeedSavedItem = {
+      id: `pending-${kind}-${id}`,
       kind,
-      postId: kind === 'post' ? id : undefined,
-      serviceId: kind === 'service' ? id : undefined,
-    })
-    saved.value.unshift(created)
-    return created
+      createdAt: new Date().toISOString(),
+      postId: kind === 'post' ? id : null,
+      serviceId: kind === 'service' ? id : null,
+    }
+    saved.value.unshift(placeholder)
+    try {
+      const created = await api.post<FeedSavedItem>('/feed/saved', {
+        kind,
+        postId: kind === 'post' ? id : undefined,
+        serviceId: kind === 'service' ? id : undefined,
+      })
+      saved.value = saved.value.map((item) => (item.id === placeholder.id ? created : item))
+      return created
+    } catch (err) {
+      saved.value = saved.value.filter((item) => item.id !== placeholder.id)
+      throw err
+    }
   }
 
   return {
@@ -556,7 +605,10 @@ export const useFeedStore = defineStore('feed', () => {
     fetchComments,
     postComment,
     toggleCommentLike,
+    reportPost,
+    dropAuthor,
     fetchSaved,
+    ensureSaved,
     toggleSaved,
     findSaved,
   }

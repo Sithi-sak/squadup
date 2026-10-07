@@ -86,20 +86,7 @@ async function unsave(item: FeedSavedItem) {
           :likes="item.likes ?? 0"
           :comments="item.comments ?? 0"
           @open-comments="activePostId = item.postId ?? item.id"
-        >
-          <template #action>
-            <UButton
-              color="neutral"
-              variant="ghost"
-              square
-              :ui="{ base: 'rounded-full' }"
-              aria-label="Unsave"
-              @click="unsave(item)"
-            >
-              <PhBookmarkSimple :size="18" weight="fill" class="text-brand-400" />
-            </UButton>
-          </template>
-        </FeedPostCard>
+        />
 
         <div v-else class="flex items-center gap-4 rounded-xl bg-gray-800/70 p-4">
           <div class="h-16 w-16 shrink-0 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10" />

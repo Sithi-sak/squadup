@@ -9,6 +9,7 @@ from ..core.schema import CamelModel
 from ..core.storage import create_signed_url
 from ..core.supabase import get_supabase_client
 from ..core.wallet import adjust_coin_balance
+from .feed import _refresh_posts_count
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -63,6 +64,22 @@ class AdminFlagStatusIn(CamelModel):
 
 class AdminFlagWarningIn(CamelModel):
     message: str | None = None
+
+
+class AdminPostReportOut(CamelModel):
+    id: str
+    post_id: str | None
+    author_id: str | None
+    author_name: str
+    author_avatar_url: str | None
+    post_text: str | None
+    post_image_url: str | None
+    reason: str
+    details: str | None
+    reported_by: str
+    report_count: int
+    reported_at: str
+    status: str
 
 
 class AdminDisputeOut(CamelModel):
@@ -143,6 +160,12 @@ _WEEKDAY_LABELS = ("M", "T", "W", "T", "F", "S", "S")
 
 _FLAG_SELECT = "*, players(display_name, avatar_url, is_banned), users(display_name)"
 
+_POST_REPORT_SELECT = (
+    "*, posts(image_url, image_urls, video_poster_url), "
+    "author:users!post_reports_author_id_fkey(display_name, avatar_url), "
+    "reporter:users!post_reports_reported_by_fkey(display_name)"
+)
+
 _PAL_APPLICATION_SELECT = "*, users(email)"
 
 _WITHDRAWAL_SELECT = "*, players(display_name, avatar_url, user_id), payout_methods(label, detail)"
@@ -163,6 +186,23 @@ def _flag_out(row: dict) -> dict:
         "reported_by": reporter.get("display_name") or "A user",
         "reported_at": row["created_at"],
         "is_banned": bool(player.get("is_banned")),
+    }
+
+
+def _post_report_out(row: dict) -> dict:
+    post = row.get("posts") or {}
+    author = row.get("author") or {}
+    reporter = row.get("reporter") or {}
+    image_urls = post.get("image_urls") or []
+    return {
+        **row,
+        "author_name": author.get("display_name") or "Deleted account",
+        "author_avatar_url": author.get("avatar_url"),
+        "post_image_url": (image_urls[0] if image_urls else None)
+        or post.get("image_url")
+        or post.get("video_poster_url"),
+        "reported_by": reporter.get("display_name") or "A user",
+        "reported_at": row["created_at"],
     }
 
 
@@ -339,6 +379,77 @@ def warn_flagged_player(flag_id: str, payload: AdminFlagWarningIn) -> dict:
     client.table("admin_flags").update({"status": "actioned"}).eq("id", flag_id).execute()
     result = client.table("admin_flags").select(_FLAG_SELECT).eq("id", flag_id).single().execute()
     return _flag_out(result.data)
+
+
+# Reported posts --------------------------------------------------------------------------
+# Same no-auth posture as flagged players above.
+
+
+@router.get("/post-reports", response_model=list[AdminPostReportOut])
+def list_post_reports() -> list[dict]:
+    rows = (
+        get_supabase_client()
+        .table("post_reports")
+        .select(_POST_REPORT_SELECT)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    return [_post_report_out(row) for row in rows]
+
+
+@router.patch("/post-reports/{report_id}/status", response_model=AdminPostReportOut)
+def update_post_report_status(report_id: str, payload: AdminFlagStatusIn) -> dict:
+    client = get_supabase_client()
+    existing = client.table("post_reports").select("id").eq("id", report_id).maybe_single().execute()
+    if not existing or not existing.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
+
+    client.table("post_reports").update({"status": payload.status}).eq("id", report_id).execute()
+    result = client.table("post_reports").select(_POST_REPORT_SELECT).eq("id", report_id).single().execute()
+    return _post_report_out(result.data)
+
+
+@router.post("/post-reports/{report_id}/remove-post", response_model=AdminPostReportOut)
+def remove_reported_post(report_id: str) -> dict:
+    """"Remove post" in the Reported posts review modal (4.77c). Deletes the post for everyone,
+    marks every open report on it `actioned` (not just this one, since a post reported for two
+    reasons has two rows), and tells the author why it went. The report rows outlive the post:
+    `post_id` goes null and the snapshotted text is what the panel shows from then on."""
+    client = get_supabase_client()
+    report = client.table("post_reports").select("*").eq("id", report_id).maybe_single().execute()
+    if not report or not report.data:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
+    post_id = report.data.get("post_id")
+    if not post_id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This post was already removed")
+
+    post = client.table("posts").select("author_id").eq("id", post_id).maybe_single().execute()
+    author_id = (post.data or {}).get("author_id") if post else None
+
+    # Statuses first: once the post is gone `post_id` is null and these rows can't be found by it.
+    (
+        client.table("post_reports")
+        .update({"status": "actioned"})
+        .eq("post_id", post_id)
+        .in_("status", ["pending", "reviewing"])
+        .execute()
+    )
+    client.table("post_reports").update({"status": "actioned"}).eq("id", report_id).execute()
+    client.table("posts").delete().eq("id", post_id).execute()
+
+    if author_id:
+        _refresh_posts_count(client, author_id)
+        notify(
+            author_id,
+            "moderation",
+            f"Your post was removed by SquadUp moderation after a report about "
+            f"{report.data['reason'].lower()}. Please review our community guidelines.",
+        )
+
+    result = client.table("post_reports").select(_POST_REPORT_SELECT).eq("id", report_id).single().execute()
+    return _post_report_out(result.data)
 
 
 # Disputes -------------------------------------------------------------------------------
@@ -557,16 +668,17 @@ def get_overview() -> dict:
     total_commission_coins = booking_commission_coins + payout_fee_coins
 
     week_start = today_start.date() - timedelta(days=6)
-    flag_rows = (
-        client.table("admin_flags")
-        .select("created_at")
-        .gte("created_at", week_start.isoformat())
-        .execute()
-        .data
-        or []
-    )
+    # Profile and post reports both count: the chart is moderation load, not one queue (4.77c).
+    report_rows = [
+        row
+        for table in ("admin_flags", "post_reports")
+        for row in (
+            client.table(table).select("created_at").gte("created_at", week_start.isoformat()).execute().data
+            or []
+        )
+    ]
     counts_by_day: dict[date, int] = defaultdict(int)
-    for row in flag_rows:
+    for row in report_rows:
         counts_by_day[datetime.fromisoformat(row["created_at"]).date()] += 1
     reports_this_week = [
         {
@@ -642,6 +754,30 @@ def list_admin_notifications() -> list[dict]:
                 "New report",
                 f"{name} was reported for {row['reason'].lower()}",
                 "flagged",
+                row["created_at"],
+            )
+        )
+
+    post_reports = (
+        client.table("post_reports")
+        .select("id, reason, created_at, author:users!post_reports_author_id_fkey(display_name)")
+        .eq("status", "pending")
+        .order("created_at", desc=True)
+        .limit(_ADMIN_FEED_PER_SOURCE)
+        .execute()
+        .data
+        or []
+    )
+    for row in post_reports:
+        name = (row.get("author") or {}).get("display_name") or "A user"
+        items.append(
+            _feed_item(
+                "post-report",
+                row["id"],
+                "report",
+                "Post reported",
+                f"A post by {name} was reported for {row['reason'].lower()}",
+                "posts",
                 row["created_at"],
             )
         )

@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from '@nuxt/ui/composables/useToast'
 import {
+  PhBookmarkSimple,
   PhCaretLeft,
   PhCaretRight,
   PhChatCircle,
+  PhDotsThree,
   PhHeart,
   PhShareFat,
   PhSpinnerGap,
@@ -14,7 +17,9 @@ import {
 } from '@phosphor-icons/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feed'
+import { useUsersStore } from '@/stores/users'
 import { useSharePost } from '@/composables/useSharePost'
+import ReportProfileModal from '@/components/modals/ReportProfileModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { profileRouteFor } from '@/utils/profileRoute'
 
@@ -66,6 +71,88 @@ const shareItems = computed(() => [
   [{ label: 'Copy link', onSelect: () => copyPostLink(props.id) }],
 ])
 
+const toast = useToast()
+const feedStore = useFeedStore()
+const currentUserId = computed(() => authStore.user?.id ?? null)
+/** Own posts already get `PostAuthorMenu`'s "..." through the `action` slot. */
+const isOwnPost = computed(() => !!props.authorId && props.authorId === currentUserId.value)
+
+/** The "..." on other people's posts. Report is the only entry for now; more land here later. */
+const optionsItems = [
+  [
+    {
+      label: 'Report post',
+      color: 'error' as const,
+      onSelect: () => {
+        reportOpen.value = true
+      },
+    },
+  ],
+]
+
+const usersStore = useUsersStore()
+const reportOpen = ref(false)
+const reportSubmitting = ref(false)
+
+/** Files the report, then blocks the author if asked. The block runs only once the report is in,
+ * and its own failure gets its own toast, so a report that did land never reads as failed. */
+async function submitReport(payload: { reason: string; details: string; alsoBlock: boolean }) {
+  if (reportSubmitting.value) return
+  reportSubmitting.value = true
+  try {
+    await feedStore.reportPost(props.id, payload)
+    reportOpen.value = false
+    toast.add({
+      title: 'Report submitted',
+      description: 'Our moderation team will review it.',
+      color: 'success',
+    })
+  } catch (err) {
+    toast.add({
+      title: 'Could not submit report',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+    return
+  } finally {
+    reportSubmitting.value = false
+  }
+
+  if (!payload.alsoBlock || !props.authorId) return
+  try {
+    await usersStore.blockUser(props.authorId)
+    feedStore.dropAuthor(props.authorId)
+  } catch (err) {
+    toast.add({
+      title: `Could not block ${props.author}`,
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  }
+}
+
+watch(currentUserId, (userId) => userId && feedStore.ensureSaved(userId), { immediate: true })
+const isSaved = computed(() => !!feedStore.findSaved('post', props.id))
+/** The store flips the icon on click; this only drops a second click while the first request is
+ * out, since unsaving a `pending-` placeholder row would hit a row id the server doesn't have. */
+const savePending = ref(false)
+
+async function toggleSave() {
+  if (savePending.value) return
+  savePending.value = true
+  try {
+    await feedStore.toggleSaved('post', props.id)
+  } catch (err) {
+    toast.add({
+      title: isSaved.value ? 'Could not unsave' : 'Could not save',
+      description: err instanceof Error ? err.message : 'Please try again.',
+      color: 'error',
+    })
+  } finally {
+    savePending.value = false
+  }
+}
+
 /** Falsy when there's no author to link to (e.g. `FeedSavedView`'s local mock fallback). */
 const profileRoute = computed(() =>
   profileRouteFor(props.authorId, authStore.user?.id, props.playerId),
@@ -106,7 +193,6 @@ watch(
 )
 
 const CLIP_POLL_MS = 5000
-const feedStore = useFeedStore()
 let clipPoll: ReturnType<typeof setTimeout> | undefined
 
 /** While the author's own clip is encoding, re-reads the post every few seconds until it is
@@ -222,7 +308,32 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onLightboxKey))
           <p class="text-sm text-slate-400">{{ handle ? `${handle} · ` : '' }}{{ timeAgo }}</p>
         </div>
       </component>
-      <slot name="action" />
+      <div class="flex shrink-0 items-center gap-1">
+        <slot name="action" />
+        <UDropdownMenu
+          v-if="currentUserId && !isOwnPost && !isStatus"
+          :items="optionsItems"
+          :content="{ side: 'bottom', align: 'end' }"
+        >
+          <UButton
+            color="neutral"
+            variant="ghost"
+            square
+            :ui="{ base: 'rounded-full' }"
+            aria-label="Post options"
+          >
+            <PhDotsThree :size="20" weight="bold" />
+          </UButton>
+        </UDropdownMenu>
+        <ReportProfileModal
+          v-if="currentUserId && !isOwnPost && !isStatus"
+          v-model:open="reportOpen"
+          :handle="author"
+          subject="post"
+          :submitting="reportSubmitting"
+          @submit="submitReport"
+        />
+      </div>
     </div>
 
     <p class="mt-3 text-md leading-relaxed" :class="isStatus ? 'text-slate-300' : 'text-slate-200'">
@@ -380,7 +491,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onLightboxKey))
         <PhChatCircle :size="24" />
         {{ comments }}
       </button>
-      <UDropdownMenu :items="shareItems" class="ml-auto">
+      <button
+        v-if="currentUserId"
+        type="button"
+        class="ml-auto transition-colors hover:text-white"
+        :class="isSaved && 'text-brand-400'"
+        :aria-label="isSaved ? 'Unsave post' : 'Save post'"
+        :aria-pressed="isSaved"
+        @click="toggleSave"
+      >
+        <PhBookmarkSimple :size="24" :weight="isSaved ? 'fill' : 'regular'" />
+      </button>
+      <UDropdownMenu :items="shareItems" :class="!currentUserId && 'ml-auto'">
         <button
           type="button"
           class="text-slate-400 transition-colors hover:text-white"

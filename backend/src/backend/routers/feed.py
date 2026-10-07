@@ -646,6 +646,75 @@ def unlike_post(post_id: str, user_id: str = Depends(get_current_user_id)) -> di
     return _refresh_post(client, post_id, user_id)
 
 
+class PostReportIn(CamelModel):
+    reason: str
+    details: str | None = None
+
+
+class PostReportOut(CamelModel):
+    id: str
+    status: str
+    report_count: int
+
+
+@router.post("/posts/{post_id}/report", response_model=PostReportOut, status_code=status.HTTP_201_CREATED)
+def report_post(post_id: str, payload: PostReportIn, user_id: str = Depends(get_current_user_id)) -> dict:
+    """"Report post" from the feed card's "..." menu (4.77b), read by the admin panel's Reported
+    posts tab (`GET /admin/post-reports`). Same collapse rule as `report_player`: one pending row
+    per post and reason, bumped by each new reporter, untouched by a repeat from the same one.
+    The author and text are copied onto the row so it still reads if the post is later removed."""
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A reason is required")
+
+    client = get_supabase_client()
+    post = _get_post(client, post_id)
+    if not _visible_posts([post], user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
+    if post["author_id"] == user_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You can't report your own post")
+
+    details = (payload.details or "").strip() or None
+
+    existing = (
+        client.table("post_reports")
+        .select("id, report_count, details, reported_by")
+        .eq("post_id", post_id)
+        .eq("reason", reason)
+        .eq("status", "pending")
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if existing:
+        row = existing[0]
+        if row.get("reported_by") == user_id:
+            return {"id": row["id"], "status": "pending", "report_count": row["report_count"]}
+        update: dict = {"report_count": row["report_count"] + 1}
+        if details and not row.get("details"):
+            update["details"] = details
+        client.table("post_reports").update(update).eq("id", row["id"]).execute()
+        return {"id": row["id"], "status": "pending", "report_count": update["report_count"]}
+
+    created = (
+        client.table("post_reports")
+        .insert(
+            {
+                "post_id": post_id,
+                "author_id": post["author_id"],
+                "post_text": post.get("text"),
+                "reason": reason,
+                "details": details,
+                "reported_by": user_id,
+            }
+        )
+        .execute()
+        .data[0]
+    )
+    return {"id": created["id"], "status": created["status"], "report_count": created["report_count"]}
+
+
 # Comments --------------------------------------------------------------------------------
 
 

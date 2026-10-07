@@ -8,6 +8,9 @@ const props = defineProps<{
    * closes itself on submit: the parent closes it once the report has actually been filed, so a
    * failed request leaves the reason and details the person typed intact. */
   submitting?: boolean
+  /** `'post'` (4.77d) reuses the modal for `FeedPostCard`'s "Report post": the title names the
+   * post instead of the person, and "Also block" blocks its author. */
+  subject?: 'profile' | 'post'
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -45,14 +48,17 @@ function submit() {
 <template>
   <UModal
     v-model:open="open"
-    :title="`Report ${props.handle}`"
+    :title="props.subject === 'post' ? `Report ${props.handle}'s post` : `Report ${props.handle}`"
     :ui="{ content: 'max-w-lg rounded-3xl', body: 'max-h-[75vh] overflow-y-auto' }"
   >
     <template #body>
       <div class="flex flex-col gap-5">
         <div class="flex items-start gap-2.5 rounded-2xl bg-brand-900/20 p-3.5 text-sm text-brand-300">
           <PhLockSimple :size="18" weight="fill" class="mt-0.5 shrink-0" />
-          <p>Reports are confidential. {{ props.handle }} won't know who reported them.</p>
+          <p>
+            Reports are confidential. {{ props.handle }} won't know who reported
+            {{ props.subject === 'post' ? 'this post' : 'them' }}.
+          </p>
         </div>
 
         <div>

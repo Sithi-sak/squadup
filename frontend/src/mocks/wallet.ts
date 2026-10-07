@@ -55,6 +55,9 @@ export const mockPayoutMethods: PayoutMethod[] = [
 /** SquadUp's cut of a payout (4.28c): the Pal keeps the other 80%. */
 export const mockWithdrawalPlatformFeePct = 20
 
+/** The smallest payout a Pal can request (4.75). Mirrors the backend's `MIN_WITHDRAWAL_COINS`. */
+export const minWithdrawalCoins = 1000
+
 export interface WithdrawalHistoryEntry {
   id: string
   coins: number

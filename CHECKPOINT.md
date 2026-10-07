@@ -3729,6 +3729,16 @@ kind of Stripe id.
     - [x] 4.74d Verification: `eslint` clean on touched files; `vue-tsc` total unchanged (15). Not
           run in the browser per [[feedback_no_build_or_run_skill]]. Migration not pushed yet;
           until it is, only the Pal's own completion refreshes live (via `completeBooking`).
+  - [x] 4.75 Minimum withdrawal of 1,000 SC (user request, 2026-10-07). A Pal with less than
+        1,000 SC available cannot withdraw anything.
+    - [x] 4.75a Backend: `MIN_WITHDRAWAL_COINS = 1000` in `routers/wallet.py`; `create_withdrawal`
+          rejects anything below it with a 422.
+    - [x] 4.75b Frontend: `minWithdrawalCoins` in `mocks/wallet.ts`. `WithdrawView` disables the
+          Withdraw button below the minimum and shows a hint under the amount (amber when the
+          balance or the entered amount is under 1,000 SC).
+    - [x] 4.75c Verification: `ruff check` and `eslint` clean on touched files; `vue-tsc` total
+          unchanged (15). Not run in the
+          browser per [[feedback_no_build_or_run_skill]].
 
 ---
 

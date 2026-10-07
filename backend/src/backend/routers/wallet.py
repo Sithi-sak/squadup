@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 # frontend's fee preview must match what a real withdrawal actually charges.
 WITHDRAWAL_FEE_PCT = 20
 
+# 4.75: the smallest payout a Pal can request (user request). Mirrors `mocks/wallet.ts`'s
+# `minWithdrawalCoins`, so a Pal holding less than this cannot withdraw at all.
+MIN_WITHDRAWAL_COINS = 1000
+
 # Card and bank transfer only, and bank transfer means ABA (user request, 4.30) - the bank is not
 # a free-text field, so nothing needs to carry its name in from the client. These are the two
 # *categories* a client may ask for; what gets stored in `payout_methods.brand` for a card is the
@@ -618,6 +622,10 @@ def list_withdrawals(user_id: str = Depends(get_current_user_id)) -> list[dict]:
 def create_withdrawal(payload: WithdrawalCreateIn, user_id: str = Depends(get_current_user_id)) -> dict:
     if payload.coins <= 0:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Withdrawal amount must be positive")
+    if payload.coins < MIN_WITHDRAWAL_COINS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, f"The minimum withdrawal is {MIN_WITHDRAWAL_COINS:,} SC"
+        )
 
     client = get_supabase_client()
     player = _get_owned_player(user_id)

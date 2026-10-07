@@ -6,7 +6,7 @@ import { PhCaretLeft, PhBank, PhCheck, PhCreditCard } from '@phosphor-icons/vue'
 import coinIcon from '@/assets/squadup-coin.svg'
 import visaIcon from '@/assets/visa.svg'
 import mastercardIcon from '@/assets/mastercard.svg'
-import { mockWithdrawalPlatformFeePct } from '@/mocks/wallet'
+import { minWithdrawalCoins, mockWithdrawalPlatformFeePct } from '@/mocks/wallet'
 import { useWalletStore, type Withdrawal } from '@/stores/wallet'
 import AddPayoutMethodModal from '@/components/modals/AddPayoutMethodModal.vue'
 import { coinsToUsd } from '@/utils/coins'
@@ -37,6 +37,10 @@ onMounted(async () => {
 const feeCoins = computed(() => Math.round((amount.value * mockWithdrawalPlatformFeePct) / 100))
 const receiveCoins = computed(() => amount.value - feeCoins.value)
 const receiveUsd = computed(() => coinsToUsd(receiveCoins.value))
+
+/** Below the minimum (4.75) the Pal cannot withdraw anything, not even their whole balance. */
+const belowMinimum = computed(() => availableCoins.value < minWithdrawalCoins)
+const amountValid = computed(() => amount.value >= minWithdrawalCoins && amount.value <= availableCoins.value)
 
 /** Mirrors the `withdrawal_status` enum (4.28b) - `requested` is a payout waiting on an admin,
  * `in_progress` one they approved that is with the payment provider. */
@@ -75,7 +79,7 @@ function onMethodAdded() {
 const submitting = ref(false)
 
 async function submitWithdrawal() {
-  if (submitting.value || amount.value <= 0 || amount.value > availableCoins.value) return
+  if (submitting.value || !amountValid.value) return
   submitting.value = true
   try {
     await walletStore.requestWithdrawal(amount.value, selectedMethodId.value ?? undefined)
@@ -142,7 +146,7 @@ async function submitWithdrawal() {
               <UInput
                 v-model.number="amount"
                 type="number"
-                min="0"
+                :min="minWithdrawalCoins"
                 :max="availableCoins"
                 variant="none"
                 size="xl"
@@ -158,6 +162,15 @@ async function submitWithdrawal() {
               Max
             </button>
           </div>
+          <p v-if="belowMinimum" class="mt-2 text-sm text-amber-400">
+            You need at least {{ minWithdrawalCoins.toLocaleString() }} SC available to withdraw.
+          </p>
+          <p v-else-if="amount < minWithdrawalCoins" class="mt-2 text-sm text-amber-400">
+            The minimum withdrawal is {{ minWithdrawalCoins.toLocaleString() }} SC.
+          </p>
+          <p v-else class="mt-2 text-sm text-slate-500">
+            Minimum withdrawal: {{ minWithdrawalCoins.toLocaleString() }} SC
+          </p>
 
           <p class="mt-4 text-sm text-slate-400">
             Payouts are reviewed by the SquadUp team first. The coins stay in your wallet on hold
@@ -235,7 +248,7 @@ async function submitWithdrawal() {
             block
             class="mt-4 rounded-full"
             :loading="submitting"
-            :disabled="amount <= 0 || amount > availableCoins || walletStore.payoutMethods.length === 0"
+            :disabled="!amountValid || walletStore.payoutMethods.length === 0"
             @click="submitWithdrawal"
           >
             Withdraw ${{ receiveUsd }}

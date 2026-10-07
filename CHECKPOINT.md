@@ -3774,12 +3774,17 @@ kind of Stripe id.
           admin bell and the overview's "reports this week".
     - [x] 4.77d Frontend: `ReportProfileModal` takes a subject so posts reuse it ("Also block"
           blocks the author via `usersStore.blockUser`). `FeedPostCard`'s "Report post" opens it.
+          Follow-up (user request): "Also block" now starts off, for profile reports too.
     - [x] 4.77e Admin frontend: "Reported posts" tab, same layout as Flagged players.
     - [x] 4.77f Verification: `ruff check` clean and the backend imports; `eslint` clean on touched
           files; `vue-tsc` total unchanged (15). Not run in the browser per
           [[feedback_no_build_or_run_skill]]. Migration `20261007090000_post_reports.sql` not
           pushed yet (project is unlinked, see [[project_squadup_supabase_setup]]); until it is,
           reporting a post returns an error toast and the admin tab shows its error state.
+    - [x] 4.77g Follow-up (reported by the user after pushing the migration): the Reported posts
+          tab failed to load because the admin query joined `users.avatar_url`, which doesn't
+          exist (avatars live on `players`). Author avatars now come from one batched `players`
+          lookup (`_post_reports_out`). Checked against the live endpoint: returns the report.
 
 ---
 

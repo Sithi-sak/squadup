@@ -162,7 +162,7 @@ _FLAG_SELECT = "*, players(display_name, avatar_url, is_banned), users(display_n
 
 _POST_REPORT_SELECT = (
     "*, posts(image_url, image_urls, video_poster_url), "
-    "author:users!post_reports_author_id_fkey(display_name, avatar_url), "
+    "author:users!post_reports_author_id_fkey(display_name), "
     "reporter:users!post_reports_reported_by_fkey(display_name)"
 )
 
@@ -189,7 +189,7 @@ def _flag_out(row: dict) -> dict:
     }
 
 
-def _post_report_out(row: dict) -> dict:
+def _post_report_out(row: dict, avatar_url: str | None = None) -> dict:
     post = row.get("posts") or {}
     author = row.get("author") or {}
     reporter = row.get("reporter") or {}
@@ -197,13 +197,29 @@ def _post_report_out(row: dict) -> dict:
     return {
         **row,
         "author_name": author.get("display_name") or "Deleted account",
-        "author_avatar_url": author.get("avatar_url"),
+        "author_avatar_url": avatar_url,
         "post_image_url": (image_urls[0] if image_urls else None)
         or post.get("image_url")
         or post.get("video_poster_url"),
         "reported_by": reporter.get("display_name") or "A user",
         "reported_at": row["created_at"],
     }
+
+
+def _post_reports_out(client, rows: list[dict]) -> list[dict]:
+    """Author avatars live on `players` (a plain buyer has none), so they come from one batched
+    lookup like `routers/feed.py`'s `_resolve_authors` rather than the `users` join."""
+    author_ids = list({row["author_id"] for row in rows if row.get("author_id")})
+    avatars = {
+        p["user_id"]: p.get("avatar_url")
+        for p in (
+            client.table("players").select("user_id, avatar_url").in_("user_id", author_ids).execute().data
+            if author_ids
+            else []
+        )
+        or []
+    }
+    return [_post_report_out(row, avatars.get(row.get("author_id"))) for row in rows]
 
 
 def _pal_application_out(row: dict) -> dict:
@@ -387,16 +403,16 @@ def warn_flagged_player(flag_id: str, payload: AdminFlagWarningIn) -> dict:
 
 @router.get("/post-reports", response_model=list[AdminPostReportOut])
 def list_post_reports() -> list[dict]:
+    client = get_supabase_client()
     rows = (
-        get_supabase_client()
-        .table("post_reports")
+        client.table("post_reports")
         .select(_POST_REPORT_SELECT)
         .order("created_at", desc=True)
         .execute()
         .data
         or []
     )
-    return [_post_report_out(row) for row in rows]
+    return _post_reports_out(client, rows)
 
 
 @router.patch("/post-reports/{report_id}/status", response_model=AdminPostReportOut)
@@ -408,7 +424,7 @@ def update_post_report_status(report_id: str, payload: AdminFlagStatusIn) -> dic
 
     client.table("post_reports").update({"status": payload.status}).eq("id", report_id).execute()
     result = client.table("post_reports").select(_POST_REPORT_SELECT).eq("id", report_id).single().execute()
-    return _post_report_out(result.data)
+    return _post_reports_out(client, [result.data])[0]
 
 
 @router.post("/post-reports/{report_id}/remove-post", response_model=AdminPostReportOut)
@@ -449,7 +465,7 @@ def remove_reported_post(report_id: str) -> dict:
         )
 
     result = client.table("post_reports").select(_POST_REPORT_SELECT).eq("id", report_id).single().execute()
-    return _post_report_out(result.data)
+    return _post_reports_out(client, [result.data])[0]
 
 
 # Disputes -------------------------------------------------------------------------------

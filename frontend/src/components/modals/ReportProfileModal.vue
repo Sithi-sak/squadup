@@ -30,13 +30,13 @@ const reasons = [
 
 const reason = ref<string | null>(null)
 const details = ref('')
-const alsoBlock = ref(true)
+const alsoBlock = ref(false)
 
 watch(open, (isOpen) => {
   if (!isOpen) return
   reason.value = null
   details.value = ''
-  alsoBlock.value = true
+  alsoBlock.value = false
 })
 
 function submit() {

@@ -87,6 +87,9 @@ export interface FeedSavedItem {
   priceCoins?: number | null
   priceUnit?: string | null
   promoLabel?: string | null
+  /** The full feed post (images, clip, liked) on post rows from the API. Absent on the mock
+   * fallback and on a `pending-` placeholder, which only have the flat fields above. */
+  post?: FeedPost | null
 }
 
 export interface FollowUser {
@@ -218,6 +221,9 @@ export const useFeedStore = defineStore('feed', () => {
       const index = list.findIndex((p) => p.id === updated.id)
       if (index !== -1) list[index] = updated
     }
+    for (const item of saved.value) {
+      if (item.post?.id === updated.id) item.post = updated
+    }
     if (current.value?.id === updated.id) current.value = updated
   }
 
@@ -253,6 +259,9 @@ export const useFeedStore = defineStore('feed', () => {
     for (const list of [posts.value, following.value]) {
       const post = list.find((p) => p.id === postId)
       if (post) post.comments += delta
+    }
+    for (const item of saved.value) {
+      if (item.post?.id === postId) item.post.comments += delta
     }
     if (current.value?.id === postId) current.value.comments += delta
   }

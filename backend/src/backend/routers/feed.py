@@ -119,6 +119,9 @@ class SavedItemOut(CamelModel):
     price_unit: str | None = None
     promo_label: str | None = None
     player_id: str | None = None
+    # The whole post as the feed serves it (images, clip, liked), so the Saved tab renders the
+    # same card as the feed instead of a text-only stand-in. Null on service rows.
+    post: PostOut | None = None
 
 
 # Helpers -----------------------------------------------------------------------------------
@@ -164,13 +167,6 @@ def _resolve_authors(client, author_ids: set[str]) -> tuple[dict[str, dict], dic
         or []
     }
     return users_by_id, players_by_user_id
-
-
-def _resolve_author(client, author_id: str | None) -> tuple[dict | None, dict | None]:
-    if not author_id:
-        return None, None
-    users_by_id, players_by_user_id = _resolve_authors(client, {author_id})
-    return users_by_id.get(author_id), players_by_user_id.get(author_id)
 
 
 def _collect_uploads(image: UploadFile | None, images: list[UploadFile] | None) -> list[UploadFile]:
@@ -398,7 +394,9 @@ def _service_promo_label(service: dict) -> str | None:
     return None
 
 
-def _saved_item_out(row: dict, author: dict | None = None, player: dict | None = None) -> dict:
+def _saved_item_out(
+    row: dict, author: dict | None = None, player: dict | None = None, post_out: dict | None = None
+) -> dict:
     base = {"id": row["id"], "kind": row["kind"], "created_at": row["created_at"]}
     if row["kind"] == "post":
         post = row.get("posts") or {}
@@ -406,6 +404,7 @@ def _saved_item_out(row: dict, author: dict | None = None, player: dict | None =
         player = player or {}
         return {
             **base,
+            "post": post_out,
             "post_id": row["post_id"],
             "author_id": post.get("author_id"),
             "author": author.get("display_name"),
@@ -433,6 +432,26 @@ def _saved_item_out(row: dict, author: dict | None = None, player: dict | None =
         "price_unit": first["price_unit"] if first else None,
         "promo_label": _service_promo_label(service),
     }
+
+
+def _saved_items_out(client, rows: list[dict], viewer_id: str) -> list[dict]:
+    """Serializes saved rows, running the post ones through `_serialize_posts` in one batch so
+    each carries the full feed post alongside the flat summary fields."""
+    post_rows = [r["posts"] for r in rows if r["kind"] == "post" and r.get("posts")]
+    posts_by_id = {p["id"]: p for p in _serialize_posts(client, post_rows, viewer_id)}
+    users_by_id, players_by_user_id = _resolve_authors(client, {p["author_id"] for p in post_rows})
+    out = []
+    for r in rows:
+        author_id = (r.get("posts") or {}).get("author_id")
+        out.append(
+            _saved_item_out(
+                r,
+                users_by_id.get(author_id),
+                players_by_user_id.get(author_id),
+                posts_by_id.get(r.get("post_id")),
+            )
+        )
+    return out
 
 
 # Posts ---------------------------------------------------------------------------------------
@@ -916,17 +935,7 @@ def list_saved(user_id: str = Depends(get_current_user_id)) -> list[dict]:
         .data
         or []
     )
-    post_author_ids = {(r.get("posts") or {}).get("author_id") for r in rows if r["kind"] == "post"}
-    post_author_ids.discard(None)
-    users_by_id, players_by_user_id = _resolve_authors(client, post_author_ids)
-    return [
-        _saved_item_out(
-            r,
-            users_by_id.get((r.get("posts") or {}).get("author_id")),
-            players_by_user_id.get((r.get("posts") or {}).get("author_id")),
-        )
-        for r in rows
-    ]
+    return _saved_items_out(client, rows, user_id)
 
 
 @router.post("/saved", response_model=SavedItemOut, status_code=status.HTTP_201_CREATED)
@@ -945,8 +954,7 @@ def save_item(payload: SavedItemIn, user_id: str = Depends(get_current_user_id))
             .execute()
         )
         if existing and existing.data:
-            author_id = (existing.data.get("posts") or {}).get("author_id")
-            return _saved_item_out(existing.data, *_resolve_author(client, author_id))
+            return _saved_items_out(client, [existing.data], user_id)[0]
         post = client.table("posts").select("id").eq("id", payload.post_id).maybe_single().execute()
         if not post or not post.data:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Post not found")
@@ -976,8 +984,7 @@ def save_item(payload: SavedItemIn, user_id: str = Depends(get_current_user_id))
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "kind must be 'post' or 'service'")
 
     row = client.table("saved_items").select(_SAVED_SELECT).eq("id", created.data[0]["id"]).single().execute().data
-    author_id = (row.get("posts") or {}).get("author_id") if row["kind"] == "post" else None
-    return _saved_item_out(row, *_resolve_author(client, author_id))
+    return _saved_items_out(client, [row], user_id)[0]
 
 
 @router.delete("/saved/{saved_item_id}", status_code=status.HTTP_204_NO_CONTENT)

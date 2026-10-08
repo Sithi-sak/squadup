@@ -5,10 +5,20 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import ui from '@nuxt/ui/vite'
 
+// Video.js 10 custom elements used in templates (see ClipPlayer.vue). Listed exactly, per
+// the Video.js Vue guide, so a misspelled Vue component still warns.
+const videoJsElements = new Set(['video-player', 'video-skin'])
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    vue(),
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => videoJsElements.has(tag),
+        },
+      },
+    }),
     vueDevTools(),
     ui({
       // SquadUp is dark-theme only (no light/dark toggle), so the @vueuse/core

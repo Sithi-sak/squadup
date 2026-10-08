@@ -12,6 +12,7 @@ import {
   PhX,
 } from '@phosphor-icons/vue'
 import { useToast } from '@nuxt/ui/composables/useToast'
+import ClipPlayer from '@/components/common/ClipPlayer.vue'
 import ImageCropper from '@/components/common/ImageCropper.vue'
 import { games } from '@/data/games'
 import { mockCurrentUser } from '@/mocks/users'
@@ -518,14 +519,11 @@ async function submitPost() {
         </div>
 
         <div v-if="clipPreview" class="relative">
-          <video
+          <ClipPlayer
             v-if="clipPreview.src"
             :src="clipPreview.src"
             :poster="clipPreview.poster"
-            controls
-            playsinline
-            preload="metadata"
-            class="max-h-80 w-full rounded-2xl bg-black/40 ring-1 ring-inset ring-white/10"
+            class="aspect-video [--media-border-radius:var(--radius-2xl)]"
           />
           <div
             v-else

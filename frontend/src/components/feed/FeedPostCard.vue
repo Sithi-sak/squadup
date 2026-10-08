@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feed'
 import { useUsersStore } from '@/stores/users'
 import { useSharePost } from '@/composables/useSharePost'
+import ClipPlayer from '@/components/common/ClipPlayer.vue'
 import ReportProfileModal from '@/components/modals/ReportProfileModal.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { profileRouteFor } from '@/utils/profileRoute'
@@ -340,14 +341,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onLightboxKey))
       {{ text }}
     </p>
 
-    <video
+    <ClipPlayer
       v-if="clipState.status === 'ready' && clipState.url"
       :src="clipState.url"
-      :poster="clipState.poster ?? undefined"
-      controls
-      playsinline
+      :poster="clipState.poster"
       preload="none"
-      class="mt-3 aspect-video w-full rounded-lg bg-slate-950 object-contain ring-1 ring-inset ring-white/10"
+      class="mt-3 aspect-video"
     />
     <div
       v-else-if="clipState.status === 'processing' || clipState.status === 'failed'"

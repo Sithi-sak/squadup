@@ -5,10 +5,40 @@
  * Class and other attrs land on the skin, which owns the player's size and layout. The theme
  * variables sit on the player so a caller can override one (e.g. the radius) from that class.
  */
+import { onMounted, ref } from 'vue'
 import '@videojs/html/video/player'
 import '@videojs/html/video/skin'
 
 defineOptions({ inheritAttrs: false })
+
+/**
+ * The packaged skin keeps its controls up whenever the clip is paused, which leaves a control
+ * bar on every clip in the feed. With a mouse, hide them unless the pointer (or keyboard
+ * focus) is on the player; while playing, the skin's own idle timer still applies. Touch
+ * devices can't hover, so they keep the skin's default. The skin's styles live in its
+ * shadow root, so this sheet is adopted there too; it targets only the public
+ * `<media-controls-*>` tags, not the skin's private class names.
+ */
+const hoverControlsSheet = new CSSStyleSheet()
+hoverControlsSheet.replaceSync(`
+  @media (hover: hover) {
+    :host(:not(:hover):not(:focus-within))
+      :is(media-controls-backdrop, media-controls-content, media-controls-group) {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+`)
+
+const skin = ref<HTMLElement | null>(null)
+
+onMounted(async () => {
+  await customElements.whenDefined('video-skin')
+  const root = skin.value?.shadowRoot
+  if (root && !root.adoptedStyleSheets.includes(hoverControlsSheet)) {
+    root.adoptedStyleSheets = [...root.adoptedStyleSheets, hoverControlsSheet]
+  }
+})
 
 withDefaults(
   defineProps<{
@@ -23,7 +53,7 @@ withDefaults(
 <template>
   <!-- The skin only shows a poster set on the player, not one set on the <video>. -->
   <video-player :poster="poster ?? undefined" class="clip-player block">
-    <video-skin v-bind="$attrs" class="clip-player-skin block w-full">
+    <video-skin ref="skin" v-bind="$attrs" class="clip-player-skin block w-full">
       <video :src="src" :preload="preload" playsinline />
     </video-skin>
   </video-player>

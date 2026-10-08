@@ -6,6 +6,7 @@ import AppFooter from '@/components/layout/AppFooter.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMessagesStore } from '@/stores/messages'
 import { useNotificationsStore } from '@/stores/notifications'
+import { usePresenceStore } from '@/stores/presence'
 import { useWalletStore } from '@/stores/wallet'
 
 const route = useRoute()
@@ -13,9 +14,10 @@ const route = useRoute()
 const authStore = useAuthStore()
 const messagesStore = useMessagesStore()
 const notificationsStore = useNotificationsStore()
+const presenceStore = usePresenceStore()
 const walletStore = useWalletStore()
 
-/** Live bell, messages badge and inbox (4.73) and header balance (4.74), for the whole signed-in session. Here rather
+/** Live bell, messages badge and inbox (4.73), header balance (4.74) and online presence (4.78), for the whole signed-in session. Here rather
  * than in `AppHeader`, which unmounts on chrome-less routes. Keyed on the id, not the user
  * object, so a token refresh (which replaces the object) doesn't tear the channels down. */
 watch(
@@ -25,10 +27,12 @@ watch(
       notificationsStore.subscribeRealtime(userId)
       messagesStore.subscribeRealtime(userId)
       walletStore.subscribeRealtime(userId)
+      presenceStore.subscribe(userId)
     } else {
       notificationsStore.unsubscribeRealtime()
       messagesStore.unsubscribeRealtime()
       walletStore.unsubscribeRealtime()
+      presenceStore.unsubscribe()
     }
   },
   { immediate: true },

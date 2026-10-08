@@ -12,8 +12,8 @@ import {
 } from '@phosphor-icons/vue'
 import { useMessagesStore, type MessageThread } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
+import { usePresenceStore } from '@/stores/presence'
 import { mockCurrentUser } from '@/mocks/users'
-import { mockPlayers } from '@/mocks/players'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { userErrorMessage } from '@/utils/errors'
 import { compressImage } from '@/utils/image'
@@ -29,6 +29,7 @@ defineProps<{
 
 const store = useMessagesStore()
 const authStore = useAuthStore()
+const presence = usePresenceStore()
 const router = useRouter()
 const route = useRoute()
 const toast = useToast()
@@ -182,14 +183,6 @@ async function deleteChat(threadId: string) {
 }
 
 const totalUnread = computed(() => store.threads.reduce((sum, t) => sum + t.unreadCount, 0))
-
-function participant(id: string) {
-  return mockPlayers.find((p) => p.id === id) ?? null
-}
-
-const activeParticipant = computed(() =>
-  store.activeThread ? participant(store.activeThread.participantId) : null,
-)
 
 function formatRelative(iso: string) {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
@@ -381,19 +374,14 @@ async function handleSend() {
                 @click.stop="goToProfile(thread.participantId)"
               >
                 <UAvatar
-                  :src="
-                    resolveAvatarUrl(
-                      thread.participantId,
-                      participant(thread.participantId)?.avatarUrl,
-                    )
-                  "
+                  :src="resolveAvatarUrl(thread.participantId, thread.participantAvatarUrl)"
                   size="md"
                   class="bg-white/10 text-slate-300"
                 >
                   <PhUserCircle :size="22" />
                 </UAvatar>
                 <span
-                  v-if="participant(thread.participantId)?.online"
+                  v-if="presence.isOnline(thread.participantId)"
                   class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-brand-400 ring-2 ring-gray-800"
                 />
               </button>
@@ -464,7 +452,10 @@ async function handleSend() {
           >
             <UAvatar
               :src="
-                resolveAvatarUrl(store.activeThread.participantId, activeParticipant?.avatarUrl)
+                resolveAvatarUrl(
+                  store.activeThread.participantId,
+                  store.activeThread.participantAvatarUrl,
+                )
               "
               size="md"
               class="bg-white/10 text-slate-300"
@@ -475,11 +466,15 @@ async function handleSend() {
               <p class="font-semibold text-white hover:underline">
                 {{ store.activeThread.participantDisplayName }}
               </p>
-              <p class="text-sm text-slate-400">
-                <span v-if="activeParticipant?.games?.[0]"
-                  >{{ activeParticipant.games[0] }} ·
-                </span>
-                {{ activeParticipant?.online ? 'Online' : 'Offline' }}
+              <p
+                class="text-sm"
+                :class="
+                  presence.isOnline(store.activeThread.participantId)
+                    ? 'text-brand-400'
+                    : 'text-slate-400'
+                "
+              >
+                {{ presence.isOnline(store.activeThread.participantId) ? 'Online' : 'Offline' }}
               </p>
             </div>
           </router-link>

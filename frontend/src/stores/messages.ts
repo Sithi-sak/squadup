@@ -10,6 +10,8 @@ export interface MessageThread {
   id: string
   participantId: string
   participantDisplayName: string
+  /** The participant's Pal photo, or null for a plain buyer (falls back to DiceBear). */
+  participantAvatarUrl: string | null
   lastMessagePreview: string | null
   updatedAt: string
   unreadCount: number

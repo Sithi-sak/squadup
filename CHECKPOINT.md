@@ -3785,6 +3785,22 @@ kind of Stripe id.
           tab failed to load because the admin query joined `users.avatar_url`, which doesn't
           exist (avatars live on `players`). Author avatars now come from one batched `players`
           lookup (`_post_reports_out`). Checked against the live endpoint: returns the report.
+  - [x] 4.78 Messages avatars and online status (reported 2026-10-08 by the user, off a
+        screenshot). `MessagesPanel` still read both from `mockPlayers` (the 3.5a graceful-miss
+        note), so real threads always showed the DiceBear fallback and "Offline".
+    - [x] 4.78a Backend `routers/messages.py`: `participantAvatarUrl` on `ThreadOut`, from one
+          batched `players` lookup by `user_id` (`_avatars_by_user`) in both `list_threads` and
+          `start_thread`. No migration, the RPC is unchanged.
+    - [x] 4.78b New `stores/presence.ts`: Supabase Realtime Presence on one shared
+          `presence:online` channel keyed by user id, started/stopped from `App.vue` with the
+          other per-user channels. `isOnline(userId)` is true while any tab of theirs is open.
+    - [x] 4.78c `MessagesPanel`: avatar from `thread.participantAvatarUrl`, online dot and
+          header "Online/Offline" from the presence store. The mock-only game tag is gone.
+    - [x] 4.78d Verification: `ruff check` clean and the router imports; `eslint`/`prettier`
+          clean on touched files; `vue-tsc` total unchanged (15). Not run in the browser per
+          [[feedback_no_build_or_run_skill]]. Not done: the Settings "Show online status" toggle
+          is still local-only (see Cut list), and `players.online` elsewhere (browse, profiles)
+          is still the static column, not presence.
 
 ---
 

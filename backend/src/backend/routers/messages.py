@@ -49,6 +49,7 @@ class ThreadOut(CamelModel):
     id: str
     participant_id: str
     participant_display_name: str
+    participant_avatar_url: str | None = None
     last_message_preview: str | None
     updated_at: str
     unread_count: int
@@ -103,6 +104,15 @@ def _find_thread_by_pair(client, user_a_id: str, user_b_id: str) -> dict | None:
     return result.data if result and result.data else None
 
 
+def _avatars_by_user(client, user_ids: list[str]) -> dict[str, str | None]:
+    """Profile photos live on `players`, so a plain buyer has none and the frontend falls back
+    to their generated avatar - same lookup the feed and blocks list do."""
+    if not user_ids:
+        return {}
+    rows = client.table("players").select("user_id, avatar_url").in_("user_id", user_ids).execute().data or []
+    return {row["user_id"]: row.get("avatar_url") for row in rows}
+
+
 def _preview(body: str | None, image_url: str | None) -> str | None:
     """An image-only message stores an empty `body` (20260920090000), so the inbox line needs
     something to show for it."""
@@ -112,7 +122,13 @@ def _preview(body: str | None, image_url: str | None) -> str | None:
 
 
 def _thread_out(
-    thread: dict, user_id: str, *, last_message: dict | None, unread_count: int, muted: bool = False
+    thread: dict,
+    user_id: str,
+    *,
+    last_message: dict | None,
+    unread_count: int,
+    muted: bool = False,
+    avatar_url: str | None = None,
 ) -> dict:
     is_a = thread["user_a_id"] == user_id
     participant_id = thread["user_b_id"] if is_a else thread["user_a_id"]
@@ -121,6 +137,7 @@ def _thread_out(
         "id": thread["id"],
         "participant_id": participant_id,
         "participant_display_name": participant.get("display_name") or "SquadUp user",
+        "participant_avatar_url": avatar_url,
         "last_message_preview": _preview(
             last_message["body"] if last_message else None,
             (last_message or {}).get("image_url"),
@@ -182,11 +199,13 @@ def list_threads(user_id: str = Depends(get_current_user_id)) -> list[dict]:
     """
     client = get_supabase_client()
     rows = client.rpc("message_thread_summaries", {"p_user_id": user_id}).execute().data or []
+    avatars = _avatars_by_user(client, list({row["participant_id"] for row in rows}))
     return [
         {
             "id": row["id"],
             "participant_id": row["participant_id"],
             "participant_display_name": row["participant_display_name"] or "SquadUp user",
+            "participant_avatar_url": avatars.get(row["participant_id"]),
             "last_message_preview": _preview(row["last_message_body"], row["last_message_image_url"]),
             "updated_at": row["updated_at"],
             "unread_count": row["unread_count"],
@@ -233,7 +252,15 @@ def start_thread(payload: StartThreadIn, user_id: str = Depends(get_current_user
     if state["deleted_at"]:
         _set_thread_state(client, thread["id"], user_id, deleted_at=None)
 
-    return _thread_out(thread, user_id, last_message=None, unread_count=0, muted=state["muted"])
+    avatars = _avatars_by_user(client, [payload.participant_id])
+    return _thread_out(
+        thread,
+        user_id,
+        last_message=None,
+        unread_count=0,
+        muted=state["muted"],
+        avatar_url=avatars.get(payload.participant_id),
+    )
 
 
 @router.get("/threads/{thread_id}/messages", response_model=list[MessageOut])
